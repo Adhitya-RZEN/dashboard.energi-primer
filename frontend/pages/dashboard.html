@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitoring Efisiensi Batu Bara — PT PLN Indonesia Power UBP Jeranjang</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../layout/dashboard.css" />
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="layout">
+
+  <!-- ════════════════════ NAVBAR ════════════════════ -->
+  <nav class="navbar" role="banner">
+
+    <button class="hamburger" id="hamburgerBtn" aria-label="Buka menu" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+
+    <div class="navbar__logo">
+      <div class="navbar__logo-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      </div>
+      <div class="navbar__brand">
+        <span class="navbar__brand-name">PLN Indonesia Power</span>
+        <span class="navbar__brand-sub">UBP Jeranjang</span>
+      </div>
+    </div>
+
+    <div class="navbar__divider"></div>
+
+    <span class="navbar__title">Monitoring Efisiensi Batu Bara</span>
+
+    <div class="navbar__actions">
+      <button class="icon-btn" aria-label="Notifikasi" title="Notifikasi">
+        <span class="notif-badge"></span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </button>
+
+      <button class="icon-btn" aria-label="Pengaturan" title="Pengaturan">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+
+      <div class="navbar__user">
+        <div class="avatar" role="img" aria-label="Profil pengguna">EP</div>
+        <div class="navbar__user-info">
+          <div class="navbar__user-name">Energi Primer</div>
+          <div class="navbar__user-role">Operator</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ════════════════════ SIDEBAR ════════════════════ -->
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Menu utama">
+
+    <span class="sidebar__section-label">Menu Utama</span>
+
+    <ul class="sidebar__menu" role="menubar">
+      <li role="none">
+        <a class="sidebar__link active" role="menuitem" href="#" aria-current="page">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          Dashboard
+        </a>
+      </li>
+      <li role="none">
+        <a class="sidebar__link" role="menuitem" href="#">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          Monitoring
+          <span class="sidebar__badge future-chip">Soon</span>
+        </a>
+      </li>
+      <li role="none">
+        <a class="sidebar__link" role="menuitem" href="#">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          </svg>
+          Data Batu Bara
+          <span class="sidebar__badge future-chip">Soon</span>
+        </a>
+      </li>
+      <li role="none">
+        <a class="sidebar__link" role="menuitem" href="#">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+          Laporan
+          <span class="sidebar__badge future-chip">Soon</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar__sep"></div>
+
+    <span class="sidebar__section-label">Sistem</span>
+
+    <ul class="sidebar__menu" role="menubar">
+      <li role="none">
+        <a class="sidebar__link" role="menuitem" href="#">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Pengaturan
+        </a>
+      </li>
+      <li role="none">
+        <a class="sidebar__link" role="menuitem" href="#">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Logout
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar__footer">
+      <div class="sidebar__version">Dashboard v0.1 · Phase 1</div>
+    </div>
+  </aside>
+
+  <!-- ════════════════════ MAIN ════════════════════ -->
+  <main class="main" role="main" id="mainContent">
+
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <span class="breadcrumb__item">Dashboard</span>
+      <span class="breadcrumb__sep">›</span>
+      <span class="breadcrumb__item active" aria-current="page">Monitoring Efisiensi Batu Bara</span>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+      <p class="page-header__eyebrow">PT PLN Indonesia Power · UBP Jeranjang</p>
+      <h1 class="page-header__title">Monitoring Efisiensi Batu Bara</h1>
+      <p class="page-header__desc">
+        Menampilkan data monitoring efisiensi batu bara berdasarkan data operasional.
+        Dashboard ini dirancang untuk membantu Tim Energi Primer memantau konsumsi
+        dan kualitas batu bara secara real-time.
+      </p>
+    </header>
+
+    <!-- Status Bar -->
+    <div class="status-bar" role="status" aria-label="Status sistem">
+      <div class="status-indicator">
+        <span class="status-dot status-dot--online"></span>
+        Sistem Online
+      </div>
+      <div class="status-indicator">
+        <span class="status-dot status-dot--info"></span>
+        Sumber Data: Google Sheets API
+      </div>
+      <div class="status-indicator">
+        <span class="status-dot status-dot--warning"></span>
+        Sinkronisasi otomatis belum aktif
+      </div>
+      <div class="status-bar__time" id="currentTime" aria-live="polite">—</div>
+    </div>
+
+    <!-- ── Placeholder Grid ── -->
+    <div class="placeholder-grid">
+
+      <!-- Section: KPI Cards -->
+      <div>
+        <div class="section-divider">
+          <span class="section-divider__label">KPI Utama</span>
+          <div class="section-divider__line"></div>
+          <span class="future-chip">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Phase 2
+          </span>
+        </div>
+        <div class="kpi-row">
+
+          <!-- KPI 1 -->
+          <div class="card" aria-label="Total Konsumsi Batu Bara">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Total Konsumsi</div>
+                <div class="card__subtitle">Batu Bara · Bulan Ini</div>
+              </div>
+              <div class="card__icon" style="background:#EBF3FB;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#005BAC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-card__value"></div>
+            <div class="kpi-card__label"></div>
+            <div class="kpi-card__trend">
+              <span style="color:var(--text-caption);font-size:11px;">— ton · Data belum tersedia</span>
+            </div>
+          </div>
+
+          <!-- KPI 2 -->
+          <div class="card" aria-label="Efisiensi Boiler">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Efisiensi Boiler</div>
+                <div class="card__subtitle">Rata-rata · Hari Ini</div>
+              </div>
+              <div class="card__icon" style="background:#F0FDF4;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                  <polyline points="17 6 23 6 23 12"/>
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-card__value"></div>
+            <div class="kpi-card__label"></div>
+            <div class="kpi-card__trend">
+              <span style="color:var(--text-caption);font-size:11px;">— % · Data belum tersedia</span>
+            </div>
+          </div>
+
+          <!-- KPI 3 -->
+          <div class="card" aria-label="Heat Rate">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Heat Rate</div>
+                <div class="card__subtitle">kCal/kWh · Hari Ini</div>
+              </div>
+              <div class="card__icon" style="background:#FFF7ED;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a10 10 0 1 0 10 10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-card__value"></div>
+            <div class="kpi-card__label"></div>
+            <div class="kpi-card__trend">
+              <span style="color:var(--text-caption);font-size:11px;">— kCal/kWh · Data belum tersedia</span>
+            </div>
+          </div>
+
+          <!-- KPI 4 -->
+          <div class="card" aria-label="Stock Batu Bara">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Stock Batu Bara</div>
+                <div class="card__subtitle">Saat Ini · Yard</div>
+              </div>
+              <div class="card__icon" style="background:#EFF6FF;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                  <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-card__value"></div>
+            <div class="kpi-card__label"></div>
+            <div class="kpi-card__trend">
+              <span style="color:var(--text-caption);font-size:11px;">— ton · Data belum tersedia</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Section: Charts -->
+      <div>
+        <div class="section-divider">
+          <span class="section-divider__label">Grafik Analitik</span>
+          <div class="section-divider__line"></div>
+          <span class="future-chip">Phase 2</span>
+        </div>
+        <div class="chart-row">
+
+          <div class="card">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Tren Konsumsi Batu Bara</div>
+                <div class="card__subtitle">30 hari terakhir · per unit PLTU</div>
+              </div>
+              <button class="btn-outline" style="height:32px;padding:0 12px;font-size:12px;" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export
+              </button>
+            </div>
+            <div class="chart-placeholder" role="img" aria-label="Line chart placeholder">
+              <svg class="chart-placeholder__icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <span class="chart-placeholder__label">Line Chart — Tren Konsumsi</span>
+              <span class="chart-placeholder__sub">Akan ditampilkan pada Phase 2</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__header">
+              <div>
+                <div class="card__title">Distribusi Kualitas</div>
+                <div class="card__subtitle">Kalori batu bara · Bulan ini</div>
+              </div>
+            </div>
+            <div class="chart-placeholder" role="img" aria-label="Pie chart placeholder">
+              <svg class="chart-placeholder__icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5">
+                <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+                <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+              </svg>
+              <span class="chart-placeholder__label">Pie Chart — Kualitas</span>
+              <span class="chart-placeholder__sub">Akan ditampilkan pada Phase 2</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Section: Table -->
+      <div>
+        <div class="section-divider">
+          <span class="section-divider__label">Data Monitoring</span>
+          <div class="section-divider__line"></div>
+          <span class="future-chip">Phase 2</span>
+        </div>
+
+        <div class="card">
+          <div class="card__header">
+            <div>
+              <div class="card__title">Tabel Monitoring Harian</div>
+              <div class="card__subtitle">Data operasional batu bara per unit dan shift</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-outline" style="height:36px;font-size:12px;padding:0 14px;" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Cari
+              </button>
+              <button class="btn-primary" style="height:36px;font-size:12px;padding:0 14px;" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Excel
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter bar placeholder -->
+          <div class="filter-bar" style="margin-bottom:16px;">
+            <span class="filter-bar__label">Filter:</span>
+            <div class="input-ph">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Rentang Tanggal
+            </div>
+            <div class="input-ph">Unit PLTU</div>
+            <div class="input-ph">Shift</div>
+            <div class="input-ph">Supplier</div>
+          </div>
+
+          <div class="table-placeholder">
+            <table class="table-ph" role="table" aria-label="Tabel monitoring batu bara (placeholder)">
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Unit</th>
+                  <th>Kalori (kCal/kg)</th>
+                  <th>Moisture (%)</th>
+                  <th>Ash (%)</th>
+                  <th>Sulfur (%)</th>
+                  <th>Pemakaian (ton)</th>
+                  <th>Heat Rate</th>
+                  <th>Efisiensi</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><span class="tag tag--success">Normal</span></td>
+                </tr>
+                <tr>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><span class="tag tag--warning">Perhatian</span></td>
+                </tr>
+                <tr>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><span class="tag tag--info">Proses</span></td>
+                </tr>
+                <tr>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><span class="tag tag--success">Normal</span></td>
+                </tr>
+                <tr>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--long"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--med"></div></td>
+                  <td><div class="cell-shimmer cell-shimmer--short"></div></td>
+                  <td><span class="tag tag--warning">Perhatian</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination placeholder -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px;">
+            <span style="font-size:12px;color:var(--text-caption);">Menampilkan 1–5 dari — data</span>
+            <div style="display:flex;gap:4px;">
+              <button style="width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:not-allowed;opacity:.5;display:flex;align-items:center;justify-content:center;" disabled aria-label="Halaman sebelumnya">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button style="width:32px;height:32px;border:1px solid var(--primary);border-radius:6px;background:var(--primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;" disabled>1</button>
+              <button style="width:32px;height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:not-allowed;opacity:.5;display:flex;align-items:center;justify-content:center;" disabled aria-label="Halaman berikutnya">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ════════════════════ FOOTER ════════════════════ -->
+  <footer class="footer" role="contentinfo">
+    <span>© 2026 PT PLN Indonesia Power UBP Jeranjang</span>
+    <div class="footer__right">
+      <span>Dashboard Monitoring Efisiensi Batu Bara</span>
+      <span style="color:var(--border);">|</span>
+      <span>v0.1 — Phase 1</span>
+    </div>
+  </footer>
+
+</div><!-- .layout -->
+
+<script src="../services/dashboard.js"></script>
+
+</body>
+</html>
