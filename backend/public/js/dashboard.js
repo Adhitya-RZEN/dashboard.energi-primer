@@ -87,3 +87,95 @@ function animateCounter(el, target, duration, suffix) {
     observer.observe(el);
   });
 })();
+
+/* ----------------------------------------------
+   CHART.JS INITIALIZATION
+---------------------------------------------- */
+(function initCharts() {
+  if (typeof Chart === 'undefined' || !window.chartData) return;
+
+  const styleStyle = getComputedStyle(document.documentElement);
+  const primary = styleStyle.getPropertyValue('--primary').trim();
+  const primaryLight = styleStyle.getPropertyValue('--primary-light').trim();
+  const success = styleStyle.getPropertyValue('--success').trim();
+  const warning = styleStyle.getPropertyValue('--warning').trim();
+  const danger = styleStyle.getPropertyValue('--danger').trim();
+
+  // Common defaults
+  Chart.defaults.font.family = 'Poppins, sans-serif';
+  Chart.defaults.color = '#6B7280';
+  Chart.defaults.plugins.tooltip.backgroundColor = '#1F2937';
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+
+  // 1. Line Chart
+  const lineCtx = document.getElementById('lineChart');
+  if (lineCtx) {
+    const colors = [primary, warning, success, danger];
+    const datasets = window.chartData.line.datasets.map((ds, i) => {
+      const color = colors[i % colors.length];
+      return {
+        label: ds.label,
+        data: ds.data,
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        tension: 0.3
+      };
+    });
+
+    new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: window.chartData.line.labels,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', align: 'end', labels: { boxWidth: 12, usePointStyle: true } }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            grid: { borderDash: [4, 4], color: '#E5E7EB', drawBorder: false }
+          },
+          x: {
+            grid: { display: false, drawBorder: false }
+          }
+        },
+        interaction: { mode: 'index', intersect: false }
+      }
+    });
+  }
+
+  // 2. Pie (Doughnut) Chart
+  const pieCtx = document.getElementById('pieChart');
+  if (pieCtx) {
+    new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['On Spec (>= 4700)', 'Perhatian (4500-4699)', 'Off Spec (< 4500)'],
+        datasets: [{
+          data: window.chartData.pie.data,
+          backgroundColor: [success, warning, danger],
+          borderWidth: 2,
+          borderColor: '#FFFFFF',
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true, pointStyle: 'circle' } }
+        }
+      }
+    });
+  }
+})();
+

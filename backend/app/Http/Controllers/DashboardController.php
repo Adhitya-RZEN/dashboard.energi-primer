@@ -143,6 +143,81 @@ class DashboardController extends Controller
 
         $totalMonitoringCount = CoalConsumption::count();
 
+        // ── PHASE 2: Data Grafik Analitik (Chart.js) ─────────────────────
+        
+        // 1. Line Chart: Tren Konsumsi Harian (30 Hari Terakhir)
+        $lineChartStart = Carbon::parse($effectiveLatestDate)->subDays(29)->toDateString();
+        $lineChartRaw = DB::table('coal_consumption as cc')
+            ->join('units as u', 'u.id', '=', 'cc.unit_id')
+            ->whereBetween('cc.date', [$lineChartStart, $effectiveLatestDate])
+            ->select('cc.date', 'u.name as unit_name', 'cc.coal_used')
+            ->orderBy('cc.date')
+            ->get();
+
+        // Menyusun array date unik untuk label sumbu X
+        $lineLabelsMap = [];
+        // Menyusun dataset per unit
+        $lineDatasets = [];
+        
+        foreach ($lineChartRaw as $row) {
+            $dateFormatted = Carbon::parse($row->date)->format('d M');
+            $lineLabelsMap[$row->date] = $dateFormatted;
+            
+            if (!isset($lineDatasets[$row->unit_name])) {
+                $lineDatasets[$row->unit_name] = [];
+            }
+            $lineDatasets[$row->unit_name][$row->date] = (float) $row->coal_used;
+        }
+
+        $lineLabels = array_values($lineLabelsMap);
+        $lineSeries = [];
+        foreach ($lineDatasets as $unitName => $dataByDate) {
+            $seriesData = [];
+            foreach (array_keys($lineLabelsMap) as $dateKey) {
+                $seriesData[] = $dataByDate[$dateKey] ?? 0;
+            }
+            $lineSeries[] = [
+                'label' => $unitName,
+                'data'  => $seriesData,
+            ];
+        }
+
+        // 2. Pie Chart: Distribusi Kualitas (Bulan Ini)
+        $pieChartRaw = DB::table('coal_quality')
+            ->whereBetween('date', [$monthStart, $monthEnd])
+            ->select('gar')
+            ->get();
+
+        $pieData = [
+            'on_spec'   => 0,
+            'perhatian' => 0,
+            'off_spec'  => 0,
+        ];
+
+        foreach ($pieChartRaw as $row) {
+            if ($row->gar >= 4700) {
+                $pieData['on_spec']++;
+            } elseif ($row->gar >= 4500) {
+                $pieData['perhatian']++;
+            } else {
+                $pieData['off_spec']++;
+            }
+        }
+
+        $chartData = [
+            'line' => [
+                'labels'   => $lineLabels,
+                'datasets' => $lineSeries,
+            ],
+            'pie' => [
+                'data' => [
+                    $pieData['on_spec'],
+                    $pieData['perhatian'],
+                    $pieData['off_spec'],
+                ],
+            ]
+        ];
+
         return view('dashboard.index', compact(
             'effectiveLatestDate', 'monthLabel', 'filterMonth', 'filterYear',
             'totalConsumption', 'consumptionTrend', 'sparkline',
@@ -150,7 +225,8 @@ class DashboardController extends Controller
             'avgHeatRate', 'heatRateTrend', 'hrSparkline',
             'latestStock', 'stockPct', 'maxStockCapacity',
             'unitPerformance', 'recentActivity',
-            'monitoringTable', 'totalMonitoringCount'
+            'monitoringTable', 'totalMonitoringCount',
+            'chartData'
         ));
     }
 }

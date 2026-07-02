@@ -319,12 +319,8 @@
           Export
         </button>
       </div>
-      <div class="chart-placeholder">
-        <svg class="chart-placeholder__icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-        <span class="chart-placeholder__label">Line Chart — Tren Konsumsi Harian</span>
-        <span class="chart-placeholder__sub">Akan ditampilkan pada Phase 2 (integrasi Chart.js)</span>
+      <div class="chart-container" style="position: relative; height: 300px; width: 100%; padding: 16px;">
+        <canvas id="lineChart"></canvas>
       </div>
     </div>
 
@@ -335,13 +331,8 @@
           <div class="card__subtitle">Kalori · Bulan ini</div>
         </div>
       </div>
-      <div class="chart-placeholder">
-        <svg class="chart-placeholder__icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5">
-          <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
-          <path d="M22 12A10 10 0 0 0 12 2v10z"/>
-        </svg>
-        <span class="chart-placeholder__label">Pie Chart — Kualitas Batu Bara</span>
-        <span class="chart-placeholder__sub">Akan ditampilkan pada Phase 2</span>
+      <div class="chart-container" style="position: relative; height: 300px; width: 100%; padding: 16px; display: flex; justify-content: center;">
+        <canvas id="pieChart"></canvas>
       </div>
     </div>
   </div>
@@ -413,5 +404,9 @@
 @endsection
 
 @section('page-js')
+  <script src="{{ asset('js/chart.min.js') }}"></script>
+  <script>
+    window.chartData = @json($chartData);
+  </script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
 @endsection
