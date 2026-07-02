@@ -25,14 +25,7 @@
 
   {{-- Logo & Brand --}}
   <a class="navbar__logo" href="{{ url('/') }}" aria-label="Dashboard Monitoring Batu Bara">
-    <div class="navbar__logo-icon" aria-hidden="true">
-      {{-- PLN Lightning bolt --}}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-           stroke="#ffffff" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-      </svg>
-    </div>
+    <img src="{{ asset('images/Logo_PLN.svg') }}" alt="Logo PLN" style="height: 42px; width: auto; object-fit: contain;">
     <div class="navbar__brand">
       <span class="navbar__brand-name">PLN Indonesia Power</span>
       <span class="navbar__brand-sub">UBP Jeranjang</span>

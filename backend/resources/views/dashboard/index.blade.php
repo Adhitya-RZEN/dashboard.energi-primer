@@ -24,14 +24,34 @@
   <header class="page-header">
     <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
     <h1 class="page-header__title">Dashboard Monitoring Efisiensi Batu Bara</h1>
-    <p class="page-header__desc">
+    {{-- <p class="page-header__desc">
       Ringkasan data operasional batu bara secara keseluruhan. Membantu Tim Energi Primer
       memantau konsumsi, efisiensi, dan kualitas batu bara PLTU Jeranjang.
-    </p>
+    </p> --}}
   </header>
 
   {{-- Status Bar --}}
   @include('components.status-bar')
+
+  {{-- ── Filter Bar ── --}}
+  <form method="GET" action="{{ url('/') }}" class="filter-bar mb-16" style="margin-top: 16px;">
+    <span class="filter-bar__label">Periode</span>
+    <select name="month" class="filter-select">
+      @foreach(range(1, 12) as $m)
+        @php $mPad = str_pad($m, 2, '0', STR_PAD_LEFT); @endphp
+        <option value="{{ $mPad }}" {{ $filterMonth == $mPad ? 'selected' : '' }}>
+          {{ \Carbon\Carbon::create(null, $m, 1)->locale('id')->isoFormat('MMMM') }}
+        </option>
+      @endforeach
+    </select>
+    <select name="year" class="filter-select">
+      @for($y = date('Y') + 1; $y >= 2024; $y--)
+        <option value="{{ $y }}" {{ $filterYear == $y ? 'selected' : '' }}>{{ $y }}</option>
+      @endfor
+    </select>
+    <button type="submit" class="btn btn-primary btn--sm">Terapkan Filter</button>
+    <a href="{{ url('/') }}" class="btn btn-outline btn--sm">Reset</a>
+  </form>
 
   {{-- ── KPI Cards ── --}}
   <div class="section-divider mb-16">

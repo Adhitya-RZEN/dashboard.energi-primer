@@ -210,9 +210,7 @@
     {{-- Pagination --}}
     <div class="pagination">
       <span class="pagination__info">Menampilkan {{ $records->firstItem() }}–{{ $records->lastItem() }} dari {{ $records->total() }} data</span>
-      <div class="pagination__nav">
-        {{ $records->links() }}
-      </div>
+      {{ $records->links('vendor.pagination.custom') }}
     </div>
   </div>
 

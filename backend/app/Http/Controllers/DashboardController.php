@@ -12,14 +12,31 @@ class DashboardController extends Controller
     public function index()
     {
         // ── Referensi tanggal: pakai date terbaru di DB ──────────────────
-        $latestDate = CoalConsumption::max('date');         // e.g. "2025-12-31"
-        $refDate    = Carbon::parse($latestDate);
+        $latestDbDate = CoalConsumption::max('date') ?? date('Y-m-d');         // e.g. "2025-12-31"
+
+        $reqMonth = request('month');
+        $reqYear  = request('year');
+
+        if ($reqMonth && $reqYear) {
+            $refDate = Carbon::createFromDate($reqYear, $reqMonth, 1)->endOfMonth();
+            $effectiveLatestDate = CoalConsumption::whereYear('date', $reqYear)
+                                                  ->whereMonth('date', $reqMonth)
+                                                  ->max('date') ?? $refDate->toDateString();
+        } else {
+            $refDate = Carbon::parse($latestDbDate);
+            $effectiveLatestDate = $latestDbDate;
+            $reqMonth = $refDate->format('m');
+            $reqYear  = $refDate->format('Y');
+        }
 
         $monthStart = $refDate->copy()->startOfMonth()->toDateString();
         $monthEnd   = $refDate->copy()->endOfMonth()->toDateString();
         $prevStart  = $refDate->copy()->subMonth()->startOfMonth()->toDateString();
         $prevEnd    = $refDate->copy()->subMonth()->endOfMonth()->toDateString();
         $monthLabel = $refDate->locale('id')->isoFormat('MMMM YYYY');
+
+        $filterMonth = $reqMonth;
+        $filterYear  = $reqYear;
 
         // ── KPI 1: Total Konsumsi bulan ini ──────────────────────────────
         $totalConsumption = (float) CoalConsumption::whereBetween('date', [$monthStart, $monthEnd])
@@ -52,9 +69,9 @@ class DashboardController extends Controller
             : 0;
 
         // ── Sparkline konsumsi: 7 hari terakhir ──────────────────────────
-        $sevenDayStart = $refDate->copy()->subDays(6)->toDateString();
+        $sevenDayStart = Carbon::parse($effectiveLatestDate)->subDays(6)->toDateString();
         $sparklineRaw  = CoalConsumption::selectRaw('date, SUM(coal_used) as total')
-            ->whereBetween('date', [$sevenDayStart, $latestDate])
+            ->whereBetween('date', [$sevenDayStart, $effectiveLatestDate])
             ->groupBy('date')
             ->orderBy('date')
             ->pluck('total')
@@ -69,7 +86,7 @@ class DashboardController extends Controller
 
         // ── Sparkline heat rate: 7 hari terakhir ─────────────────────────
         $hrRaw = CoalConsumption::selectRaw('date, AVG(heat_rate) as avg_hr')
-            ->whereBetween('date', [$sevenDayStart, $latestDate])
+            ->whereBetween('date', [$sevenDayStart, $effectiveLatestDate])
             ->groupBy('date')
             ->orderBy('date')
             ->pluck('avg_hr')
@@ -90,14 +107,16 @@ class DashboardController extends Controller
         // ── Performa unit (tanggal terbaru) ───────────────────────────────
         $unitPerformance = DB::table('coal_consumption as cc')
             ->join('units as u', 'u.id', '=', 'cc.unit_id')
-            ->where('cc.date', $latestDate)
+            ->where('cc.date', $effectiveLatestDate)
             ->select(['u.name as unit_name', 'cc.coal_used', 'cc.boiler_efficiency', 'cc.heat_rate', 'cc.sfc'])
             ->orderBy('u.name')
             ->get();
 
         // ── Aktivitas terbaru (5 record terakhir berbeda tanggal+unit) ────
+        // Kita batasi aktivitas terbaru berdasarkan monthEnd agar filter berguna
         $recentActivity = DB::table('coal_consumption as cc')
             ->join('units as u', 'u.id', '=', 'cc.unit_id')
+            ->where('cc.date', '<=', $effectiveLatestDate)
             ->select(['cc.date', 'u.name as unit_name', 'cc.coal_used', 'cc.boiler_efficiency', 'cc.heat_rate'])
             ->orderBy('cc.date', 'desc')
             ->orderBy('u.name')
@@ -111,6 +130,7 @@ class DashboardController extends Controller
                 $join->on('cq.unit_id', '=', 'cc.unit_id')
                      ->on('cq.date', '=', 'cc.date');
             })
+            ->where('cc.date', '<=', $effectiveLatestDate)
             ->select([
                 'cc.date', 'u.name as unit_name',
                 'cq.gar', 'cq.moisture', 'cq.ash', 'cq.sulfur',
@@ -124,7 +144,7 @@ class DashboardController extends Controller
         $totalMonitoringCount = CoalConsumption::count();
 
         return view('dashboard.index', compact(
-            'latestDate', 'monthLabel',
+            'effectiveLatestDate', 'monthLabel', 'filterMonth', 'filterYear',
             'totalConsumption', 'consumptionTrend', 'sparkline',
             'avgEfficiency', 'efficiencyTrend',
             'avgHeatRate', 'heatRateTrend', 'hrSparkline',
