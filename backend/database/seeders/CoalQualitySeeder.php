@@ -5,30 +5,78 @@ namespace Database\Seeders;
 use App\Models\CoalQuality;
 use App\Models\Unit;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
 
 class CoalQualitySeeder extends Seeder
 {
     /**
-     * Seed the coal_quality table with a simple 7-day sample per unit.
+     * Baca database/data/coal_quality.csv dan insert ke tabel coal_quality.
+     *
+     * Header CSV: Date, Unit, GAR, Moisture (%), Ash (%), Sulfur (%), HGI
      */
     public function run(): void
     {
-        Unit::query()->each(function (Unit $unit) {
-            for ($i = 6; $i >= 0; $i--) {
-                $date = Carbon::today()->subDays($i);
+        $csvPath = database_path('data/coal_quality.csv');
 
-                CoalQuality::query()->updateOrCreate(
-                    ['unit_id' => $unit->id, 'date' => $date->toDateString()],
-                    [
-                        'gar' => 4200,
-                        'moisture' => 25.5,
-                        'ash' => 8.2,
-                        'sulfur' => 0.45,
-                        'hgi' => 48,
-                    ]
-                );
+        if (! file_exists($csvPath)) {
+            $this->command->warn("File tidak ditemukan: {$csvPath}");
+            return;
+        }
+
+        // Cache unit name → id agar tidak query berulang
+        $unitMap = Unit::query()
+            ->pluck('id', 'name')
+            ->toArray();
+
+        $handle = fopen($csvPath, 'r');
+
+        // Lewati baris header
+        fgetcsv($handle);
+
+        $batch = [];
+        $now   = now();
+
+        while (($row = fgetcsv($handle)) !== false) {
+            [$date, $unitName, $gar, $moisture, $ash, $sulfur, $hgi] = $row;
+
+            $unitId = $unitMap[$unitName] ?? null;
+            if (! $unitId) {
+                continue; // lewati baris jika unit tidak dikenal
             }
-        });
+
+            $batch[] = [
+                'unit_id'    => $unitId,
+                'date'       => $date,
+                'gar'        => $gar !== '' ? (float) $gar      : null,
+                'moisture'   => $moisture !== '' ? (float) $moisture : null,
+                'ash'        => $ash !== '' ? (float) $ash      : null,
+                'sulfur'     => $sulfur !== '' ? (float) $sulfur   : null,
+                'hgi'        => $hgi !== '' ? (float) $hgi      : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            // Insert per batch 200 baris agar tidak kehabisan memori
+            if (count($batch) >= 200) {
+                CoalQuality::query()->upsert(
+                    $batch,
+                    ['unit_id', 'date'],          // unique key
+                    ['gar', 'moisture', 'ash', 'sulfur', 'hgi', 'updated_at']
+                );
+                $batch = [];
+            }
+        }
+
+        // Flush sisa batch
+        if (! empty($batch)) {
+            CoalQuality::query()->upsert(
+                $batch,
+                ['unit_id', 'date'],
+                ['gar', 'moisture', 'ash', 'sulfur', 'hgi', 'updated_at']
+            );
+        }
+
+        fclose($handle);
+
+        $this->command->info('CoalQualitySeeder: selesai.');
     }
 }

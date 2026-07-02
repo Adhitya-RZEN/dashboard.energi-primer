@@ -1,0 +1,151 @@
+/* ============================================================
+   dashboard.css — Dashboard Overview Page Styles
+   PT PLN Indonesia Power UBP Jeranjang
+============================================================ */
+
+/* Summary Stats Row */
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+/* Sparkline mini visual inside KPI */
+.kpi-mini-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 28px;
+  margin-top: 10px;
+}
+
+.kpi-mini-bar__seg {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  background: var(--primary-mid);
+  min-height: 4px;
+  transition: background var(--transition);
+}
+
+.kpi-mini-bar__seg:hover {
+  background: var(--primary);
+}
+
+/* Chart placeholder with grid lines */
+.chart-canvas {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+}
+
+.chart-canvas__grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.chart-canvas__grid-line {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+  opacity: 0.6;
+}
+
+/* Recent activity mini list */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.activity-content {}
+.activity-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 2px;
+}
+
+.activity-meta {
+  font-size: 11px;
+  color: var(--text-caption);
+}
+
+/* Progress bar for stock indicator */
+.progress-bar-wrap {
+  margin-top: 10px;
+}
+
+.progress-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-caption);
+  margin-bottom: 5px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  transition: width 0.6s ease-out;
+}
+
+.progress-bar__fill--success { background: var(--success); }
+.progress-bar__fill--warning { background: var(--warning); }
+.progress-bar__fill--danger  { background: var(--danger); }
+
+/* Unit performance row */
+.unit-perf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+@media (max-width: 1199px) {
+  .summary-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .unit-perf-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+}
