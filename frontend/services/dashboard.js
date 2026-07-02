@@ -20,8 +20,8 @@ updateClock();
 setInterval(updateClock, 1000);
 
 /* ════════════ Sidebar Toggle (Mobile / Tablet) ════════════ */
-const sidebar        = document.getElementById('sidebar');
-const hamburgerBtn   = document.getElementById('hamburgerBtn');
+const sidebar = document.getElementById('sidebar');
+const hamburgerBtn = document.getElementById('hamburgerBtn');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
 
 function openSidebar() {
