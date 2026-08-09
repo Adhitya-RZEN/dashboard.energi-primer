@@ -15,7 +15,7 @@ namespace App\DataSources;
  */
 class DatabaseDataSource implements DataSourceInterface
 {
-    public function getDashboardData(int $month, int $year): array
+    public function getDashboardData(int $month, int $year, ?int $day = null): array
     {
         // TODO: Fase 2 — implementasi query PostgreSQL
         throw new \RuntimeException('DatabaseDataSource belum diimplementasikan (Fase 2).');

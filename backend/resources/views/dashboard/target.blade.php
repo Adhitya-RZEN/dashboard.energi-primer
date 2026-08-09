@@ -37,27 +37,44 @@
   @endif
 
   <form method="GET" action="{{ route('dashboard.target') }}" class="filter-bar mb-16" style="margin-top:16px;">
-    <span class="filter-bar__label">Periode</span>
-    <select name="month" class="filter-select">
-      @foreach(range(1, 12) as $m)
-        @php $mPad = str_pad($m, 2, '0', STR_PAD_LEFT); @endphp
-        <option value="{{ $mPad }}" {{ $filterMonth == $m ? 'selected' : '' }}>
-          {{ \Carbon\Carbon::create(null, $m, 1)->locale('id')->isoFormat('MMMM') }}
-        </option>
-      @endforeach
-    </select>
-    <select name="year" class="filter-select">
-      @for($y = date('Y') + 1; $y >= 2024; $y--)
-        <option value="{{ $y }}" {{ $filterYear == $y ? 'selected' : '' }}>{{ $y }}</option>
-      @endfor
-    </select>
-    <button type="submit" class="btn btn-primary btn--sm">Terapkan Filter</button>
-    <a href="{{ route('dashboard.target') }}" class="btn btn-outline btn--sm">Reset</a>
-    <span style="font-size:12px;color:var(--text-caption);margin-left:auto;display:flex;align-items:center;gap:6px;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      {{ $data['worksheet'] ?? '-' }}
-    </span>
-  </form>
+  <span class="filter-bar__label">Periode</span>
+
+  {{-- FILTER HARI (baru) --}}
+  <select name="day" class="filter-select" aria-label="Tanggal">
+    <option value="">Semua Tanggal</option>
+    @for($d = 1; $d <= 31; $d++)
+      <option value="{{ $d }}" {{ (string) $filterDay === (string) $d ? 'selected' : '' }}>
+        {{ $d }}
+      </option>
+    @endfor
+  </select>
+
+  <select name="month" class="filter-select">
+    @foreach(range(1, 12) as $m)
+      @php $mPad = str_pad($m, 2, '0', STR_PAD_LEFT); @endphp
+      <option value="{{ $mPad }}" {{ $filterMonth == $m ? 'selected' : '' }}>
+        {{ \Carbon\Carbon::create(null, $m, 1)->locale('id')->isoFormat('MMMM') }}
+      </option>
+    @endforeach
+  </select>
+
+  <select name="year" class="filter-select">
+    @for($y = date('Y') + 1; $y >= 2024; $y--)
+      <option value="{{ $y }}" {{ $filterYear == $y ? 'selected' : '' }}>{{ $y }}</option>
+    @endfor
+  </select>
+
+  <button type="submit" class="btn btn-primary btn--sm">Terapkan Filter</button>
+  <a href="{{ route('dashboard.filter.reset', ['redirect' => route('dashboard.target')]) }}" class="btn btn-outline btn--sm">Reset</a>
+
+  <span style="font-size:12px;color:var(--text-caption);margin-left:auto;display:flex;align-items:center;gap:6px;">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    {{ $data['worksheet'] ?? '-' }}
+    @if($filterDay)
+      · Tanggal {{ $filterDay }}
+    @endif
+  </span>
+</form>
 
   <div class="section-divider mb-16">
     <span class="section-divider__label">

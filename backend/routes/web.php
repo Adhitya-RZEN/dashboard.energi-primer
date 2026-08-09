@@ -15,6 +15,9 @@ use App\Http\Controllers\CoalDataController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PengaturanController;
 
+use Illuminate\Http\Request;
+
+
 Route::redirect('/', '/dashboard');
 
 Route::prefix('dashboard')->group(function () {
@@ -24,9 +27,14 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/stok', [DashboardController::class, 'stok'])->name('dashboard.stok');
     Route::get('/solar', [DashboardController::class, 'solar'])->name('dashboard.solar');
     Route::get('/target', [DashboardController::class, 'target'])->name('dashboard.target');
-});
-
-Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
-Route::get('/data-batu-bara', [CoalDataController::class, 'index'])->name('data-batu-bara');
-Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan');
-Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan');
+    Route::get('/filter/reset', function (Request $request) {
+        session()->forget(['dashboard_filter_month', 'dashboard_filter_year', 'dashboard_filter_day']);
+        return redirect($request->input('redirect', route('dashboard.overview')));
+    })->name('dashboard.filter.reset');
+    });
+    
+    Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
+    Route::get('/data-batu-bara', [CoalDataController::class, 'index'])->name('data-batu-bara');
+    Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan');
+    Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan');
+    

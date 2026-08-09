@@ -22,55 +22,78 @@ class DashboardController extends Controller
         private readonly DashboardService $dashboardService
     ) {}
 
-    private function prepareDashboardData(Request $request): array
-    {
-        $filterMonth = (int) ($request->input('month') ?: date('n'));
-        $filterYear  = (int) ($request->input('year')  ?: date('Y'));
+ private function prepareDashboardData(Request $request): array
+{
+    // Ambil dari query string jika ada; kalau tidak, fallback ke session; kalau tidak ada juga, fallback ke default.
+    $filterMonth = (int) ($request->input('month')
+        ?? session('dashboard_filter_month')
+        ?? date('n'));
 
-        $filterMonth = max(1, min(12, $filterMonth));
-        $filterYear  = max(2024, min((int) date('Y') + 1, $filterYear));
+    $filterYear = (int) ($request->input('year')
+        ?? session('dashboard_filter_year')
+        ?? date('Y'));
 
-        $data = null;
-        $error = null;
+    $filterDay = $request->has('day')
+        ? ($request->input('day') !== '' ? (int) $request->input('day') : null)
+        : session('dashboard_filter_day'); // null jika belum pernah difilter
 
-        try {
-            $data = $this->dashboardService->getDashboard($filterMonth, $filterYear);
-        } catch (\Exception $e) {
-            Log::error('[DashboardController] Gagal mengambil data: ' . $e->getMessage());
-            $error = 'Gagal terhubung ke Google Sheets. Detail: ' . $e->getMessage();
-        }
+    $filterMonth = max(1, min(12, $filterMonth));
+    $filterYear  = max(2024, min((int) date('Y') + 1, $filterYear));
 
-        if ($data === null) {
-            $data = $this->emptyData($filterMonth, $filterYear);
-        }
-
-        $meta        = $data['meta'];
-        $monthLabel  = ($meta['month_name'] ?? '') . ' ' . ($meta['year'] ?? $filterYear);
-        
-        $biomassa = $data['biomassa'];
-        $batubara = $data['batubara'];
-        $stock = $data['stock'];
-        $solar = $data['solar'];
-        $targetBiomassa = $data['target_biomassa'];
-
-        $stockPct = DashboardService::stockPct($stock['stock_batubara'], 70000);
-        $fallbackNotice = $data['fallback_notice'] ?? null;
-
-        return compact(
-            'filterMonth',
-            'filterYear',
-            'monthLabel',
-            'error',
-            'data',
-            'biomassa',
-            'batubara',
-            'stock',
-            'solar',
-            'targetBiomassa',
-            'stockPct',
-            'fallbackNotice'
-        );
+    if ($filterDay !== null) {
+        $daysInMonth = (int) \Carbon\Carbon::create($filterYear, $filterMonth, 1)->daysInMonth;
+        $filterDay   = max(1, min($daysInMonth, $filterDay));
     }
+
+    // Simpan kembali ke session supaya halaman lain ikut memakainya
+    session([
+        'dashboard_filter_month' => $filterMonth,
+        'dashboard_filter_year'  => $filterYear,
+        'dashboard_filter_day'   => $filterDay,
+    ]);
+
+    $data = null;
+    $error = null;
+
+    try {
+        $data = $this->dashboardService->getDashboard($filterMonth, $filterYear, $filterDay);
+    } catch (\Exception $e) {
+        Log::error('[DashboardController] Gagal mengambil data: ' . $e->getMessage());
+        $error = 'Gagal terhubung ke Google Sheets. Detail: ' . $e->getMessage();
+    }
+
+    if ($data === null) {
+        $data = $this->emptyData($filterMonth, $filterYear);
+    }
+
+    $meta       = $data['meta'];
+    $monthLabel = ($meta['month_name'] ?? '') . ' ' . ($meta['year'] ?? $filterYear);
+
+    $biomassa = $data['biomassa'];
+    $batubara = $data['batubara'];
+    $stock = $data['stock'];
+    $solar = $data['solar'];
+    $targetBiomassa = $data['target_biomassa'];
+
+    $stockPct = DashboardService::stockPct($stock['stock_batubara'], 70000);
+    $fallbackNotice = $data['fallback_notice'] ?? null;
+
+    return compact(
+        'filterMonth',
+        'filterYear',
+        'filterDay',
+        'monthLabel',
+        'error',
+        'data',
+        'biomassa',
+        'batubara',
+        'stock',
+        'solar',
+        'targetBiomassa',
+        'stockPct',
+        'fallbackNotice'
+    );
+}
 
     public function overview(Request $request)
     {

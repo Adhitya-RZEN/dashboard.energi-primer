@@ -103,63 +103,62 @@ class GoogleSheetsDataSource implements DataSourceInterface
     /**
      * Ambil seluruh data KPI untuk bulan dan tahun tertentu.
      */
-    public function getDashboardData(int $month, int $year): array
-    {
-        $worksheetName = $this->buildWorksheetName($month, $year);
-        $range         = config('google.sheets.data_range', 'B11:CO59');
-        $fullRange     = "'{$worksheetName}'!{$range}";
+    public function getDashboardData(int $month, int $year, ?int $day = null): array
+{
+    $worksheetName = $this->buildWorksheetName($month, $year);
+    $range         = config('google.sheets.data_range', 'B11:CO59');
+    $fullRange     = "'{$worksheetName}'!{$range}";
 
-        Log::info("[GoogleSheetsDataSource] Fetching: {$fullRange}");
+    Log::info("[GoogleSheetsDataSource] Fetching: {$fullRange}");
 
-        try {
-            $response = $this->service->spreadsheets_values->get(
-                $this->spreadsheetId,
-                $fullRange
-            );
+    try {
+        $response = $this->service->spreadsheets_values->get(
+            $this->spreadsheetId,
+            $fullRange
+        );
 
-            $rows = $response->getValues() ?? [];
-        } catch (\Exception $e) {
-            Log::error("[GoogleSheetsDataSource] API Error: " . $e->getMessage());
-            throw $e;
-        }
-
-        if (empty($rows)) {
-            return $this->emptyResponse($worksheetName);
-        }
-
-        // Row 42 = index 31 (total bulanan)
-        $totalRow = $rows[self::ROW_TOTAL_INDEX] ?? [];
-        $row52 = $rows[self::ROW_BIOMASSA_PENERIMAAN_BULANAN_INDEX] ?? [];
-        $row56 = $rows[self::ROW_TARGET_BIOMASSA_INDEX] ?? [];
-        $realisasiRow = $rows[self::ROW_REALISASI_KUMULATIF_INDEX] ?? [];
-
-        // Cari baris hari ini
-        $today    = (int) date('j'); // hari tanpa leading zero
-        $todayRowIndex = $this->findTodayRow($rows, $today);
-        $dailyRow = $todayRowIndex !== null ? ($rows[$todayRowIndex] ?? []) : [];
-
-        // Tentukan tanggal yang sesuai dengan data yang diambil
-        $actualDay = $todayRowIndex !== null ? ($todayRowIndex + 1) : $today;
-        $monthName = self::MONTH_NAMES[$month] ?? '';
-        $actualDate = str_pad($actualDay, 2, '0', STR_PAD_LEFT) . " {$monthName} {$year}";
-
-        return [
-            'worksheet'  => $worksheetName,
-            'today_row'  => $todayRowIndex !== null ? ($todayRowIndex + 11) : null,
-            'today_date' => $actualDate,
-            'biomassa'   => $this->parseBiomassa($totalRow, $row52, $dailyRow),
-            'batubara'   => $this->parseBatubara($totalRow, $dailyRow),
-            'stock'      => $this->parseStock($dailyRow),
-            'solar'      => $this->parseSolar($totalRow, $dailyRow),
-            'target_biomassa' => $this->parseTargetBiomassa($row56, $realisasiRow),
-            'meta' => [
-                'month'         => $month,
-                'year'          => $year,
-                'month_name'    => self::MONTH_NAMES[$month] ?? '',
-                'fetched_at'    => now()->toDateTimeString(),
-            ],
-        ];
+        $rows = $response->getValues() ?? [];
+    } catch (\Exception $e) {
+        Log::error("[GoogleSheetsDataSource] API Error: " . $e->getMessage());
+        throw $e;
     }
+
+    if (empty($rows)) {
+        return $this->emptyResponse($worksheetName);
+    }
+
+    $totalRow = $rows[self::ROW_TOTAL_INDEX] ?? [];
+    $row52 = $rows[self::ROW_BIOMASSA_PENERIMAAN_BULANAN_INDEX] ?? [];
+    $row56 = $rows[self::ROW_TARGET_BIOMASSA_INDEX] ?? [];
+    $realisasiRow = $rows[self::ROW_REALISASI_KUMULATIF_INDEX] ?? [];
+
+    // Jika $day diberikan (filter manual), gunakan itu. Jika tidak, fallback ke tanggal hari ini.
+    $targetDay = $day ?? (int) date('j');
+    $todayRowIndex = $this->findTodayRow($rows, $targetDay);
+    $dailyRow = $todayRowIndex !== null ? ($rows[$todayRowIndex] ?? []) : [];
+
+    $actualDay = $todayRowIndex !== null ? ($todayRowIndex + 1) : $targetDay;
+    $monthName = self::MONTH_NAMES[$month] ?? '';
+    $actualDate = str_pad($actualDay, 2, '0', STR_PAD_LEFT) . " {$monthName} {$year}";
+
+    return [
+        'worksheet'  => $worksheetName,
+        'today_row'  => $todayRowIndex !== null ? ($todayRowIndex + 11) : null,
+        'today_date' => $actualDate,
+        'biomassa'   => $this->parseBiomassa($totalRow, $row52, $dailyRow),
+        'batubara'   => $this->parseBatubara($totalRow, $dailyRow),
+        'stock'      => $this->parseStock($dailyRow),
+        'solar'      => $this->parseSolar($totalRow, $dailyRow),
+        'target_biomassa' => $this->parseTargetBiomassa($row56, $realisasiRow),
+        'meta' => [
+            'month'         => $month,
+            'year'          => $year,
+            'day'           => $targetDay,
+            'month_name'    => self::MONTH_NAMES[$month] ?? '',
+            'fetched_at'    => now()->toDateTimeString(),
+        ],
+    ];
+}
 
     // ── Private Helpers ────────────────────────────────────────────────
 
@@ -178,31 +177,30 @@ class GoogleSheetsDataSource implements DataSourceInterface
      * Cari index baris yang tanggalnya cocok dengan hari ini.
      * Baris dalam array: index 0 = row 11 = tanggal 1, dst.
      */
-    private function findTodayRow(array $rows, int $today): ?int
-    {
-        foreach ($rows as $i => $row) {
-            if ($i >= 31) break; // lewati row 42 (total)
-            $cellValue = trim($row[0] ?? '');
-            if ($cellValue === '' || $cellValue === null) continue;
+   private function findTodayRow(array $rows, int $targetDay): ?int
+{
+    foreach ($rows as $i => $row) {
+        if ($i >= 31) break; // lewati row 42 (total)
+        $cellValue = trim($row[0] ?? '');
+        if ($cellValue === '' || $cellValue === null) continue;
 
-            // Nilai bisa berupa angka tanggal atau string tanggal
-            $dayValue = (int) $cellValue;
-            if ($dayValue === $today) {
-                return $i;
-            }
+        $dayValue = (int) $cellValue;
+        if ($dayValue === $targetDay) {
+            return $i;
         }
-
-        // Fallback: cari baris terakhir yang ada datanya
-        for ($i = 30; $i >= 0; $i--) {
-            $val = trim($rows[$i][0] ?? '');
-            if ($val !== '' && is_numeric($val)) {
-                Log::info("[GoogleSheetsDataSource] Hari ini ({$today}) tidak ditemukan, fallback ke baris " . ($i + 11));
-                return $i;
-            }
-        }
-
-        return null;
     }
+
+    // Fallback: cari baris terakhir yang ada datanya
+    for ($i = 30; $i >= 0; $i--) {
+        $val = trim($rows[$i][0] ?? '');
+        if ($val !== '' && is_numeric($val)) {
+            Log::info("[GoogleSheetsDataSource] Tanggal ({$targetDay}) tidak ditemukan, fallback ke baris " . ($i + 11));
+            return $i;
+        }
+    }
+
+    return null;
+}
 
     /**
      * Ambil nilai numerik dari baris berdasarkan index kolom.
