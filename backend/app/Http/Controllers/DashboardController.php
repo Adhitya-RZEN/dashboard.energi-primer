@@ -2,231 +2,131 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CoalConsumption;
-use App\Models\CoalStock;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Services\DashboardService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * DashboardController
+ *
+ * Menerima request HTTP, memanggil DashboardService,
+ * lalu mengirim data yang sudah diformat ke View.
+ *
+ * Tidak ada logika bisnis maupun query langsung di sini.
+ *
+ * PT PLN Indonesia Power UBP Jeranjang
+ */
 class DashboardController extends Controller
 {
-    public function index()
+    public function __construct(
+        private readonly DashboardService $dashboardService
+    ) {}
+
+    private function prepareDashboardData(Request $request): array
     {
-        // ── Referensi tanggal: pakai date terbaru di DB ──────────────────
-        $latestDbDate = CoalConsumption::max('date') ?? date('Y-m-d');         // e.g. "2025-12-31"
+        $filterMonth = (int) ($request->input('month') ?: date('n'));
+        $filterYear  = (int) ($request->input('year')  ?: date('Y'));
 
-        $reqMonth = request('month');
-        $reqYear  = request('year');
+        $filterMonth = max(1, min(12, $filterMonth));
+        $filterYear  = max(2024, min((int) date('Y') + 1, $filterYear));
 
-        if ($reqMonth && $reqYear) {
-            $refDate = Carbon::createFromDate($reqYear, $reqMonth, 1)->endOfMonth();
-            $effectiveLatestDate = CoalConsumption::whereYear('date', $reqYear)
-                                                  ->whereMonth('date', $reqMonth)
-                                                  ->max('date') ?? $refDate->toDateString();
-        } else {
-            $refDate = Carbon::parse($latestDbDate);
-            $effectiveLatestDate = $latestDbDate;
-            $reqMonth = $refDate->format('m');
-            $reqYear  = $refDate->format('Y');
+        $data = null;
+        $error = null;
+
+        try {
+            $data = $this->dashboardService->getDashboard($filterMonth, $filterYear);
+        } catch (\Exception $e) {
+            Log::error('[DashboardController] Gagal mengambil data: ' . $e->getMessage());
+            $error = 'Gagal terhubung ke Google Sheets. Detail: ' . $e->getMessage();
         }
 
-        $monthStart = $refDate->copy()->startOfMonth()->toDateString();
-        $monthEnd   = $refDate->copy()->endOfMonth()->toDateString();
-        $prevStart  = $refDate->copy()->subMonth()->startOfMonth()->toDateString();
-        $prevEnd    = $refDate->copy()->subMonth()->endOfMonth()->toDateString();
-        $monthLabel = $refDate->locale('id')->isoFormat('MMMM YYYY');
-
-        $filterMonth = $reqMonth;
-        $filterYear  = $reqYear;
-
-        // ── KPI 1: Total Konsumsi bulan ini ──────────────────────────────
-        $totalConsumption = (float) CoalConsumption::whereBetween('date', [$monthStart, $monthEnd])
-            ->sum('coal_used');
-        $prevConsumption  = (float) CoalConsumption::whereBetween('date', [$prevStart, $prevEnd])
-            ->sum('coal_used');
-        $consumptionTrend = $prevConsumption > 0
-            ? round((($totalConsumption - $prevConsumption) / $prevConsumption) * 100, 1)
-            : 0;
-
-        // ── KPI 2: Rata-rata Efisiensi Boiler ────────────────────────────
-        $avgEfficiency  = round((float) CoalConsumption::whereBetween('date', [$monthStart, $monthEnd])
-            ->avg('boiler_efficiency'), 2);
-        $prevEfficiency = round((float) CoalConsumption::whereBetween('date', [$prevStart, $prevEnd])
-            ->avg('boiler_efficiency'), 2);
-        $efficiencyTrend = round($avgEfficiency - $prevEfficiency, 2);
-
-        // ── KPI 3: Rata-rata Heat Rate ────────────────────────────────────
-        $avgHeatRate  = (int) round((float) CoalConsumption::whereBetween('date', [$monthStart, $monthEnd])
-            ->avg('heat_rate'));
-        $prevHeatRate = (int) round((float) CoalConsumption::whereBetween('date', [$prevStart, $prevEnd])
-            ->avg('heat_rate'));
-        $heatRateTrend = $avgHeatRate - $prevHeatRate;      // negatif = lebih baik
-
-        // ── KPI 4: Stock Batu Bara (terbaru) ─────────────────────────────
-        $latestStock       = CoalStock::orderBy('date', 'desc')->first();
-        $maxStockCapacity  = 70000; // ton
-        $stockPct          = $latestStock
-            ? min(100, round(($latestStock->closing_stock / $maxStockCapacity) * 100))
-            : 0;
-
-        // ── Sparkline konsumsi: 7 hari terakhir ──────────────────────────
-        $sevenDayStart = Carbon::parse($effectiveLatestDate)->subDays(6)->toDateString();
-        $sparklineRaw  = CoalConsumption::selectRaw('date, SUM(coal_used) as total')
-            ->whereBetween('date', [$sevenDayStart, $effectiveLatestDate])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->pluck('total')
-            ->map(fn ($v) => (float) $v)
-            ->toArray();
-
-        $maxSpark  = max($sparklineRaw ?: [1]);
-        $sparkline = array_map(fn ($v) => max(10, (int) round($v / $maxSpark * 100)), $sparklineRaw);
-        while (count($sparkline) < 7) {
-            array_unshift($sparkline, 15);
+        if ($data === null) {
+            $data = $this->emptyData($filterMonth, $filterYear);
         }
 
-        // ── Sparkline heat rate: 7 hari terakhir ─────────────────────────
-        $hrRaw = CoalConsumption::selectRaw('date, AVG(heat_rate) as avg_hr')
-            ->whereBetween('date', [$sevenDayStart, $effectiveLatestDate])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->pluck('avg_hr')
-            ->map(fn ($v) => (float) $v)
-            ->toArray();
+        $meta        = $data['meta'];
+        $monthLabel  = ($meta['month_name'] ?? '') . ' ' . ($meta['year'] ?? $filterYear);
+        
+        $biomassa = $data['biomassa'];
+        $batubara = $data['batubara'];
+        $stock = $data['stock'];
+        $solar = $data['solar'];
+        $targetBiomassa = $data['target_biomassa'];
 
-        $maxHr    = max($hrRaw ?: [1]);
-        $minHr    = min($hrRaw ?: [0]);
-        $range    = ($maxHr - $minHr) ?: 1;
-        $hrSparkline = array_map(
-            fn ($v) => max(10, (int) round(($v - $minHr) / $range * 100)),
-            $hrRaw
+        $stockPct = DashboardService::stockPct($stock['stock_batubara'], 70000);
+        $fallbackNotice = $data['fallback_notice'] ?? null;
+
+        return compact(
+            'filterMonth',
+            'filterYear',
+            'monthLabel',
+            'error',
+            'data',
+            'biomassa',
+            'batubara',
+            'stock',
+            'solar',
+            'targetBiomassa',
+            'stockPct',
+            'fallbackNotice'
         );
-        while (count($hrSparkline) < 7) {
-            array_unshift($hrSparkline, 50);
-        }
+    }
 
-        // ── Performa unit (tanggal terbaru) ───────────────────────────────
-        $unitPerformance = DB::table('coal_consumption as cc')
-            ->join('units as u', 'u.id', '=', 'cc.unit_id')
-            ->where('cc.date', $effectiveLatestDate)
-            ->select(['u.name as unit_name', 'cc.coal_used', 'cc.boiler_efficiency', 'cc.heat_rate', 'cc.sfc'])
-            ->orderBy('u.name')
-            ->get();
+    public function overview(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.overview', $viewData);
+    }
 
-        // ── Aktivitas terbaru (5 record terakhir berbeda tanggal+unit) ────
-        // Kita batasi aktivitas terbaru berdasarkan monthEnd agar filter berguna
-        $recentActivity = DB::table('coal_consumption as cc')
-            ->join('units as u', 'u.id', '=', 'cc.unit_id')
-            ->where('cc.date', '<=', $effectiveLatestDate)
-            ->select(['cc.date', 'u.name as unit_name', 'cc.coal_used', 'cc.boiler_efficiency', 'cc.heat_rate'])
-            ->orderBy('cc.date', 'desc')
-            ->orderBy('u.name')
-            ->limit(5)
-            ->get();
+    public function biomassa(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.biomassa', $viewData);
+    }
 
-        // ── Tabel monitoring bawah (5 record terakhir, join quality) ─────
-        $monitoringTable = DB::table('coal_consumption as cc')
-            ->join('units as u', 'u.id', '=', 'cc.unit_id')
-            ->leftJoin('coal_quality as cq', function ($join) {
-                $join->on('cq.unit_id', '=', 'cc.unit_id')
-                     ->on('cq.date', '=', 'cc.date');
-            })
-            ->where('cc.date', '<=', $effectiveLatestDate)
-            ->select([
-                'cc.date', 'u.name as unit_name',
-                'cq.gar', 'cq.moisture', 'cq.ash', 'cq.sulfur',
-                'cc.coal_used', 'cc.heat_rate', 'cc.boiler_efficiency',
-            ])
-            ->orderBy('cc.date', 'desc')
-            ->orderBy('u.name')
-            ->limit(5)
-            ->get();
+    public function batubara(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.batubara', $viewData);
+    }
 
-        $totalMonitoringCount = CoalConsumption::count();
+    public function stok(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.stok', $viewData);
+    }
 
-        // ── PHASE 2: Data Grafik Analitik (Chart.js) ─────────────────────
-        
-        // 1. Line Chart: Tren Konsumsi Harian (30 Hari Terakhir)
-        $lineChartStart = Carbon::parse($effectiveLatestDate)->subDays(29)->toDateString();
-        $lineChartRaw = DB::table('coal_consumption as cc')
-            ->join('units as u', 'u.id', '=', 'cc.unit_id')
-            ->whereBetween('cc.date', [$lineChartStart, $effectiveLatestDate])
-            ->select('cc.date', 'u.name as unit_name', 'cc.coal_used')
-            ->orderBy('cc.date')
-            ->get();
+    public function solar(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.solar', $viewData);
+    }
 
-        // Menyusun array date unik untuk label sumbu X
-        $lineLabelsMap = [];
-        // Menyusun dataset per unit
-        $lineDatasets = [];
-        
-        foreach ($lineChartRaw as $row) {
-            $dateFormatted = Carbon::parse($row->date)->format('d M');
-            $lineLabelsMap[$row->date] = $dateFormatted;
-            
-            if (!isset($lineDatasets[$row->unit_name])) {
-                $lineDatasets[$row->unit_name] = [];
-            }
-            $lineDatasets[$row->unit_name][$row->date] = (float) $row->coal_used;
-        }
+    public function target(Request $request)
+    {
+        $viewData = $this->prepareDashboardData($request);
+        return view('dashboard.target', $viewData);
+    }
 
-        $lineLabels = array_values($lineLabelsMap);
-        $lineSeries = [];
-        foreach ($lineDatasets as $unitName => $dataByDate) {
-            $seriesData = [];
-            foreach (array_keys($lineLabelsMap) as $dateKey) {
-                $seriesData[] = $dataByDate[$dateKey] ?? 0;
-            }
-            $lineSeries[] = [
-                'label' => $unitName,
-                'data'  => $seriesData,
-            ];
-        }
+    // ── Helpers ────────────────────────────────────────────────────────
 
-        // 2. Pie Chart: Distribusi Kualitas (Bulan Ini)
-        $pieChartRaw = DB::table('coal_quality')
-            ->whereBetween('date', [$monthStart, $monthEnd])
-            ->select('gar')
-            ->get();
-
-        $pieData = [
-            'on_spec'   => 0,
-            'perhatian' => 0,
-            'off_spec'  => 0,
+    private function emptyData(int $month, int $year): array
+    {
+        $monthNames = [
+            1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',
+            7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember',
         ];
 
-        foreach ($pieChartRaw as $row) {
-            if ($row->gar >= 4700) {
-                $pieData['on_spec']++;
-            } elseif ($row->gar >= 4500) {
-                $pieData['perhatian']++;
-            } else {
-                $pieData['off_spec']++;
-            }
-        }
-
-        $chartData = [
-            'line' => [
-                'labels'   => $lineLabels,
-                'datasets' => $lineSeries,
-            ],
-            'pie' => [
-                'data' => [
-                    $pieData['on_spec'],
-                    $pieData['perhatian'],
-                    $pieData['off_spec'],
-                ],
-            ]
+        return [
+            'worksheet'  => ($monthNames[$month] ?? '') . substr($year, -2) . '-BB',
+            'today_row'  => null,
+            'today_date' => date('d F Y'),
+            'biomassa'   => ['penerimaan_bulanan'=>0,'pemakaian_bulanan'=>0,'unit1_harian'=>0,'unit2_harian'=>0,'unit3_harian'=>0,'total_pemakaian_batubara_bulanan'=>0],
+            'batubara'   => ['penerimaan_bulanan'=>0,'unit1_harian'=>0,'unit2_harian'=>0,'unit3_harian'=>0,'pemakaian_harian'=>0],
+            'stock'      => ['stock_batubara'=>0,'hop'=>0,'hop_status'=>'danger','hop_label'=>'Kritis'],
+            'solar'      => ['pemakaian_harian'=>0,'pemakaian_bulanan'=>0,'penerimaan_bulanan'=>0],
+            'target_biomassa' => ['target'=>70020,'realisasi_kumulatif'=>0,'kumulatif'=>0,'progress'=>0,'sisa'=>70020],
+            'meta'       => ['month'=>$month,'year'=>$year,'month_name'=>$monthNames[$month]??'','fetched_at'=>now()->toDateTimeString()],
         ];
-
-        return view('dashboard.index', compact(
-            'effectiveLatestDate', 'monthLabel', 'filterMonth', 'filterYear',
-            'totalConsumption', 'consumptionTrend', 'sparkline',
-            'avgEfficiency', 'efficiencyTrend',
-            'avgHeatRate', 'heatRateTrend', 'hrSparkline',
-            'latestStock', 'stockPct', 'maxStockCapacity',
-            'unitPerformance', 'recentActivity',
-            'monitoringTable', 'totalMonitoringCount',
-            'chartData'
-        ));
     }
 }

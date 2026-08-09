@@ -39,6 +39,20 @@
   {{-- Status Bar --}}
   @include('components.status-bar')
 
+  {{-- ── Phase 1 Notice ── --}}
+  @if(isset($phase1Notice) && $phase1Notice)
+  <div role="alert" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;margin-top:16px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div>
+      <div style="color:#1E40AF;font-size:13px;font-weight:600;margin-bottom:2px;">Fase 1 — Data Bersumber dari Google Sheets</div>
+      <div style="color:#3B82F6;font-size:12px;line-height:1.5;">
+        Halaman monitoring terperinci akan tersedia pada Fase 2 (PostgreSQL). Saat ini, data operasional dapat dipantau melalui
+        <a href="{{ url('/') }}" style="color:#1D4ED8;font-weight:600;text-decoration:underline;">Dashboard Energi Primer</a>.
+      </div>
+    </div>
+  </div>
+  @endif
+
   {{-- ── Filter Bar ── --}}
   <form method="GET" action="{{ route('monitoring') }}" class="filter-bar mb-20">
     <span class="filter-bar__label">Filter</span>

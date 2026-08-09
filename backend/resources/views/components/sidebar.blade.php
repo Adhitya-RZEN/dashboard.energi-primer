@@ -15,87 +15,68 @@
 
   <ul class="sidebar__menu" role="menubar">
 
-    {{-- Dashboard --}}
+    {{-- Overview --}}
     <li role="none">
-      <a
-        class="sidebar__link {{ request()->is('/') ? 'active' : '' }}"
-        href="{{ url('/') }}"
-        role="menuitem"
-        aria-current="{{ request()->is('/') ? 'page' : 'false' }}"
-        data-href="/"
-      >
-        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
+      <a class="sidebar__link {{ request()->routeIs('dashboard.overview') ? 'active' : '' }}" href="{{ route('dashboard.overview') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.overview') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="7" height="7" rx="1" />
           <rect x="14" y="3" width="7" height="7" rx="1" />
           <rect x="14" y="14" width="7" height="7" rx="1" />
           <rect x="3" y="14" width="7" height="7" rx="1" />
         </svg>
-        <span class="sidebar__label">Dashboard</span>
+        <span class="sidebar__label">Overview</span>
       </a>
     </li>
 
-    {{-- Monitoring --}}
+    {{-- Biomassa --}}
     <li role="none">
-      <a
-        class="sidebar__link {{ request()->is('monitoring') ? 'active' : '' }}"
-        href="{{ url('/monitoring') }}"
-        role="menuitem"
-        aria-current="{{ request()->is('monitoring') ? 'page' : 'false' }}"
-        data-href="/monitoring"
-      >
-        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+      <a class="sidebar__link {{ request()->routeIs('dashboard.biomassa') ? 'active' : '' }}" href="{{ route('dashboard.biomassa') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.biomassa') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2a9 9 0 0 1 9 9c0 4.97-9 13-9 13S3 15.97 3 11a9 9 0 0 1 9-9z"/><circle cx="12" cy="11" r="3"/>
         </svg>
-        <span class="sidebar__label">Monitoring</span>
+        <span class="sidebar__label">Biomassa</span>
       </a>
     </li>
 
-    {{-- Data Batu Bara
+    {{-- Batubara --}}
     <li role="none">
-      <a
-        class="sidebar__link {{ request()->is('data-batu-bara') ? 'active' : '' }}"
-        href="{{ url('/data-batu-bara') }}"
-        role="menuitem"
-        aria-current="{{ request()->is('data-batu-bara') ? 'page' : 'false' }}"
-        data-href="/data-batu-bara"
-      >
-        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
+      <a class="sidebar__link {{ request()->routeIs('dashboard.batubara') ? 'active' : '' }}" href="{{ route('dashboard.batubara') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.batubara') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" />
+        </svg>
+        <span class="sidebar__label">Batubara</span>
+      </a>
+    </li>
+
+    {{-- Stok Batubara --}}
+    <li role="none">
+      <a class="sidebar__link {{ request()->routeIs('dashboard.stok') ? 'active' : '' }}" href="{{ route('dashboard.stok') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.stok') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
         </svg>
-        <span class="sidebar__label">Data Batu Bara</span>
+        <span class="sidebar__label">Stok Batubara</span>
       </a>
-    </li> --}}
+    </li>
 
-    {{-- Laporan
+    {{-- Solar --}}
     <li role="none">
-      <a
-        class="sidebar__link {{ request()->is('laporan') ? 'active' : '' }}"
-        href="{{ url('/laporan') }}"
-        role="menuitem"
-        aria-current="{{ request()->is('laporan') ? 'page' : 'false' }}"
-        data-href="/laporan"
-      >
-        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round"
-             aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
+      <a class="sidebar__link {{ request()->routeIs('dashboard.solar') ? 'active' : '' }}" href="{{ route('dashboard.solar') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.solar') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
         </svg>
-        <span class="sidebar__label">Laporan</span>
+        <span class="sidebar__label">Solar</span>
       </a>
-    </li> --}}
+    </li>
+
+    {{-- Target & Kinerja --}}
+    <li role="none">
+      <a class="sidebar__link {{ request()->routeIs('dashboard.target') ? 'active' : '' }}" href="{{ route('dashboard.target') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.target') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+        </svg>
+        <span class="sidebar__label">Target & Kinerja</span>
+      </a>
+    </li>
 
   </ul>
 

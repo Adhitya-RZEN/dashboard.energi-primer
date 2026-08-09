@@ -15,7 +15,17 @@ use App\Http\Controllers\CoalDataController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PengaturanController;
 
-Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+Route::redirect('/', '/dashboard');
+
+Route::prefix('dashboard')->group(function () {
+    Route::get('/', [DashboardController::class, 'overview'])->name('dashboard.overview');
+    Route::get('/biomassa', [DashboardController::class, 'biomassa'])->name('dashboard.biomassa');
+    Route::get('/batubara', [DashboardController::class, 'batubara'])->name('dashboard.batubara');
+    Route::get('/stok', [DashboardController::class, 'stok'])->name('dashboard.stok');
+    Route::get('/solar', [DashboardController::class, 'solar'])->name('dashboard.solar');
+    Route::get('/target', [DashboardController::class, 'target'])->name('dashboard.target');
+});
+
 Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring');
 Route::get('/data-batu-bara', [CoalDataController::class, 'index'])->name('data-batu-bara');
 Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan');
