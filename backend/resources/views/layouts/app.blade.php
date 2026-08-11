@@ -17,10 +17,36 @@
   {{-- Global CSS --}}
   <link rel="stylesheet" href="{{ asset('css/app.css') }}" />
 
+  {{-- Dashboard page-identity theme tokens (Dashboard Theme Color Refactor) --}}
+  <link rel="stylesheet" href="{{ asset('css/theme.css') }}" />
+
   {{-- Page-specific CSS --}}
   @yield('page-css')
 </head>
-<body>
+@php
+  /**
+   * Page theme mapping — Dashboard Theme Color Refactor
+   *
+   * Maps each of the six dashboard routes to a page-identity theme.
+   * The resulting data-theme attribute drives CSS custom-property
+   * overrides defined in theme.css ([data-theme="..."] blocks), which
+   * re-scope --primary/--primary-dark/--primary-light/--primary-mid
+   * for that page only. Routes outside this map (Monitoring, Data
+   * Batu Bara, Laporan, Pengaturan, etc.) intentionally receive no
+   * data-theme attribute and keep the default (blue) design system.
+   */
+  $dashboardThemeMap = [
+      'dashboard.overview' => 'overview',
+      'dashboard.biomassa' => 'biomassa',
+      'dashboard.batubara' => 'batubara',
+      'dashboard.solar'    => 'solar',
+      'dashboard.stok'     => 'stok',
+      'dashboard.target'   => 'target',
+  ];
+  $currentRouteName = request()->route()?->getName();
+  $pageTheme = $dashboardThemeMap[$currentRouteName] ?? null;
+@endphp
+<body @if($pageTheme) data-theme="{{ $pageTheme }}" @endif>
 
 {{-- Overlay for mobile sidebar --}}
 <div class="sidebar-overlay" id="js-overlay" aria-hidden="true"></div>

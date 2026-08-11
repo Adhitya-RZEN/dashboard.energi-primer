@@ -150,6 +150,7 @@ class GoogleSheetsDataSource implements DataSourceInterface
         'stock'      => $this->parseStock($dailyRow),
         'solar'      => $this->parseSolar($totalRow, $dailyRow),
         'target_biomassa' => $this->parseTargetBiomassa($row56, $realisasiRow),
+        'daily_series'    => $this->parseDailySeries($rows, $month, $year),
         'meta' => [
             'month'         => $month,
             'year'          => $year,
@@ -331,6 +332,7 @@ class GoogleSheetsDataSource implements DataSourceInterface
                 'unit1_harian' => 0, 'unit2_harian' => 0, 'unit3_harian' => 0,
                 'total_pemakaian_batubara_bulanan' => 0,
             ],
+            'daily_series'  => [],
             'batubara'   => [
                 'penerimaan_bulanan' => 0, 'unit1_harian' => 0,
                 'unit2_harian' => 0, 'unit3_harian' => 0, 'pemakaian_harian' => 0,
@@ -340,5 +342,34 @@ class GoogleSheetsDataSource implements DataSourceInterface
             'target_biomassa' => ['target' => self::TARGET_BIOMASSA_TON, 'realisasi_kumulatif' => 0, 'kumulatif' => 0, 'progress' => 0, 'sisa' => self::TARGET_BIOMASSA_TON],
             'meta'       => ['month' => 0, 'year' => 0, 'month_name' => '', 'fetched_at' => now()->toDateTimeString()],
         ];
+    }
+    
+    private function parseDailySeries(array $rows, int $month, int $year): array
+    {
+        $series = [];
+        foreach ($rows as $i => $row) {
+            if ($i >= self::ROW_TOTAL_INDEX) break; // stop sebelum row 42 (total)
+            $dayRaw = trim($row[0] ?? '');
+            if ($dayRaw === '' || !is_numeric($dayRaw)) continue;
+
+            $day  = (int) $dayRaw;
+            $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
+
+            $series[] = [
+                'date'               => $date,
+                'day'                => $day,
+                'biomassa_unit1'     => $this->val($row, self::COL_BIOMASSA_UNIT1_HARIAN),
+                'biomassa_unit2'     => $this->val($row, self::COL_BIOMASSA_UNIT2_HARIAN),
+                'biomassa_unit3'     => $this->val($row, self::COL_BIOMASSA_UNIT3_HARIAN),
+                'batubara_pemakaian' => $this->val($row, self::COL_BATUBARA_PEMAKAIAN_HARIAN),
+                'batubara_unit1'     => $this->val($row, self::COL_BATUBARA_UNIT1_HARIAN),
+                'batubara_unit2'     => $this->val($row, self::COL_BATUBARA_UNIT2_HARIAN),
+                'batubara_unit3'     => $this->val($row, self::COL_BATUBARA_UNIT3_HARIAN),
+                'stock_batubara'     => $this->val($row, self::COL_STOCK_BATUBARA),
+                'hop'                => $this->val($row, self::COL_HOP),
+                'solar_pemakaian'    => $this->val($row, self::COL_SOLAR_PEMAKAIAN_HARIAN),
+            ];
+        }
+        return $series;
     }
 }

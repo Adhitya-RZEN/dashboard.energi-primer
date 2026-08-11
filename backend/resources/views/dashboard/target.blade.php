@@ -142,11 +142,24 @@
 
   </div>
 
+  <div class="section-divider mb-16" style="margin-top:24px;">
+    <span class="section-divider__label">Grafik Target</span>
+    <div class="section-divider__line"></div>
+  </div>
+  <div class="card card--no-hover mb-20">
+    <div class="card__header"><div class="card__meta"><div class="card__title">Progres Target Biomassa</div></div></div>
+    <div class="chart-canvas" style="height:260px;"><canvas id="targetProgressChart"></canvas></div>
+  </div>
+
   <div style="height:32px;"></div>
 
 @endsection
 
 @section('page-js')
+  <script>
+    window.targetBiomassaData = @json($targetBiomassa ?? []);
+  </script>
+  <script src="{{ asset('js/chart.min.js') }}"></script>
   <script src="{{ asset('js/target.js') }}"></script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
 @endsection

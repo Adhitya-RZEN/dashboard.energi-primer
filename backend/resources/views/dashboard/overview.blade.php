@@ -217,11 +217,37 @@
     </x-kpi-card>
   </div>
 
+  <div class="section-divider mb-16" style="margin-top:24px;">
+    <span class="section-divider__label">Grafik Konsumsi Energi Primer</span>
+    <div class="section-divider__line"></div>
+  </div>
+  <div class="card card--no-hover mb-20">
+    <div class="card__header"><div class="card__meta">
+      <div class="card__title">Konsumsi Energi Primer Harian</div>
+      <div class="card__subtitle">Batubara vs Biomassa &middot; {{ $monthLabel }}</div>
+    </div></div>
+    <div class="chart-canvas" style="height:280px;"><canvas id="energyLineChart"></canvas></div>
+  </div>
+  <div class="chart-row">
+    <div class="card card--no-hover">
+      <div class="card__header"><div class="card__meta">
+        <div class="card__title">Target vs Realisasi Kumulatif Biomassa</div>
+      </div></div>
+      <div class="chart-canvas" style="height:220px;"><canvas id="targetBarChart"></canvas></div>
+    </div>
+  
+  </div>
+
   <div style="height:32px;"></div>
 
 @endsection
 
 @section('page-js')
+  <script>
+    window.chartSeries = @json($chartSeries ?? []);
+    window.targetBiomassaData = @json($targetBiomassa ?? []);
+  </script>
+  <script src="{{ asset('js/chart.min.js') }}"></script>
   <script src="{{ asset('js/overview.js') }}"></script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
 @endsection

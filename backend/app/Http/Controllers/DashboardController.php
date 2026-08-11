@@ -74,6 +74,7 @@ class DashboardController extends Controller
     $stock = $data['stock'];
     $solar = $data['solar'];
     $targetBiomassa = $data['target_biomassa'];
+    $chartSeries = $data['daily_series'] ?? [];
 
     $stockPct = DashboardService::stockPct($stock['stock_batubara'], 70000);
     $fallbackNotice = $data['fallback_notice'] ?? null;
@@ -91,7 +92,8 @@ class DashboardController extends Controller
         'solar',
         'targetBiomassa',
         'stockPct',
-        'fallbackNotice'
+        'fallbackNotice',
+        'chartSeries'
     );
 }
 

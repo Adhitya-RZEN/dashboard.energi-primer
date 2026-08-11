@@ -130,11 +130,29 @@
 
   </div>
 
+  <div class="section-divider mb-16" style="margin-top:24px;">
+    <span class="section-divider__label">Grafik Solar</span>
+    <div class="section-divider__line"></div>
+  </div>
+  <div class="card card--no-hover mb-20">
+    <div class="card__header"><div class="card__meta"><div class="card__title">Pemakaian Solar Harian</div></div></div>
+    <div class="chart-canvas" style="height:260px;"><canvas id="solarLineChart"></canvas></div>
+  </div>
+  <div class="card card--no-hover">
+    <div class="card__header"><div class="card__meta"><div class="card__title">Penerimaan vs Pemakaian Solar</div></div></div>
+    <div class="chart-canvas" style="height:220px;"><canvas id="solarCompareChart"></canvas></div>
+  </div>
+
   <div style="height:32px;"></div>
 
 @endsection
 
 @section('page-js')
+  <script>
+    window.chartSeries = @json($chartSeries ?? []);
+    window.solarTotals = @json($solar ?? []);
+  </script>
+  <script src="{{ asset('js/chart.min.js') }}"></script>
   <script src="{{ asset('js/solar.js') }}"></script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
 @endsection
