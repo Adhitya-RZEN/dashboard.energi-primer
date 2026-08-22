@@ -23,7 +23,7 @@
 
   {{-- Page Header --}}
   <header class="page-header">
-    <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
+    <p class="page-header__eyebrow">Energi Primer</p>
     <h1 class="page-header__title">Laporan Efisiensi Batu Bara</h1>
     <p class="page-header__desc">
       Generate dan unduh laporan monitoring efisiensi batu bara berdasarkan periode yang dipilih.

@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('title', 'Batubara - Dashboard Energi Primer')
 
@@ -16,7 +16,7 @@
   ])
 
   <header class="page-header">
-    <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
+    <p class="page-header__eyebrow">Energi Primer</p>
     <h1 class="page-header__title">Dashboard Batubara</h1>
   </header>
 
@@ -71,7 +71,7 @@
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
     {{ $data['worksheet'] ?? '-' }}
     @if($filterDay)
-      · Tanggal {{ $filterDay }}
+      Â· Tanggal {{ $filterDay }}
     @endif
   </span>
 </form>
@@ -164,6 +164,6 @@
     window.chartSeries = @json($chartSeries ?? []);
   </script>
   <script src="{{ asset('js/chart.min.js') }}"></script>
-  <script src="{{ asset('js/batubara.js') }}"></script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
+  <script src="{{ asset('js/batubara.js') }}"></script>
 @endsection

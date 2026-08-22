@@ -96,3 +96,47 @@
   --primary-light: #F5F3FF;
   --primary-mid:   #DDD6FE;
 }
+
+/* Page identity header: use the active dashboard theme with white content. */
+.navbar {
+  background: var(--primary);
+  border-bottom-color: var(--primary-dark);
+}
+
+.navbar__logo img {
+  border: 2px solid #fff;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.navbar__brand-name,
+.navbar__brand-sub,
+.navbar__page-title,
+.navbar__user-name,
+.navbar__user-role,
+.navbar .btn-icon,
+.navbar .btn-hamburger {
+  color: #fff;
+}
+
+.navbar__brand-sub,
+.navbar__user-role {
+  opacity: .84;
+}
+
+.navbar__divider,
+.navbar__user {
+  border-color: rgba(255, 255, 255, .45);
+}
+
+.navbar .btn-icon:hover,
+.navbar .btn-hamburger:hover,
+.navbar__user:hover {
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+}
+
+.navbar__avatar,
+.navbar__user:hover .navbar__avatar {
+  border-color: #fff;
+}

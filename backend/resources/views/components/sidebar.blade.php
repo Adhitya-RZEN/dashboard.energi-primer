@@ -48,16 +48,6 @@
       </a>
     </li>
 
-    {{-- Stok Batubara --}}
-    <li role="none">
-      <a class="sidebar__link {{ request()->routeIs('dashboard.stok') ? 'active' : '' }}" href="{{ route('dashboard.stok') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.stok') ? 'page' : 'false' }}">
-        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        </svg>
-        <span class="sidebar__label">Stok Batubara</span>
-      </a>
-    </li>
-
     {{-- Solar --}}
     <li role="none">
       <a class="sidebar__link {{ request()->routeIs('dashboard.solar') ? 'active' : '' }}" href="{{ route('dashboard.solar') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.solar') ? 'page' : 'false' }}">
@@ -65,6 +55,16 @@
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
         </svg>
         <span class="sidebar__label">Solar</span>
+      </a>
+    </li>
+
+    {{-- Stok Batubara --}}
+    <li role="none">
+      <a class="sidebar__link {{ request()->routeIs('dashboard.stok') ? 'active' : '' }}" href="{{ route('dashboard.stok') }}" role="menuitem" aria-current="{{ request()->routeIs('dashboard.stok') ? 'page' : 'false' }}">
+        <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        </svg>
+        <span class="sidebar__label">Stok Batubara</span>
       </a>
     </li>
 
@@ -109,13 +109,9 @@
 
     {{-- Logout --}}
     <li role="none">
-      <a
-        class="sidebar__link"
-        href="#"
-        role="menuitem"
-        onclick="return false;"
-        aria-label="Keluar dari sistem"
-      >
+      <form method="POST" action="{{ route('logout') }}">
+        @csrf
+        <button type="submit" class="sidebar__link sidebar__link--button" role="menuitem" aria-label="Keluar dari sistem">
         <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round"
@@ -125,14 +121,15 @@
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
         <span class="sidebar__label">Keluar</span>
-      </a>
+        </button>
+      </form>
     </li>
 
   </ul>
 
   {{-- Sidebar footer --}}
   <div class="sidebar__footer">
-    <div class="sidebar__version">Dashboard v1.0 &middot; Phase 1</div>
+    <div class="sidebar__version">Dashboard v1.0 &middot; Admin</div>
   </div>
 
 </aside>

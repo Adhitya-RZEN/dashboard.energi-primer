@@ -169,7 +169,9 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // Enable secure cookies automatically in production unless explicitly
+    // overridden for a local HTTP environment.
+    'secure' => env('SESSION_SECURE_COOKIE') ?? (env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

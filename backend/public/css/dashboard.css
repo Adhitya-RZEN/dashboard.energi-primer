@@ -11,6 +11,49 @@
   margin-bottom: 22px;
 }
 
+/* Overview shows the complete set of 15 operational KPIs. */
+.overview-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-kpi-icon {
+  color: var(--primary);
+  font-size: 20px;
+}
+
+.overview-kpi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.overview-kpi-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overview-kpi-list span {
+  color: var(--text-caption);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.overview-kpi-list strong {
+  color: var(--text-heading);
+  font-size: 15px;
+}
+
+.overview-kpi-list small {
+  color: var(--text-caption);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 /* Sparkline mini visual inside KPI */
 .kpi-mini-bar {
   display: flex;
@@ -136,6 +179,9 @@
 }
 
 @media (max-width: 1199px) {
+  .overview-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .summary-stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -145,6 +191,9 @@
 }
 
 @media (max-width: 767px) {
+  .overview-kpi-grid {
+    grid-template-columns: 1fr;
+  }
   .summary-stats {
     grid-template-columns: 1fr;
   }

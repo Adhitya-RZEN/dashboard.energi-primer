@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('title', 'Stok Batubara - Dashboard Energi Primer')
 
@@ -16,7 +16,7 @@
   ])
 
   <header class="page-header">
-    <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
+    <p class="page-header__eyebrow">Energi Primer</p>
     <h1 class="page-header__title">Dashboard Stok Batubara</h1>
   </header>
 
@@ -71,7 +71,7 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       {{ $data['worksheet'] ?? '-' }}
       @if($filterDay)
-        · Tanggal {{ $filterDay }}
+        Â· Tanggal {{ $filterDay }}
       @endif
     </span>
   </form>
@@ -112,7 +112,7 @@
       </x-slot>
     </x-kpi-card>
 
-    {{-- KPI: HOP (AJ row) --}}
+    {{-- KPI: HOP tiga unit (AJ, AK, AL) --}}
     @php
       $hopColor = match($stock['hop_status']) {
         'danger'  => ['bg' => '#FEF2F2', 'stroke' => '#EF4444'],
@@ -122,26 +122,31 @@
     @endphp
     <x-kpi-card 
       title="HOP (Hari Operasi)" 
-      subtitle="Perkiraan sisa operasi &middot; {{ $data['today_date'] ?? date('d F Y') }}" 
-      value="{{ number_format($stock['hop'], 1, ',', '.') }}" 
-      unit="hari" 
-      label="Kolom AJ &middot; Baris hari ini" 
+      subtitle="Perkiraan sisa operasi per unit &middot; {{ $data['today_date'] ?? date('d F Y') }}"
       iconBg="{{ $hopColor['bg'] }}" 
-      delay="2">
+      delay="2"
+      customContent="true">
       <x-slot name="icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ $hopColor['stroke'] }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </x-slot>
-      <x-slot name="extra">
-        <div style="margin-top:10px;">
-          <span class="tag tag--{{ $stock['hop_status'] }}" style="font-size:12px;padding:4px 10px;">
-            {{ $stock['hop_label'] }}
-            @if($stock['hop_status'] === 'danger') &lt; 10 hari
-            @elseif($stock['hop_status'] === 'warning') 10–14 hari
-            @else ≥ 15 hari
-            @endif
-          </span>
-        </div>
-      </x-slot>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+        @foreach([
+          ['label' => 'HOP 3 Unit', 'column' => 'AJ', 'value' => $stock['hop_3unit'], 'status' => $stock['hop_status_3unit'], 'statusLabel' => $stock['hop_label_3unit']],
+          ['label' => 'HOP 2 Unit', 'column' => 'AK', 'value' => $stock['hop_2unit'], 'status' => $stock['hop_status_2unit'], 'statusLabel' => $stock['hop_label_2unit']],
+          ['label' => 'HOP 1 Unit', 'column' => 'AL', 'value' => $stock['hop_1unit'], 'status' => $stock['hop_status_1unit'], 'statusLabel' => $stock['hop_label_1unit']],
+        ] as $hopUnit)
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span style="font-size:12px;color:var(--text-caption);font-weight:600;">{{ $hopUnit['label'] }}</span>
+              <span style="font-size:10px;color:var(--text-caption);">Kolom {{ $hopUnit['column'] }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:17px;font-weight:700;color:var(--text-heading);">{{ number_format($hopUnit['value'], 1, ',', '.') }} <span style="font-size:11px;font-weight:400;color:var(--text-caption);">hari</span></span>
+              <span class="tag tag--{{ $hopUnit['status'] }}" style="font-size:10px;padding:3px 7px;">{{ $hopUnit['statusLabel'] }}</span>
+            </div>
+          </div>
+        @endforeach
+      </div>
     </x-kpi-card>
 
   </div>
@@ -168,6 +173,6 @@
     window.chartSeries = @json($chartSeries ?? []);
   </script>
   <script src="{{ asset('js/chart.min.js') }}"></script>
-  <script src="{{ asset('js/stok.js') }}"></script>
   <script src="{{ asset('js/dashboard.js') }}"></script>
+  <script src="{{ asset('js/stok.js') }}"></script>
 @endsection

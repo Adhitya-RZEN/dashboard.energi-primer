@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Log;
  */
 class DashboardService
 {
+    private const CACHE_VERSION = 'v2';
+
     public function __construct(
         private readonly DataSourceInterface $dataSource
     ) {}
@@ -31,7 +33,7 @@ class DashboardService
    public function getDashboard(int $month, int $year, ?int $day = null): array
 {
     $dayKey   = $day ?? 'today';
-    $cacheKey = "dashboard_energi_primer_{$month}_{$year}_{$dayKey}";
+     $cacheKey = "dashboard_energi_primer_" . self::CACHE_VERSION . "_{$month}_{$year}_{$dayKey}";
     $ttl      = config('google.sheets.cache_ttl', 120);
 
     return Cache::remember($cacheKey, $ttl, function () use ($month, $year, $day) {
@@ -82,7 +84,7 @@ class DashboardService
      */
     public function clearCache(int $month, int $year): void
     {
-        Cache::forget("dashboard_energi_primer_{$month}_{$year}");
+        Cache::forget("dashboard_energi_primer_" . self::CACHE_VERSION . "_{$month}_{$year}_today");
     }
 
     // ── Format Helpers ─────────────────────────────────────────────────

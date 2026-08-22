@@ -66,14 +66,15 @@
       </svg>
     </a>
 
-    {{-- User --}}
-    <div class="navbar__user" role="button" aria-label="Menu pengguna" tabindex="0">
-      <div class="navbar__avatar" aria-hidden="true">EP</div>
+    {{-- Authenticated admin --}}
+    @php($authUser = auth()->user())
+    <a class="navbar__user" href="{{ route('pengaturan') }}" aria-label="Buka pengaturan akun">
+      <div class="navbar__avatar" aria-hidden="true">{{ strtoupper(substr($authUser?->name ?? 'AD', 0, 2)) }}</div>
       <div class="navbar__user-info">
-        <div class="navbar__user-name">Energi Primer</div>
-        <div class="navbar__user-role">Operator</div>
+        <div class="navbar__user-name">{{ $authUser?->name ?? 'Administrator' }}</div>
+        <div class="navbar__user-role">{{ ucfirst($authUser?->role ?? 'admin') }}</div>
       </div>
-    </div>
+    </a>
 
   </div>
 </nav>

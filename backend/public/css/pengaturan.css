@@ -10,6 +10,16 @@
   align-items: start;
 }
 
+.settings-profile-card {
+  max-width: 760px;
+}
+
+.settings-profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
 /* Settings sidebar nav */
 .settings-nav {
   background: var(--surface);

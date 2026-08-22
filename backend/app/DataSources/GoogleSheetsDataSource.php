@@ -65,7 +65,9 @@ class GoogleSheetsDataSource implements DataSourceInterface
 
     // Kolom STOCK
     private const COL_STOCK_BATUBARA = 28; // AD
-    private const COL_HOP            = 34; // AJ
+    private const COL_HOP_3UNIT      = 34; // AJ
+    private const COL_HOP_2UNIT      = 35; // AK
+    private const COL_HOP_1UNIT      = 36; // AL
 
     // Kolom SOLAR
     private const COL_SOLAR_PEMAKAIAN_HARIAN  = 86; // CJ
@@ -137,7 +139,9 @@ class GoogleSheetsDataSource implements DataSourceInterface
     $todayRowIndex = $this->findTodayRow($rows, $targetDay);
     $dailyRow = $todayRowIndex !== null ? ($rows[$todayRowIndex] ?? []) : [];
 
-    $actualDay = $todayRowIndex !== null ? ($todayRowIndex + 1) : $targetDay;
+    $actualDay = $todayRowIndex !== null
+        ? ($this->parseDay($rows[$todayRowIndex][0] ?? null) ?? ($todayRowIndex + 1))
+        : $targetDay;
     $monthName = self::MONTH_NAMES[$month] ?? '';
     $actualDate = str_pad($actualDay, 2, '0', STR_PAD_LEFT) . " {$monthName} {$year}";
 
@@ -178,14 +182,12 @@ class GoogleSheetsDataSource implements DataSourceInterface
      * Cari index baris yang tanggalnya cocok dengan hari ini.
      * Baris dalam array: index 0 = row 11 = tanggal 1, dst.
      */
-   private function findTodayRow(array $rows, int $targetDay): ?int
+    private function findTodayRow(array $rows, int $targetDay): ?int
 {
     foreach ($rows as $i => $row) {
         if ($i >= 31) break; // lewati row 42 (total)
-        $cellValue = trim($row[0] ?? '');
-        if ($cellValue === '' || $cellValue === null) continue;
-
-        $dayValue = (int) $cellValue;
+        $dayValue = $this->parseDay($row[0] ?? null);
+        if ($dayValue === null) continue;
         if ($dayValue === $targetDay) {
             return $i;
         }
@@ -193,8 +195,7 @@ class GoogleSheetsDataSource implements DataSourceInterface
 
     // Fallback: cari baris terakhir yang ada datanya
     for ($i = 30; $i >= 0; $i--) {
-        $val = trim($rows[$i][0] ?? '');
-        if ($val !== '' && is_numeric($val)) {
+        if ($this->parseDay($rows[$i][0] ?? null) !== null) {
             Log::info("[GoogleSheetsDataSource] Tanggal ({$targetDay}) tidak ditemukan, fallback ke baris " . ($i + 11));
             return $i;
         }
@@ -202,6 +203,32 @@ class GoogleSheetsDataSource implements DataSourceInterface
 
     return null;
 }
+
+    /**
+     * Worksheet menyimpan tanggal sebagai "01 Juli 2026", bukan angka 1.
+     */
+    private function parseDay(mixed $raw): ?int
+    {
+        if ($raw === null || trim((string) $raw) === '') return null;
+
+        if (is_int($raw) || is_float($raw) || is_numeric((string) $raw)) {
+            $day = (int) $raw;
+            return $day >= 1 && $day <= 31 ? $day : null;
+        }
+
+        $text = trim((string) $raw);
+        if (preg_match('/^(\d{4})[-\/]\d{1,2}[-\/](\d{1,2})$/', $text, $matches)) {
+            $day = (int) $matches[2];
+            return $day >= 1 && $day <= 31 ? $day : null;
+        }
+
+        if (preg_match('/^(\d{1,2})(?:\s|[-\/])/', $text, $matches)) {
+            $day = (int) $matches[1];
+            return $day >= 1 && $day <= 31 ? $day : null;
+        }
+
+        return null;
+    }
 
     /**
      * Ambil nilai numerik dari baris berdasarkan index kolom.
@@ -212,11 +239,30 @@ class GoogleSheetsDataSource implements DataSourceInterface
         $raw = $row[$colIndex] ?? null;
         if ($raw === null || $raw === '') return 0.0;
 
+        if (is_int($raw) || is_float($raw)) return (float) $raw;
+
         // Handle format angka dengan titik/koma (mis. "1.234,56" atau "1234.56")
-        $cleaned = str_replace(['.', ','], ['', '.'], (string) $raw);
-        // Coba format lain jika hasilnya tidak valid
-        if (!is_numeric($cleaned)) {
-            $cleaned = str_replace(',', '', (string) $raw);
+        $cleaned = trim((string) $raw);
+        $cleaned = str_replace([' ', "\u{00A0}"], '', $cleaned);
+        $lastComma = strrpos($cleaned, ',');
+        $lastDot = strrpos($cleaned, '.');
+
+        if ($lastComma !== false && $lastDot !== false) {
+            if ($lastComma > $lastDot) {
+                $cleaned = str_replace('.', '', $cleaned);
+                $cleaned = str_replace(',', '.', $cleaned);
+            } else {
+                $cleaned = str_replace(',', '', $cleaned);
+            }
+        } elseif ($lastComma !== false) {
+            $cleaned = str_replace(',', '.', $cleaned);
+        } elseif ($lastDot !== false) {
+            // In the worksheet, values such as 70.020 mean 70,020.
+            $parts = explode('.', $cleaned);
+            $fraction = end($parts);
+            if (count($parts) > 1 && strlen($fraction) === 3) {
+                $cleaned = str_replace('.', '', $cleaned);
+            }
         }
 
         return is_numeric($cleaned) ? (float) $cleaned : 0.0;
@@ -240,7 +286,7 @@ class GoogleSheetsDataSource implements DataSourceInterface
     {
         return [
             'penerimaan_bulanan'        => $this->val($row52, self::COL_BIOMASSA_PENERIMAAN_BULANAN),
-            'pemakaian_bulanan'         => $this->val($dailyRow, self::COL_BIOMASSA_PEMAKAIAN_BULANAN),
+            'pemakaian_bulanan'         => $this->val($totalRow, self::COL_BIOMASSA_PEMAKAIAN_BULANAN),
             'unit1_harian'              => $this->val($dailyRow,  self::COL_BIOMASSA_UNIT1_HARIAN),
             'unit2_harian'              => $this->val($dailyRow,  self::COL_BIOMASSA_UNIT2_HARIAN),
             'unit3_harian'              => $this->val($dailyRow,  self::COL_BIOMASSA_UNIT3_HARIAN),
@@ -261,12 +307,14 @@ class GoogleSheetsDataSource implements DataSourceInterface
 
     private function parseStock(array $dailyRow): array
     {
-        $hop = $this->val($dailyRow, self::COL_HOP);
+        $hop3Unit = $this->val($dailyRow, self::COL_HOP_3UNIT);
+        $hop2Unit = $this->val($dailyRow, self::COL_HOP_2UNIT);
+        $hop1Unit = $this->val($dailyRow, self::COL_HOP_1UNIT);
 
         // Status HOP sesuai arsitektur: <10=merah, 10-<15=kuning, ≥15=hijau
         $hopStatus = match(true) {
-            $hop < 10  => 'danger',
-            $hop < 15  => 'warning',
+            $hop3Unit < 10  => 'danger',
+            $hop3Unit < 15  => 'warning',
             default    => 'success',
         };
 
@@ -276,11 +324,34 @@ class GoogleSheetsDataSource implements DataSourceInterface
             default   => 'Aman',
         };
 
+        $statusFor = static fn (float $hop): string => match(true) {
+            $hop < 10 => 'danger',
+            $hop < 15 => 'warning',
+            default => 'success',
+        };
+        $labelFor = static fn (string $status): string => match($status) {
+            'danger' => 'Kritis',
+            'warning' => 'Perhatian',
+            default => 'Aman',
+        };
+        $hop3Status = $hopStatus;
+        $hop2Status = $statusFor($hop2Unit);
+        $hop1Status = $statusFor($hop1Unit);
+
         return [
             'stock_batubara' => $this->val($dailyRow, self::COL_STOCK_BATUBARA),
-            'hop'            => $hop,
-            'hop_status'     => $hopStatus,
-            'hop_label'      => $hopLabel,
+            'hop'              => $hop3Unit,
+            'hop_status'       => $hop3Status,
+            'hop_label'        => $hopLabel,
+            'hop_3unit'        => $hop3Unit,
+            'hop_2unit'        => $hop2Unit,
+            'hop_1unit'        => $hop1Unit,
+            'hop_status_3unit' => $hop3Status,
+            'hop_status_2unit' => $hop2Status,
+            'hop_status_1unit' => $hop1Status,
+            'hop_label_3unit'  => $labelFor($hop3Status),
+            'hop_label_2unit'  => $labelFor($hop2Status),
+            'hop_label_1unit'  => $labelFor($hop1Status),
         ];
     }
 
@@ -300,7 +371,7 @@ class GoogleSheetsDataSource implements DataSourceInterface
      */
     private function parseTargetBiomassa(array $row56, array $realisasiRow): array
     {
-        $target = $this->val($row56, self::COL_REALISASI_KUMULATIF);
+        $target = $this->targetValue($row56, self::COL_REALISASI_KUMULATIF);
         if ($target <= 0) {
             $target = self::TARGET_BIOMASSA_TON; // Fallback jika target dari sheet 0 atau tidak terbaca
         }
@@ -316,6 +387,22 @@ class GoogleSheetsDataSource implements DataSourceInterface
             'progress'            => min(100, $progress), // cap at 100%
             'sisa'                => max(0, $target - $kumulatif),
         ];
+    }
+
+    /**
+     * Target dapat datang sebagai "70.020" atau "70,020".
+     * Keduanya harus dibaca sebagai 70.020 ton, bukan 70,02 ton.
+     */
+    private function targetValue(array $row, int $colIndex): float
+    {
+        $raw = trim((string) ($row[$colIndex] ?? ''));
+        $value = $this->val($row, $colIndex);
+
+        if ($value > 0 && $value < 1000 && preg_match('/^\d{1,3}[\.,]\d{3}$/', $raw)) {
+            return (float) str_replace([',', '.'], '', $raw);
+        }
+
+        return $value;
     }
 
     /**
@@ -337,7 +424,13 @@ class GoogleSheetsDataSource implements DataSourceInterface
                 'penerimaan_bulanan' => 0, 'unit1_harian' => 0,
                 'unit2_harian' => 0, 'unit3_harian' => 0, 'pemakaian_harian' => 0,
             ],
-            'stock'      => ['stock_batubara' => 0, 'hop' => 0, 'hop_status' => 'danger', 'hop_label' => 'Kritis'],
+            'stock'      => [
+                'stock_batubara' => 0,
+                'hop' => 0, 'hop_status' => 'danger', 'hop_label' => 'Kritis',
+                'hop_3unit' => 0, 'hop_2unit' => 0, 'hop_1unit' => 0,
+                'hop_status_3unit' => 'danger', 'hop_status_2unit' => 'danger', 'hop_status_1unit' => 'danger',
+                'hop_label_3unit' => 'Kritis', 'hop_label_2unit' => 'Kritis', 'hop_label_1unit' => 'Kritis',
+            ],
             'solar'      => ['pemakaian_harian' => 0, 'pemakaian_bulanan' => 0, 'penerimaan_bulanan' => 0],
             'target_biomassa' => ['target' => self::TARGET_BIOMASSA_TON, 'realisasi_kumulatif' => 0, 'kumulatif' => 0, 'progress' => 0, 'sisa' => self::TARGET_BIOMASSA_TON],
             'meta'       => ['month' => 0, 'year' => 0, 'month_name' => '', 'fetched_at' => now()->toDateTimeString()],
@@ -349,27 +442,58 @@ class GoogleSheetsDataSource implements DataSourceInterface
         $series = [];
         foreach ($rows as $i => $row) {
             if ($i >= self::ROW_TOTAL_INDEX) break; // stop sebelum row 42 (total)
-            $dayRaw = trim($row[0] ?? '');
-            if ($dayRaw === '' || !is_numeric($dayRaw)) continue;
-
-            $day  = (int) $dayRaw;
+            $day = $this->parseDay($row[0] ?? null);
+            if ($day === null) continue;
             $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
 
             $series[] = [
                 'date'               => $date,
                 'day'                => $day,
-                'biomassa_unit1'     => $this->val($row, self::COL_BIOMASSA_UNIT1_HARIAN),
-                'biomassa_unit2'     => $this->val($row, self::COL_BIOMASSA_UNIT2_HARIAN),
-                'biomassa_unit3'     => $this->val($row, self::COL_BIOMASSA_UNIT3_HARIAN),
-                'batubara_pemakaian' => $this->val($row, self::COL_BATUBARA_PEMAKAIAN_HARIAN),
-                'batubara_unit1'     => $this->val($row, self::COL_BATUBARA_UNIT1_HARIAN),
-                'batubara_unit2'     => $this->val($row, self::COL_BATUBARA_UNIT2_HARIAN),
-                'batubara_unit3'     => $this->val($row, self::COL_BATUBARA_UNIT3_HARIAN),
-                'stock_batubara'     => $this->val($row, self::COL_STOCK_BATUBARA),
-                'hop'                => $this->val($row, self::COL_HOP),
-                'solar_pemakaian'    => $this->val($row, self::COL_SOLAR_PEMAKAIAN_HARIAN),
+                'biomassa_unit1'     => $this->nullableVal($row, self::COL_BIOMASSA_UNIT1_HARIAN),
+                'biomassa_unit2'     => $this->nullableVal($row, self::COL_BIOMASSA_UNIT2_HARIAN),
+                'biomassa_unit3'     => $this->nullableVal($row, self::COL_BIOMASSA_UNIT3_HARIAN),
+                'biomassa_pemakaian' => $this->sumNullableValues([
+                    $this->nullableVal($row, self::COL_BIOMASSA_UNIT1_HARIAN),
+                    $this->nullableVal($row, self::COL_BIOMASSA_UNIT2_HARIAN),
+                    $this->nullableVal($row, self::COL_BIOMASSA_UNIT3_HARIAN),
+                ]),
+                'batubara_pemakaian' => $this->nullableVal($row, self::COL_BATUBARA_PEMAKAIAN_HARIAN),
+                'batubara_unit1'     => $this->nullableVal($row, self::COL_BATUBARA_UNIT1_HARIAN),
+                'batubara_unit2'     => $this->nullableVal($row, self::COL_BATUBARA_UNIT2_HARIAN),
+                'batubara_unit3'     => $this->nullableVal($row, self::COL_BATUBARA_UNIT3_HARIAN),
+                'stock_batubara'     => $this->nullableVal($row, self::COL_STOCK_BATUBARA),
+                'hop'                => $this->nullableVal($row, self::COL_HOP_3UNIT),
+                'hop_3unit'          => $this->nullableVal($row, self::COL_HOP_3UNIT),
+                'hop_2unit'          => $this->nullableVal($row, self::COL_HOP_2UNIT),
+                'hop_1unit'          => $this->nullableVal($row, self::COL_HOP_1UNIT),
+                'solar_pemakaian'    => $this->nullableVal($row, self::COL_SOLAR_PEMAKAIAN_HARIAN),
+                'solar_penerimaan'   => $this->nullableVal($row, self::COL_SOLAR_PENERIMAAN_BULANAN),
             ];
         }
         return $series;
+    }
+
+    /**
+     * Ambil nilai harian tanpa mengubah sel kosong menjadi angka nol.
+     * Nilai nol yang memang ada di worksheet tetap dikembalikan sebagai 0.0.
+     */
+    private function nullableVal(array $row, int $colIndex): ?float
+    {
+        $raw = $row[$colIndex] ?? null;
+        $text = trim((string) $raw);
+        if ($raw === null || $text === '' || in_array($text, ['-', '–', '—'], true)) return null;
+
+        return $this->val($row, $colIndex);
+    }
+
+    /**
+     * Jumlahkan nilai nullable. Jika seluruh unit kosong, hasilnya tetap null.
+     */
+    private function sumNullableValues(array $values): ?float
+    {
+        $present = array_filter($values, static fn ($value) => $value !== null);
+        if ($present === []) return null;
+
+        return array_sum($present);
     }
 }

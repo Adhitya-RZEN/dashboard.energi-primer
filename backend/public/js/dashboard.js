@@ -5,6 +5,63 @@
 
 'use strict';
 
+/* Shared helpers for page-specific daily_series charts. */
+window.dashboardChart = {
+  hasValue(value) {
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+  },
+
+  formatNumber(value, decimals = 0) {
+    if (!this.hasValue(value)) return '-';
+    return Number(value).toLocaleString('id-ID', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  },
+
+  formatDate(date) {
+    if (!date) return '-';
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC',
+    }).format(parsed);
+  },
+
+  emptyState(element) {
+    element.parentElement.innerHTML = '<div class="empty-state"><span class="empty-state__desc">Tidak ada data yang tersedia.</span></div>';
+  },
+
+  tooltip(series, unit, decimals = 0, statusForValue = null) {
+    return {
+      callbacks: {
+        title: (items) => this.formatDate(series[items[0]?.dataIndex]?.date),
+        label: (context) => {
+          const value = context.parsed.y ?? context.parsed;
+          const status = statusForValue ? ` (${statusForValue(value)})` : '';
+          return `${context.dataset.label}: ${this.formatNumber(value, decimals)} ${unit}${status}`;
+        },
+      },
+    };
+  },
+
+  commonOptions(series, unit, decimals = 0, legend = true, statusForValue = null) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: legend, position: 'top', align: 'end' },
+        tooltip: this.tooltip(series, unit, decimals, statusForValue),
+      },
+      scales: {
+        x: { title: { display: true, text: 'Tanggal' }, grid: { display: false } },
+        y: { title: { display: true, text: unit }, beginAtZero: true },
+      },
+    };
+  },
+};
+
 /* ══════════════════════════════════════════════
    KPI COUNTER ANIMATION
 ══════════════════════════════════════════════ */

@@ -23,7 +23,7 @@
 
   {{-- Page Header --}}
   <header class="page-header">
-    <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
+    <p class="page-header__eyebrow">Energi Primer</p>
     <h1 class="page-header__title">Data Kualitas Batu Bara</h1>
     <p class="page-header__desc">
       Kelola dan pantau data kualitas batu bara dari setiap penerimaan dan pengujian laboratorium.

@@ -16,7 +16,7 @@
   ])
 
   <header class="page-header">
-    <p class="page-header__eyebrow">PT PLN Indonesia Power &middot; UBP Jeranjang</p>
+    <p class="page-header__eyebrow">Energi Primer</p>
     <h1 class="page-header__title">Dashboard Target & Kinerja</h1>
   </header>
 
