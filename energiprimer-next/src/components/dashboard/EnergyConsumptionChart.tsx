@@ -1,27 +1,151 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type MouseHandlerDataParam,
+} from "recharts";
+
 import type { OverviewDailyPoint } from "@/types/overview";
 
-type EnergyConsumptionChartProps = { series: OverviewDailyPoint[] };
-const WIDTH = 760;
-const HEIGHT = 280;
-const PADDING = { top: 20, right: 18, bottom: 42, left: 52 };
+import {
+  ChartFrame,
+  ChartLegend,
+  DashboardChartTooltip,
+  chartDateFromState,
+  formatChartDate,
+  formatChartValue,
+  toggleChartSeries,
+  xAxisTickInterval,
+  type ChartDataset,
+} from "./InteractiveChartPrimitives";
 
-function activate(event: KeyboardEvent<SVGCircleElement>, callback: () => void) { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); callback(); } }
+type EnergyConsumptionChartProps = {
+  series: OverviewDailyPoint[];
+};
+
+const DATASETS: ChartDataset[] = [
+  { key: "coal", label: "Batubara", color: "#2563eb" },
+  { key: "biomass", label: "Biomassa", color: "#16a34a" },
+];
+
+function ChartEmptyState() {
+  return (
+    <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
+      Tidak ada data konsumsi untuk divisualisasikan.
+    </div>
+  );
+}
 
 export function EnergyConsumptionChart({ series }: EnergyConsumptionChartProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [hidden, setHidden] = useState({ coal: false, biomass: false });
-  const points = series.filter((point) => point.coal !== null || point.biomass !== null);
-  if (!points.length) return <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">Tidak ada data konsumsi untuk divisualisasikan.</div>;
-  const max = Math.max(...points.flatMap((point) => [point.coal ?? 0, point.biomass ?? 0]), 1);
-  const plotWidth = WIDTH - PADDING.left - PADDING.right;
-  const plotHeight = HEIGHT - PADDING.top - PADDING.bottom;
-  const chartPoints = points.map((point, index) => ({ ...point, x: PADDING.left + (points.length === 1 ? plotWidth / 2 : (index / (points.length - 1)) * plotWidth), coalY: point.coal === null ? null : PADDING.top + plotHeight - (point.coal / max) * plotHeight, biomassY: point.biomass === null ? null : PADDING.top + plotHeight - (point.biomass / max) * plotHeight }));
-  const pathFor = (key: "coalY" | "biomassY") => chartPoints.reduce((path, point) => { const y = point[key]; return y === null ? path : `${path}${path && !path.endsWith("M") ? " L" : "M"} ${point.x.toFixed(2)} ${y.toFixed(2)}`; }, "");
-  const coalPath = hidden.coal ? "" : pathFor("coalY");
-  const biomassPath = hidden.biomass ? "" : pathFor("biomassY");
-  const selected = selectedDate ? points.find((point) => point.date === selectedDate) : null;
-  return <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2 sm:p-3"><div className="mb-2 flex flex-wrap items-center justify-end gap-2 px-2 text-xs text-slate-600"><button type="button" aria-pressed={!hidden.coal} onClick={() => setHidden((current) => ({ ...current, coal: !current.coal }))} className={`inline-flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${hidden.coal ? "text-slate-400 line-through" : "hover:bg-white"}`}><i className="size-2 rounded-full bg-blue-600" />Batubara</button><button type="button" aria-pressed={!hidden.biomass} onClick={() => setHidden((current) => ({ ...current, biomass: !current.biomass }))} className={`inline-flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600 ${hidden.biomass ? "text-slate-400 line-through" : "hover:bg-white"}`}><i className="size-2 rounded-full bg-green-600" />Biomassa</button></div><svg className="h-auto w-full" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Grafik konsumsi batubara dan biomassa harian">{[0, 0.25, 0.5, 0.75, 1].map((ratio) => { const y = PADDING.top + plotHeight * ratio; const value = max * (1 - ratio); return <g key={ratio}><line x1={PADDING.left} x2={WIDTH - PADDING.right} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="4 4" /><text x={PADDING.left - 8} y={y + 4} fill="#64748b" fontSize="10" textAnchor="end">{Math.round(value).toLocaleString("id-ID")}</text></g>; })}<line x1={PADDING.left} x2={PADDING.left} y1={PADDING.top} y2={HEIGHT - PADDING.bottom} stroke="#cbd5e1" /><line x1={PADDING.left} x2={WIDTH - PADDING.right} y1={HEIGHT - PADDING.bottom} y2={HEIGHT - PADDING.bottom} stroke="#cbd5e1" />{coalPath ? <path d={coalPath} fill="none" stroke="#2563eb" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" /> : null}{biomassPath ? <path d={biomassPath} fill="none" stroke="#16a34a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" /> : null}{chartPoints.map((point) => <g key={point.date}>{point.coalY === null || hidden.coal ? null : <circle cx={point.x} cy={point.coalY} r={selectedDate === point.date ? 5 : 3} fill="#2563eb" stroke="white" strokeWidth="1.5" tabIndex={0} role="button" aria-label={`${point.date}: ${point.coal} ton batubara`} onMouseEnter={() => setSelectedDate(point.date)} onClick={() => setSelectedDate(point.date)} onKeyDown={(event) => activate(event, () => setSelectedDate(point.date))}><title>{`${point.date}: ${(point.coal ?? 0).toLocaleString("id-ID")} ton batubara`}</title></circle>}{point.biomassY === null || hidden.biomass ? null : <circle cx={point.x} cy={point.biomassY} r={selectedDate === point.date ? 5 : 3} fill="#16a34a" stroke="white" strokeWidth="1.5" tabIndex={0} role="button" aria-label={`${point.date}: ${point.biomass} ton biomassa`} onMouseEnter={() => setSelectedDate(point.date)} onClick={() => setSelectedDate(point.date)} onKeyDown={(event) => activate(event, () => setSelectedDate(point.date))}><title>{`${point.date}: ${(point.biomass ?? 0).toLocaleString("id-ID")} ton biomassa`}</title></circle>}</g>)}{chartPoints.filter((_, index) => index % Math.max(1, Math.ceil(chartPoints.length / 8)) === 0).map((point) => <text key={`${point.date}-label`} x={point.x} y={HEIGHT - 16} fill="#64748b" fontSize="10" textAnchor="middle">{point.day}</text>)}<text x="12" y={HEIGHT / 2} fill="#64748b" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${HEIGHT / 2})`}>Ton</text><text x={WIDTH / 2} y={HEIGHT - 2} fill="#64748b" fontSize="10" textAnchor="middle">Tanggal</text></svg>{selected ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"><strong className="text-slate-900">{selected.date}</strong>{!hidden.coal && selected.coal !== null ? <span>Batubara: <strong className="text-slate-900">{selected.coal.toLocaleString("id-ID")} ton</strong></span> : null}{!hidden.biomass && selected.biomass !== null ? <span>Biomassa: <strong className="text-slate-900">{selected.biomass.toLocaleString("id-ID")} ton</strong></span> : null}</div> : <p className="mt-2 px-2 text-[11px] text-slate-400">Arahkan atau pilih titik data untuk melihat detail.</p>}</div>;
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const hasData = series.some((point) => point.coal !== null || point.biomass !== null);
+
+  if (!hasData) return <ChartEmptyState />;
+
+  const visible = DATASETS.filter((dataset) => !hidden.has(dataset.key));
+  const selected = selectedDate ? series.find((point) => point.date === selectedDate) : null;
+
+  function handleMove(state: MouseHandlerDataParam) {
+    setHoveredDate(chartDateFromState(state, series));
+  }
+
+  function handleClick(state: MouseHandlerDataParam) {
+    const date = chartDateFromState(state, series);
+    if (!date) return;
+    setSelectedDate(date);
+    setHoveredDate(date);
+  }
+
+  return (
+    <div className="space-y-2">
+      <ChartLegend
+        datasets={DATASETS}
+        hidden={hidden}
+        onToggle={(key) => setHidden((current) => toggleChartSeries(current, key, DATASETS.length))}
+      />
+      <ChartFrame label="Grafik konsumsi energi primer harian">
+        <LineChart
+          data={series}
+          margin={{ top: 12, right: 18, left: 8, bottom: 8 }}
+          accessibilityLayer
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHoveredDate(null)}
+          onClick={handleClick}
+        >
+          <CartesianGrid stroke="#e2e8f0" strokeDasharray="4 4" />
+          <XAxis
+            dataKey="date"
+            interval={xAxisTickInterval(series.length)}
+            minTickGap={16}
+            tickFormatter={(value) => String(value).slice(-2)}
+            tick={{ fill: "#64748b", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "#cbd5e1" }}
+          />
+          <YAxis
+            tickFormatter={(value) => formatChartValue(value, 0)}
+            tick={{ fill: "#64748b", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "#cbd5e1" }}
+            width={54}
+          />
+          <Tooltip
+            content={<DashboardChartTooltip unit="ton" accentColor="#2563eb" />}
+            cursor={{ stroke: "#94a3b8", strokeDasharray: "4 4" }}
+            filterNull
+            isAnimationActive={false}
+          />
+          {hoveredDate ? <ReferenceLine x={hoveredDate} stroke="#94a3b8" strokeDasharray="3 3" /> : null}
+          <Line
+            hide={hidden.has("coal")}
+            type="monotone"
+            dataKey="coal"
+            name="Batubara"
+            stroke="#2563eb"
+            strokeWidth={2.5}
+            dot={{ r: 3, stroke: "#fff", strokeWidth: 1 }}
+            activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <Line
+            hide={hidden.has("biomass")}
+            type="monotone"
+            dataKey="biomass"
+            name="Biomassa"
+            stroke="#16a34a"
+            strokeWidth={2.5}
+            dot={{ r: 3, stroke: "#fff", strokeWidth: 1 }}
+            activeDot={{ r: 6, stroke: "#fff", strokeWidth: 2 }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ChartFrame>
+      {selected ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" aria-live="polite">
+          <strong className="text-slate-950">{formatChartDate(selected.date)}</strong>
+          {visible.map((dataset) => {
+            const value = selected[dataset.key as "coal" | "biomass"];
+            return value === null || value === undefined ? null : (
+              <span key={dataset.key}>
+                {dataset.label}: <strong className="text-slate-950">{formatChartValue(value)} ton</strong>
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="px-2 text-[11px] text-slate-400">Arahkan atau tap titik data untuk melihat detail.</p>
+      )}
+    </div>
+  );
 }

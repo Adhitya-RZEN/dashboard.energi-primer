@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import { UserMenu, type AuthenticatedUser } from "@/components/auth/UserMenu";
 
@@ -15,17 +16,20 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
       <div aria-hidden="true" className={`h-1 ${theme.solid}`} />
       <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-4 sm:gap-4 sm:px-6 lg:px-8">
         <Link className="flex min-w-0 shrink items-center gap-3" href="/dashboard" aria-label="Buka dashboard monitoring">
-          <span
-            aria-hidden="true"
-            className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm ${theme.solid}`}
-          >
-            EP
+          <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+            <Image
+              src="/images/Logo_PLN.svg"
+              alt="Logo PLN"
+              width={36}
+              height={36}
+              unoptimized
+              className="size-9 object-contain"
+            />
           </span>
           <span className="hidden min-w-0 sm:block">
             <span className="block truncate text-sm font-bold tracking-tight text-slate-900 lg:text-base">
-              PLN Indonesia Power
+              Energi Primer
             </span>
-            <span className="block truncate text-[11px] text-slate-500">UBP Jeranjang</span>
           </span>
         </Link>
 
