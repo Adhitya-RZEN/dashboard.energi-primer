@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  name            String
+  email           String    @unique
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamp(0)
+  password        String
+  rememberToken   String?   @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime? @map("updated_at") @db.Timestamp(0)
+  role            String    @default("admin")
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamp(0)
+
+  @@index([role])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  email     String    @id
+  token     String
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+
+  @@map("password_reset_tokens")
+}
+
+model Session {
+  id           String  @id
+  userId       BigInt? @map("user_id") @db.BigInt
+  ipAddress    String? @map("ip_address") @db.VarChar(45)
+  userAgent    String? @map("user_agent") @db.Text
+  payload      String  @db.Text
+  lastActivity Int     @map("last_activity")
+
+  @@index([userId])
+  @@index([lastActivity])
+  @@map("sessions")
+}
+
+model Cache {
+  key        String @id
+  value      String @db.Text
+  expiration BigInt @db.BigInt
+
+  @@index([expiration])
+  @@map("cache")
+}
+
+model CacheLock {
+  key        String @id
+  owner      String
+  expiration BigInt @db.BigInt
+
+  @@index([expiration])
+  @@map("cache_locks")
+}
+
+model Job {
+  id          BigInt @id @default(autoincrement()) @db.BigInt
+  queue       String
+  payload     String @db.Text
+  attempts    Int    @db.SmallInt
+  reservedAt  Int?   @map("reserved_at")
+  availableAt Int    @map("available_at")
+  createdAt   Int    @map("created_at")
+
+  @@index([queue])
+  @@map("jobs")
+}
+
+model JobBatch {
+  id           String  @id
+  name         String
+  totalJobs    Int     @map("total_jobs")
+  pendingJobs  Int     @map("pending_jobs")
+  failedJobs   Int     @map("failed_jobs")
+  failedJobIds String  @map("failed_job_ids") @db.Text
+  options      String? @db.Text
+  cancelledAt  Int?    @map("cancelled_at")
+  createdAt    Int     @map("created_at")
+  finishedAt   Int?    @map("finished_at")
+
+  @@map("job_batches")
+}
+
+model FailedJob {
+  id         BigInt   @id @default(autoincrement()) @db.BigInt
+  uuid       String   @unique
+  connection String
+  queue      String
+  payload    String   @db.Text
+  exception  String   @db.Text
+  failedAt   DateTime @default(now()) @map("failed_at") @db.Timestamp(0)
+
+  @@index([connection, queue, failedAt])
+  @@map("failed_jobs")
+}
+
+model Unit {
+  id              BigInt            @id @default(autoincrement()) @db.BigInt
+  code            String            @unique @db.VarChar(20)
+  name            String            @db.VarChar(100)
+  status          Boolean           @default(true)
+  createdAt       DateTime?         @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime?         @map("updated_at") @db.Timestamp(0)
+  coalQuality     CoalQuality[]
+  coalConsumption CoalConsumption[]
+  powerGeneration PowerGeneration[]
+  kpiTargets      KpiTarget[]
+
+  @@map("units")
+}
+
+model CoalStock {
+  id           BigInt   @id @default(autoincrement()) @db.BigInt
+  date         DateTime @db.Date
+  openingStock Decimal  @default(0) @map("opening_stock") @db.Decimal(12, 2)
+  received     Decimal  @default(0) @db.Decimal(12, 2)
+  consumed     Decimal  @default(0) @db.Decimal(12, 2)
+  closingStock Decimal  @default(0) @map("closing_stock") @db.Decimal(12, 2)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+
+  @@unique([date])
+  @@map("coal_stock")
+}
+
+model CoalQuality {
+  id        BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId    BigInt    @map("unit_id") @db.BigInt
+  date      DateTime  @db.Date
+  gar       Decimal?  @db.Decimal(8, 2)
+  moisture  Decimal?  @db.Decimal(5, 2)
+  ash       Decimal?  @db.Decimal(5, 2)
+  sulfur    Decimal?  @db.Decimal(5, 3)
+  hgi       Decimal?  @db.Decimal(5, 2)
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime? @map("updated_at") @db.Timestamp(0)
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("coal_quality")
+}
+
+model CoalConsumption {
+  id                BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId            BigInt    @map("unit_id") @db.BigInt
+  date              DateTime  @db.Date
+  coalUsed          Decimal?  @map("coal_used") @db.Decimal(12, 2)
+  sfc               Decimal?  @db.Decimal(8, 2)
+  heatRate          Decimal?  @map("heat_rate") @db.Decimal(8, 2)
+  boilerEfficiency  Decimal?  @map("boiler_efficiency") @db.Decimal(5, 2)
+  createdAt         DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime? @map("updated_at") @db.Timestamp(0)
+  unit              Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("coal_consumption")
+}
+
+model PowerGeneration {
+  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId          BigInt    @map("unit_id") @db.BigInt
+  date            DateTime  @db.Date
+  averageLoad     Decimal?  @map("average_load") @db.Decimal(8, 2)
+  powerGeneration Decimal?  @map("power_generation") @db.Decimal(12, 2)
+  createdAt       DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime? @map("updated_at") @db.Timestamp(0)
+  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("power_generation")
+}
+
+model KpiTarget {
+  id             BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId         BigInt    @map("unit_id") @db.BigInt
+  date           DateTime  @db.Date
+  targetSfc      Decimal?  @map("target_sfc") @db.Decimal(8, 2)
+  actualSfc      Decimal?  @map("actual_sfc") @db.Decimal(8, 2)
+  targetHeatRate Decimal?  @map("target_heat_rate") @db.Decimal(8, 2)
+  actualHeatRate Decimal?  @map("actual_heat_rate") @db.Decimal(8, 2)
+  createdAt      DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime? @map("updated_at") @db.Timestamp(0)
+  unit           Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("kpi_targets")
+}
+
+model SpreadsheetImportLog {
+  id           BigInt    @id @default(autoincrement()) @db.BigInt
+  source       String
+  importedRows Int       @default(0) @map("imported_rows")
+  status       String
+  message      String?   @db.Text
+  importedAt   DateTime? @map("imported_at") @db.Timestamp(0)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+
+  @@map("spreadsheet_import_logs")
+}
