@@ -100,6 +100,20 @@
       </x-slot>
     </x-kpi-card>
 
+    {{-- KPI: Total Pemakaian Batubara Bulanan (AB42) --}}
+    <x-kpi-card
+      title="Pemakaian Batubara"
+      subtitle="Bulanan &middot; {{ $monthLabel }}"
+      value="{{ number_format($biomassa['total_pemakaian_batubara_bulanan'], 0, ',', '.') }}"
+      unit="ton"
+      label="Total Pemakaian &middot; AB42"
+      iconBg="#EFF6FF"
+      delay="4">
+      <x-slot name="icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </x-slot>
+    </x-kpi-card>
+
     {{-- KPI: Pemakaian Batubara Hari Ini per Unit --}}
     <x-kpi-card 
       title="Pemakaian Batubara Harian" 
