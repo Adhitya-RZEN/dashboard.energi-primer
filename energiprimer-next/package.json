@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:verify": "node scripts/verify-db.mjs",
-    "auth:verify": "node scripts/verify-auth.mjs"
+    "auth:verify": "node scripts/verify-auth.mjs",
+    "dynamic:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-dynamic-parser.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
