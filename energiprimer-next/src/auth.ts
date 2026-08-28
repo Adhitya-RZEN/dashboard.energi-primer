@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { headers } from "next/headers";
+import "server-only";
 
 import { consumeLoginAttempt, getRequestIp } from "@/lib/login-throttle";
 import { prisma } from "@/lib/prisma";
@@ -85,6 +86,7 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.sessionVersion = user.sessionVersion;
       }
 
       return token;

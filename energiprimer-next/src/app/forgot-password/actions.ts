@@ -60,8 +60,8 @@ export async function requestPasswordReset(
 
   try {
     await deliverPasswordResetEmail(user.email, token);
-  } catch (error) {
-    console.error("Password reset delivery is unavailable.", error);
+  } catch {
+    console.error("Password reset delivery is unavailable.");
   }
 
   return { message: GENERIC_MESSAGE };

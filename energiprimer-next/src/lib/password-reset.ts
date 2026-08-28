@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import "server-only";
 
 const RESET_EXPIRY_MINUTES = 60;
 
