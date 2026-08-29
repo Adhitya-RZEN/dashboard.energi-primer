@@ -208,7 +208,7 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
       note: "Metrik biomassa, solar, HOP, dan target biomassa tetap unavailable karena tidak ada padanan kolom pada schema PostgreSQL.",
     },
     metrics: {
-      biomassReceiptMonthly: unavailableMetric("ton", "Laravel mengambil S42 dari Google Sheets."),
+      biomassReceiptMonthly: unavailableMetric("ton", "Laravel mengambil S52 dari Google Sheets."),
       biomassConsumptionMonthly: unavailableMetric("ton", "Laravel menghitung SUM(J42:Q42) dari Google Sheets."),
       coalConsumptionMonthly: {
         value: monthlyCoal,

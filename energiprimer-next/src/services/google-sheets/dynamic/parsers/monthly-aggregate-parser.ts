@@ -14,6 +14,23 @@ type MonthlyAggregateSpec = {
   emptyNote: string;
 };
 
+const RECEIPT_SUPPLIER_ALIASES = [
+  ["Sawdust PT Syahroni", ["SAWDUST PT SYAHRONI"]],
+  ["Sawdust PT Bintang", ["SAWDUST PT BINTANG"]],
+  ["Woodchip PT Syahroni", ["WOODCHIP PT SYAHRONI"]],
+  ["Woodchip PT RAP", ["WOODCHIP PT RAP"]],
+  ["Woodchip CV Multi Paketindo", ["WOODCHIP CV MULTI PAKETINDO"]],
+  ["LRUK", ["LRUK"]],
+  ["SRF", ["SRF"]],
+] as const;
+
+type ReceiptSupplierName = typeof RECEIPT_SUPPLIER_ALIASES[number][0];
+
+type ReceiptSupplierColumn = {
+  name: ReceiptSupplierName;
+  column: number;
+};
+
 function cellAt(cells: readonly ScannedCell[], row: number, column: number) {
   return cells.find((cell) => cell.row === row && cell.column === column) ?? null;
 }
@@ -116,6 +133,64 @@ function aggregateFromSummaryRow(
   };
 }
 
+function aggregateFromDataRows(
+  cells: readonly ScannedCell[],
+  worksheet: string,
+  rows: readonly number[],
+  spec: MonthlyAggregateSpec,
+): ResolvedValue {
+  if (!rows.length || !spec.columns.length) {
+    return unavailableValue(spec.emptyNote);
+  }
+
+  const numericCells: ScannedCell[] = [];
+  const malformedCells: ScannedCell[] = [];
+  for (const row of rows) {
+    for (const column of spec.columns) {
+      const cell = cellAt(cells, row, column);
+      const parsed = parseNumericValue(cell?.rawValue);
+      if (parsed.status === "numeric" && cell) numericCells.push(cell);
+      if (parsed.status === "malformed" && cell) malformedCells.push(cell);
+    }
+  }
+
+  const sourceCells = [...numericCells, ...malformedCells];
+  if (malformedCells.length) {
+    return {
+      value: null,
+      available: false,
+      confidence: 0,
+      level: "UNRESOLVED",
+      source: sourceCells[0]
+        ? { sheet: worksheet, address: sourceCells[0].address, anchor: sourceCells[0].address }
+        : null,
+      status: "malformed",
+      candidates: [],
+      sourceAddresses: sourceCells.map((cell) => cell.address),
+      note: `${spec.label} memiliki nilai malformed pada ${malformedCells.map((cell) => cell.address).join(", ")}.`,
+    };
+  }
+
+  if (!numericCells.length) {
+    return unavailableValue(`${spec.label} tidak memiliki nilai numerik pada baris data tabel.`);
+  }
+
+  const value = numericCells.reduce((sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0), 0);
+  const first = numericCells[0];
+  const last = numericCells[numericCells.length - 1];
+  return {
+    value,
+    available: true,
+    confidence: 0.9,
+    level: "HIGH",
+    source: { sheet: worksheet, address: first.address, anchor: `${first.address}..${last.address}` },
+    status: "resolved",
+    candidates: [],
+    sourceAddresses: sourceCells.map((cell) => cell.address),
+    note: `${spec.label} dihitung dengan menjumlahkan ${numericCells.length} cell numerik dari baris data tabel.`,
+  };
+}
+
 function isSupplierBiomassPath(path: HeaderPath) {
   return path.resource === "biomass"
     && path.labels.some((label) => /\bPENERIMAAN\b|\bRECEIPT\b|\bINCOMING\b/.test(label))
@@ -127,11 +202,23 @@ function isSupplierBiomassPath(path: HeaderPath) {
     && !path.labels.some((label) => /\bUNIT\s*[123]\b|BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label));
 }
 
-function supplierColumns(structure: StructureAnalysis) {
+function supplierName(path: HeaderPath) {
+  const labels = path.labels;
+  const joined = labels.join(" ");
+  for (const [name, aliases] of RECEIPT_SUPPLIER_ALIASES) {
+    if (aliases.some((alias) => labels.some((label) => label === alias || label.endsWith(` ${alias}`)) || joined.endsWith(alias))) return name;
+  }
+  return null;
+}
+
+function supplierColumns(structure: StructureAnalysis): ReceiptSupplierColumn[] {
   return structure.headerPaths
-    .filter(isSupplierBiomassPath)
-    .filter((path, index, paths) => paths.findIndex((candidate) => candidate.cell.column === path.cell.column) === index)
-    .map((path) => path.cell.column);
+    .flatMap((path) => {
+      if (!isSupplierBiomassPath(path)) return [];
+      const name = supplierName(path);
+      return name ? [{ name, column: path.cell.column }] : [];
+    })
+    .filter((supplier, index, suppliers) => suppliers.findIndex((candidate) => candidate.name === supplier.name) === index);
 }
 
 function unitColumns(columns: {
@@ -153,16 +240,32 @@ export function parseMonthlyBiomassAggregates(
     biomassUnit3: number | null;
   },
 ): DynamicSemanticAggregates {
-  const supplier = supplierColumns(structure);
+  const detectedSuppliers = supplierColumns(structure);
+  const supplier = detectedSuppliers.map(({ column }) => column);
+  const expectedSupplierNames = RECEIPT_SUPPLIER_ALIASES.map(([name]) => name);
+  const detectedSupplierNames = detectedSuppliers.map(({ name }) => name);
+  const missingSupplierNames = expectedSupplierNames.filter((name) => !detectedSupplierNames.includes(name));
   const unit = unitColumns(columns);
   const summaryColumns = [...new Set([...supplier, ...unit])];
   const marker = chooseSummaryMarker(cells, structure, summaryColumns);
+  const supplierSchemaNote = `Skema Penerimaan → Biomassa mendeteksi ${detectedSuppliers.length}/${expectedSupplierNames.length} kolom pemasok terbaru${detectedSuppliers.length ? ` (${detectedSupplierNames.join(", ")})` : ""}.`;
+  const supplierSpec = {
+    label: "Total penerimaan pemasok pada tabel Penerimaan → Biomassa",
+    columns: supplier,
+    emptyNote: "Kolom Sawdust PT Syahroni, Sawdust PT Bintang, Woodchip PT Syahroni, Woodchip PT RAP, Woodchip CV Multi Paketindo, LRUK, dan SRF belum terdeteksi secara semantic.",
+  } satisfies MonthlyAggregateSpec;
+  const summarySupplier = aggregateFromSummaryRow(cells, worksheet, marker, supplierSpec);
+  const calculatedSupplier = summarySupplier.status === "missing" && structure.dataRows.length
+    ? aggregateFromDataRows(cells, worksheet, structure.dataRows, supplierSpec)
+    : summarySupplier;
+  const supplierReceipt: ResolvedValue = missingSupplierNames.length
+    ? unavailableValue(`${supplierSchemaNote} Kolom yang belum terdeteksi: ${missingSupplierNames.join(", ")}. Total penerimaan tidak dihitung dari skema parsial.`)
+    : {
+      ...calculatedSupplier,
+      note: calculatedSupplier.note ? `${calculatedSupplier.note} ${supplierSchemaNote}` : supplierSchemaNote,
+    };
   return {
-    biomassSupplierReceiptMonthly: aggregateFromSummaryRow(cells, worksheet, marker, {
-      label: "Total penerimaan pemasok pada tabel Penerimaan → Biomassa",
-      columns: supplier,
-      emptyNote: "Kolom pemasok di bawah Penerimaan → Biomassa belum terdeteksi secara semantic.",
-    }),
+    biomassSupplierReceiptMonthly: supplierReceipt,
     biomassUnitConsumptionMonthly: aggregateFromSummaryRow(cells, worksheet, marker, {
       label: "Total pemakaian bulanan Biomassa Unit 1–3",
       columns: unit,
@@ -170,4 +273,3 @@ export function parseMonthlyBiomassAggregates(
     }),
   };
 }
-

@@ -3,9 +3,9 @@
 ## Kesimpulan
 
 Next.js telah memiliki parity fungsional yang kuat untuk dashboard read-only,
-data PostgreSQL, Google Sheets, dan authentication flow utama. Required fixes
-parity yang ditemukan pada audit awal sudah diterapkan; beberapa keputusan
-deployment dan cutover masih berstatus `NEEDS REVIEW`.
+data PostgreSQL, Google Sheets, dan authentication flow utama. Setelah mapping
+skema pemasok penerimaan Biomassa dikoreksi, worksheet live mendeteksi lengkap
+7/7 header terbaru dan parity KPI penerimaan terverifikasi `PASS`.
 
 Tidak ada deployment production, perubahan Laravel, migration, schema change,
 atau operasi tulis database yang dilakukan pada Phase 9.
@@ -18,10 +18,14 @@ Skor parity dihitung dari 25 area validasi berikut:
 - `PARTIAL`, `ACCEPTABLE DIFFERENCE`, atau `NEEDS REVIEW` = 0,5 poin;
 - `REQUIRED FIX` atau `NOT IMPLEMENTED` = 0 poin.
 
-Hasil: **20,5 / 25 = 82%**.
+Hasil snapshot sebelum perubahan skema pemasok adalah **20,5 / 25 = 82%**.
+Setelah mapping diperbarui dan worksheet live memuat 7/7 header terbaru,
+parity receipt meningkat menjadi `PASS`. Persentase final pada dokumen ini
+tetap merupakan snapshot scope Phase 9 dan tidak memasukkan keputusan manual
+lainnya sebagai selesai.
 
-Angka ini adalah coverage parity terhadap scope yang ditemukan pada source,
-bukan persentase kemiripan visual pixel-per-pixel.
+Angka parity adalah coverage terhadap scope yang ditemukan pada source, bukan
+persentase kemiripan visual pixel-per-pixel.
 
 ## Feature parity matrix
 
@@ -34,8 +38,8 @@ bukan persentase kemiripan visual pixel-per-pixel.
 | Forgot password | Admin lookup, generic response, broker, throttle | Server Action, admin lookup, generic response, hashed token | PASS | PASS | PASS | NEEDS REVIEW | Mail production belum dikonfigurasi |
 | Reset password | Token broker, expiry, bcrypt password, admin-only | Hashed token, 60 menit, bcrypt, admin-only | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | Implementasi token berbeda tetapi kontrak keamanan utama sama |
 | Change password | GET/POST `/password/change`, current password, min 12, invalidate session | Page + Server Action, bcrypt, `updated_at` revocation, sign-out | PASS | PASS | PASS | PASS | Tidak membutuhkan migration |
-| Dashboard Overview | Google Sheets KPI, chart, filter, fallback/error | `/dashboard`, typed service, KPI, SVG chart, filter, fallback/error | PASS | PASS | PASS | PASS | Baseline Juli 2026 hari 28 cocok |
-| Dashboard Biomassa | KPI, unit harian, line/stacked chart | `/dashboard/biomassa`, shared typed service/components | PASS | PASS | PASS | PASS | Nilai receipt, consumption, unit, dan chart cocok |
+| Dashboard Overview | Google Sheets KPI, chart, filter, fallback/error | `/dashboard`, typed service, KPI, SVG chart, filter, fallback/error | PASS | PASS | PASS | PASS | Receipt dihitung dari tujuh kolom pemasok terbaru dan cocok dengan baseline |
+| Dashboard Biomassa | KPI, unit harian, line/stacked chart | `/dashboard/biomassa`, shared typed service/components | PASS | PASS | PASS | PASS | Receipt 7 pemasok, consumption, unit, dan chart cocok |
 | Dashboard Batubara | KPI, unit harian, line/stacked chart | `/dashboard/batubara`, shared typed service/components | PASS | PASS | PASS | PASS | Nilai receipt, consumption, unit, dan chart cocok |
 | Dashboard Stok/HOP | Stock, HOP, status threshold, dua chart | `/dashboard/stok`, shared service/components | PASS | PASS | PASS | PASS | Stock/HOP dan status cocok |
 | Dashboard Solar | Solar harian/bulanan/receipt, dua chart | `/dashboard/solar`, Google mapping dan unavailable PG state | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | PostgreSQL memang tidak memiliki tabel solar |
@@ -44,7 +48,7 @@ bukan persentase kemiripan visual pixel-per-pixel.
 | Laporan efisiensi | Aggregate bulanan dan summary `coal_consumption` | `/laporan`, PostgreSQL raw aggregate typed | PASS | PASS | Partial | ACCEPTABLE DIFFERENCE | UI Next read-only lebih ringkas; generate/preview/download juga disabled di source |
 | Monitoring | Route dan UI placeholder; controller mengembalikan empty/KPI 0 | `/monitoring` notice/filter/empty state | PASS | PASS | Partial | NEEDS REVIEW | Detail monitoring memang belum aktif pada Laravel; shift/supplier/export tidak dibuat |
 | Pengaturan profil | Nama/email readonly + link change password | Nama/email readonly + link `/password/change` | PASS | PASS | PASS | PASS | Link change password sudah tersedia |
-| Google Sheets | Service account, range `B11:CO59`, fallback maksimal 12 bulan | Server-only Node JWT/Sheets API, typed parser, fallback/cache/error | PASS | PASS | PASS | NEEDS REVIEW | Dua JSON terdeteksi memiliki private key berbeda; pilih key aktif di deployment |
+| Google Sheets | Service account, range `B11:CO59`, fallback maksimal 12 bulan | Server-only Node JWT/Sheets API, typed parser, fallback/cache/error | Partial | PASS | PASS | ACCEPTABLE DIFFERENCE | Worksheet live mendeteksi 7/7 pemasok terbaru; dua JSON memiliki private key berbeda dan key aktif deployment perlu dipilih |
 | PostgreSQL data layer | Eloquent/query builder + PostgreSQL aggregate | Prisma + typed services + PostgreSQL existing | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | Dashboard Laravel aktif tetap Google Sheets; target/HOP/solar tidak ada di PG |
 | Model/relationship | 7 domain model utama + `Unit` relationships | Prisma mappings dan relation `Unit` | PASS | PASS | N/A | PASS | Nama tabel/kolom dan FK dipertahankan |
 | Layout/navigation | Blade app layout, sidebar, navbar, breadcrumb, mobile behavior | AppShell, Sidebar, SiteHeader, NavigationMenu | PASS | N/A | PASS | ACCEPTABLE DIFFERENCE | React/Tailwind/SVG berbeda dari Blade/CSS tetapi hierarchy dipertahankan |
@@ -141,7 +145,7 @@ Validasi typed adapter Next terhadap Laravel pada `Juli26-BB`, tanggal 28:
 
 | Nilai | Laravel | Next.js | Result |
 |---|---:|---:|---|
-| Biomassa receipt bulanan | 3223.46 | 3223.46 | PASS |
+| Biomassa receipt bulanan | 3223.46 (baseline lama) | 3223.46; skema live mendeteksi 7/7 header terbaru | PASS |
 | Biomassa consumption bulanan | 3740.65 | 3740.65 | PASS |
 | Batubara consumption bulanan | 34940.444 | 34940.444 | PASS |
 | Stock | 19152.296 | 19152.296 | PASS |

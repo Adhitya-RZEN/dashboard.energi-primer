@@ -55,13 +55,14 @@ function regressionFixture() {
     [12, "HOP UNIT 3"],
     [13, "SOLAR TOTAL"],
     [14, "SOLAR TOP UP"],
-    [15, "PENERIMAAN BIOMASSA SAWDUST PT SRM"],
-    [16, "PENERIMAAN BIOMASSA SAWDUST PT BRMS"],
-    [17, "PENERIMAAN BIOMASSA WOODCHIP PT SRM"],
+    [15, "PENERIMAAN BIOMASSA SAWDUST PT SYAHRONI"],
+    [16, "PENERIMAAN BIOMASSA SAWDUST PT BINTANG"],
+    [17, "PENERIMAAN BIOMASSA WOODCHIP PT SYAHRONI"],
     [18, "PENERIMAAN BIOMASSA WOODCHIP PT RAP"],
-    [19, "PENERIMAAN BIOMASSA WOODCHIP CV MPI"],
-    [20, "PENERIMAAN BIOMASSA LRUK BI"],
-    [21, "PENERIMAAN BIOMASSA SRF TPA KONGOK"],
+    [19, "PENERIMAAN BIOMASSA WOODCHIP CV MULTI PAKETINDO"],
+    [20, "PENERIMAAN BIOMASSA LRUK"],
+    [21, "PENERIMAAN BIOMASSA SRF"],
+    [22, "PENERIMAAN BIOMASSA WOODCHIP"],
   ];
   for (const [column, value] of headers) put(rows, 1, column, value);
   put(rows, 2, 1, "28 Juli 2026");
@@ -83,13 +84,14 @@ function regressionFixture() {
     [6, "1566,500"],
     [7, "238,000"],
     [8, "1936,150"],
-    [15, "500,000"],
-    [16, "400,000"],
-    [17, "700,000"],
+    [15, "400,000"],
+    [16, "300,000"],
+    [17, "500,000"],
     [18, "600,000"],
     [19, "500,000"],
-    [20, "300,000"],
+    [20, "700,000"],
     [21, "223,460"],
+    [22, "9000,000"],
   ] as const) put(rows, 4, column, value);
 
   const labelColumn = 20;
@@ -191,8 +193,42 @@ function runStaticTests() {
   assert.equal(comparison.unresolvedCount, 0, JSON.stringify(comparison.rows, null, 2));
   assert.equal(comparison.pass, true);
   assert.equal(regression.aggregates.biomassSupplierReceiptMonthly.value, 3223.46);
+  assert.equal(regression.aggregates.biomassSupplierReceiptMonthly.sourceAddresses?.length, 7);
   assert.equal(regression.aggregates.biomassUnitConsumptionMonthly.value, 3740.65);
   assert.equal(regression.normalized.metrics.biomassConsumptionMonthly.value, 3740.65);
+
+  const receiptRowsOnly = regressionFixture();
+  for (const column of [1, 6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22]) put(receiptRowsOnly, 4, column, null);
+  for (const [column, value] of [
+    [15, "100,000"],
+    [16, "200,000"],
+    [17, "300,000"],
+    [18, "400,000"],
+    [19, "500,000"],
+    [20, "600,000"],
+    [21, "700,000"],
+  ] as const) put(receiptRowsOnly, 2, column, value);
+  const receiptRowsOnlyResult = parseDynamicWorksheet(receiptRowsOnly, { worksheetName: "Juli26-BB" });
+  assert.equal(receiptRowsOnlyResult.aggregates.biomassSupplierReceiptMonthly.value, 2800);
+
+  const incompleteReceiptSchema = regressionFixture();
+  put(incompleteReceiptSchema, 1, 21, null);
+  const incompleteReceiptResult = parseDynamicWorksheet(incompleteReceiptSchema, { worksheetName: "Juli26-BB" });
+  assert.equal(incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.available, false);
+  assert.match(incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "", /6\/7/);
+
+  const legacyReceiptSchema = regressionFixture();
+  for (const [column, value] of [
+    [15, "PENERIMAAN BIOMASSA SAWDUST PT SRM"],
+    [16, "PENERIMAAN BIOMASSA SAWDUST PT BRMS"],
+    [17, "PENERIMAAN BIOMASSA WOODCHIP PT SRM"],
+    [19, "PENERIMAAN BIOMASSA WOODCHIP CV MPI"],
+    [20, "PENERIMAAN BIOMASSA LRUK BI"],
+    [21, "PENERIMAAN BIOMASSA SRF TPA KONGOK"],
+  ] as const) put(legacyReceiptSchema, 1, column, value);
+  const legacyReceiptResult = parseDynamicWorksheet(legacyReceiptSchema, { worksheetName: "Juli26-BB" });
+  assert.equal(legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.available, false);
+  assert.match(legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "", /1\/7/);
 
   const missing = parseDynamicWorksheet(targetFixture(5, 3, null), { worksheetName: "Juli26-BB" });
   assert.equal(missing.normalized.metrics.biomassTarget.available, false);

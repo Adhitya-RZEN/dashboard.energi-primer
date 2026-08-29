@@ -62,10 +62,14 @@ export function normalizeDynamicOverview(input: {
 
   const dashboardBiomassReceipt = fields.biomassReceiptMonthly;
   const supplierReceipt = input.aggregates?.biomassSupplierReceiptMonthly;
-  if (!dashboardBiomassReceipt?.available && supplierReceipt?.available) {
+  if (supplierReceipt) {
     fields.biomassReceiptMonthly = {
       ...supplierReceipt,
-      note: "Resolved as a fallback from the supplier columns under Penerimaan → Biomassa.",
+      note: supplierReceipt.available && dashboardBiomassReceipt?.available && dashboardBiomassReceipt.value !== supplierReceipt.value
+        ? "Resolved from the seven supplier columns under Penerimaan → Biomassa because the dashboard candidate disagrees with the latest source table."
+        : supplierReceipt.available
+          ? "Resolved from the seven supplier columns under Penerimaan → Biomassa."
+          : supplierReceipt.note,
     };
   }
 

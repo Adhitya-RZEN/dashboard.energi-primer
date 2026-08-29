@@ -17,7 +17,7 @@ Status production: **BLOCKED** karena implementasi saat ini membaca credential d
 | Credential source | Path server-side dari `GOOGLE_SHEETS_CREDENTIALS_PATH` |
 | Spreadsheet | ID hanya dibaca dari `GOOGLE_SHEETS_SPREADSHEET_ID`; tidak dicetak |
 | Worksheet | Dibentuk mengikuti periode: `[MonthIndonesia][2-digit year]-BB` |
-| Range | `B11:CO59` |
+| Range | `B11:CO59` untuk mapping legacy; `A1:ZZ500` untuk agregat semantic penerimaan Biomassa |
 | API operation | Read-only Google Sheets v4 values endpoint |
 | Timeout | 15 detik |
 | Cache | In-memory process cache dengan TTL `GOOGLE_SHEETS_CACHE_TTL` |
@@ -29,14 +29,17 @@ Nama file credential lokal dan isi JSON/private key tidak ditulis di dokumen ini
 
 Parser di `src/services/google-sheets-overview.ts` mempertahankan mapping Laravel yang sudah diaudit:
 
-- indeks kolom ditentukan oleh range yang dikonfigurasi, bukan asumsi visual chart;
+- semantic parser menjadi source utama KPI yang dapat di-resolve; indeks kolom legacy tetap menjadi fallback per-field;
+- indeks kolom legacy ditentukan oleh range yang dikonfigurasi, bukan asumsi visual chart;
 - header dan baris periode diproses menjadi tipe data overview yang digunakan service dashboard;
 - nilai numerik dinormalisasi dengan aturan parser yang sama;
 - fallback target dan formula Overview dipertahankan;
 - periode yang tidak valid atau baris malformed tidak dianggap sebagai data valid;
 - batas periode maksimum yang telah ditentukan service tetap digunakan.
 
-Tidak ada perubahan schema database, API contract, KPI, atau business calculation pada Phase 10.
+Metric `biomassReceiptMonthly` pada jalur Google Sheets sekarang memakai agregat semantic tujuh kolom `Penerimaan → Biomassa`: Sawdust PT Syahroni, Sawdust PT Bintang, Woodchip PT Syahroni, Woodchip PT RAP, Woodchip CV Multi Paketindo, LRUK, dan SRF. Kolom kosong tidak dihitung. Nilai dihitung dari baris `TOTAL`; jika baris total tidak tersedia, parser menjumlahkan baris data pada tujuh kolom tersebut. Jika scan semantic gagal atau skema tujuh kolom belum lengkap, metric tetap unavailable. KPI ini tidak lagi memakai fallback legacy `S52`.
+
+Tidak ada perubahan schema database, API contract, metric konsumsi, atau business calculation lain. Perubahan ini hanya mengubah source `biomassReceiptMonthly` pada jalur Google Sheets sesuai scope pemasok yang disepakati.
 
 ## Validation dan error handling
 
@@ -98,4 +101,3 @@ Saat ini integration test production: **BLOCKED** karena konfigurasi deployment 
 ## Status
 
 **BLOCKED / NOT READY untuk Google Sheets production.** Kode server-side dan error boundary siap diaudit, tetapi credential provisioning dan permission production masih membutuhkan konfigurasi manual.
-

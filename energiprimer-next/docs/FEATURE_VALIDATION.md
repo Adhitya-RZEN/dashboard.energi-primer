@@ -20,7 +20,7 @@ Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang
 
 - Laravel: `DashboardController@biomassa` memakai `prepareDashboardData()` yang sama dengan Overview.
 - Next.js: `DetailDashboard` dengan feature `biomassa` memakai `getOverviewData()`.
-- KPI: penerimaan bulanan `S52`, pemakaian bulanan `AC42`, dan pemakaian harian Unit 1/2/3 dari `T/W/Z`.
+- KPI: penerimaan bulanan production dihitung hanya dari tujuh pemasok pada tabel `Penerimaan → Biomassa`; tidak ada fallback `S52`, pemakaian bulanan memakai field semantic/legacy fallback, dan pemakaian harian Unit 1/2/3 dari tabel data.
 - Chart: line `biomassa_pemakaian` dan stacked bar `T/W/Z` per hari.
 - Filter: `day`, `month`, `year` melalui GET.
 - State: loading, empty, unavailable, dan error.
@@ -31,7 +31,7 @@ Validation Laravel vs Next, `Juli26-BB`, hari 28:
 
 | Nilai | Laravel | Next.js | Result |
 |---|---:|---:|---|
-| Penerimaan bulanan | 3223.46 ton | 3223.46 ton | PASS |
+| Penerimaan bulanan | 3223.46 ton (baseline lama) | 3223.46 ton; seluruh 7 header skema terbaru terdeteksi | PASS |
 | Pemakaian bulanan | 3740.65 ton | 3740.65 ton | PASS |
 | Unit 1/2/3 harian | 74.8 / 47.6 / 61.2 ton | sama | PASS |
 | Chart total harian | 183.6 ton | 183.6 ton | PASS |

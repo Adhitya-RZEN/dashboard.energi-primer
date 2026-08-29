@@ -6,7 +6,7 @@ Dokumen ini mencatat implementasi Phase 6 untuk route `/dashboard`. Laravel teta
 
 Data source dipilih sebagai berikut:
 
-1. Jika `GOOGLE_SHEETS_CREDENTIALS_PATH` dan `GOOGLE_SHEETS_SPREADSHEET_ID` tersedia, Next.js memakai Google Sheets API v4 dengan parser yang mengikuti `GoogleSheetsDataSource` Laravel.
+1. Jika `GOOGLE_SHEETS_CREDENTIALS_PATH` dan `GOOGLE_SHEETS_SPREADSHEET_ID` tersedia, Next.js memakai Google Sheets API v4 dengan parser yang mengikuti `GoogleSheetsDataSource` Laravel. Metric `biomassReceiptMonthly` production dihitung dari tujuh kolom pemasok pada hierarchy `Penerimaan → Biomassa` melalui scan semantic tambahan.
 2. Jika konfigurasi Google Sheets tidak tersedia, Next.js memakai PostgreSQL existing melalui Prisma. Karena schema PostgreSQL belum memuat seluruh domain Overview, metrik yang tidak memiliki padanan dikembalikan sebagai unavailable, bukan angka buatan.
 
 ## Laravel source contract
@@ -27,7 +27,7 @@ Filter `day` memilih baris tanggal yang cocok. Bila tidak ada, Laravel memilih b
 
 | KPI | Laravel source/query | Formula dan unit | Next.js mapping | Parity |
 |---|---|---|---|---|
-| Penerimaan Biomassa | `S` index 17 pada row 52 | Nilai sel; ton; bulanan | `metrics.biomassReceiptMonthly`, Google adapter | Formula sama |
+| Penerimaan Biomassa | Tabel `Penerimaan → Biomassa` dengan tujuh kolom skema terbaru | Total tujuh pemasok; ton; bulanan | `metrics.biomassReceiptMonthly`, Google adapter | Production memakai agregat semantic; tidak ada fallback `S52`; scan gagal/skema parsial menjadi unavailable |
 | Pemakaian Biomassa | `AC` index 27 pada row 42 | Nilai sel; ton; bulanan | `metrics.biomassConsumptionMonthly`, Google adapter | Formula sama |
 | Pemakaian Batubara | `AB` index 26 pada row 42 | Nilai sel; ton; bulanan | Google: nilai `AB42`; PostgreSQL: `SUM(coal_consumption.coal_used)` pada periode | Google sama; PG adalah padanan schema |
 | Stock Batubara | `AD` index 28 pada baris fokus | Nilai sel; ton; harian | Google: nilai `AD` baris fokus; PG: `coal_stock.closing_stock` tanggal fokus | Formula sama pada Google; PG padanan |
@@ -115,7 +115,7 @@ Validasi source Laravel dan render Next.js dijalankan read-only untuk worksheet 
 
 | Nilai | Laravel result | Next.js result | Status |
 |---|---:|---:|---|
-| Penerimaan biomassa bulanan | `3223.46` ton | `3223.46` ton | PASS |
+| Penerimaan biomassa bulanan | `3223.46` ton (baseline lama) | `3223.46` ton; seluruh `7/7` header pemasok terbaru terdeteksi | PASS |
 | Pemakaian biomassa bulanan | `3740.65` ton | `3740.65` ton | PASS |
 | Pemakaian batubara bulanan | `34940.444` ton | `34940.444` ton | PASS |
 | Stock batubara tanggal 28 | `19152.296` ton | `19152.296` ton | PASS |

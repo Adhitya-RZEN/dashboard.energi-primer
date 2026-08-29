@@ -4,7 +4,7 @@
 
 Implementasi ini adalah prototype internal yang dapat dipanggil dan diuji secara independen. Tujuannya adalah membaca struktur tabel worksheet Google Sheets berdasarkan label, header, unit, hierarchy, dan boundary semantic; bukan berdasarkan indeks kolom/row legacy.
 
-Parser ini **belum menggantikan** `src/services/google-sheets-overview.ts` dan belum menjadi default pada `src/services/overview.ts`. Alur dashboard production, API contract, database, Prisma, authentication, authorization, dan Google credential handling tetap tidak berubah.
+Adapter production memakai hasil parser semantic untuk KPI Google Sheets yang berhasil di-resolve. Mapping legacy tetap tersedia sebagai fallback per-field ketika scan semantic gagal menemukan field tertentu; `biomassReceiptMonthly` memiliki aturan khusus dan hanya valid jika tujuh pemasok terbaru terdeteksi lengkap. API contract, database, Prisma, authentication, authorization, dan Google credential handling tetap tidak berubah.
 
 Laravel dan parser positional lama tetap menjadi source/reference. Tidak ada write ke Google Sheets, PostgreSQL, atau file Laravel.
 
@@ -176,11 +176,11 @@ Threshold:
 
 Parser juga membaca agregat semantic dari baris total bulanan, tanpa mengunci koordinat row/column:
 
-- Kolom pemasok di bawah hierarchy `PENERIMAAN → BIOMASSA` dijumlahkan sebagai `biomassSupplierReceiptMonthly`. Nama pemasok boleh berubah; yang digunakan adalah hierarchy semantic, resource Biomassa, dan unit yang kompatibel.
+- Kolom pemasok di bawah hierarchy `PENERIMAAN → BIOMASSA` dijumlahkan sebagai `biomassSupplierReceiptMonthly` hanya jika tujuh header skema terbaru terdeteksi: `Sawdust PT Syahroni`, `Sawdust PT Bintang`, `Woodchip PT Syahroni`, `Woodchip PT RAP`, `Woodchip CV Multi Paketindo`, `LRUK`, dan `SRF`. Kolom kosong serta header generic/lama di luar daftar tidak dihitung.
 - Kolom langsung `BIOMASSA UNIT 1`, `UNIT 2`, dan `UNIT 3` pada baris total bulanan dijumlahkan sebagai `biomassUnitConsumptionMonthly`.
 - `biomassConsumptionMonthly` memakai agregat Unit 1–3 tersebut apabila tersedia. Ini mencegah nilai dashboard yang stale/contradictory menggantikan definisi konsumsi yang dipakai Laravel.
 
-Pada worksheet live `Juli26-BB`, penjumlahan kolom pemasok yang diberikan menghasilkan `3223.46`, sama dengan penerimaan Biomassa. Total Unit 1–3 menghasilkan `3740.65`, sama dengan konsumsi bulanan legacy. Karena itu kolom `Penerimaan → Biomassa` tidak dipetakan langsung menjadi konsumsi tanpa keputusan bisnis eksplisit; jika pemilik data memang mendefinisikannya sebagai konsumsi, keputusan tersebut berstatus `NEEDS REVIEW`.
+Total `Penerimaan → Biomassa` dan total pemakaian Unit 1–3 tetap dipisahkan sebagai dua KPI berbeda. Nilai penerimaan hanya dihitung dari tujuh kolom skema terbaru; nilai konsumsi bulanan memakai agregat Unit 1–3. Jika salah satu dari tujuh header belum tersedia, penerimaan ditandai `UNRESOLVED` dan tidak diganti dengan total legacy yang dapat memiliki cakupan berbeda.
 
 ### Daily
 
@@ -218,11 +218,11 @@ min(100, cumulative / target * 100)
 
 Field hilang tidak diubah menjadi nol dan tidak membuat parser throw untuk struktur optional yang memang tidak tersedia.
 
-Jika nilai dashboard `TOTAL PEMAKAIAN BIOMASSA BULANAN` berbeda dari agregat Unit 1–3 yang valid, parser mempertahankan nilai dashboard sebagai diagnostic candidate, mencatat warning, dan menormalisasi metric dari agregat Unit 1–3. Fallback dari kolom pemasok hanya digunakan untuk `biomassReceiptMonthly` ketika candidate dashboard penerimaan tidak tersedia.
+Jika nilai dashboard `TOTAL PEMAKAIAN BIOMASSA BULANAN` berbeda dari agregat Unit 1–3 yang valid, parser mempertahankan nilai dashboard sebagai diagnostic candidate, mencatat warning, dan menormalisasi metric dari agregat Unit 1–3. `biomassReceiptMonthly` selalu mengikuti agregat tujuh pemasok terbaru ketika skema lengkap; skema parsial tidak menghasilkan angka penerimaan.
 
 ## Dual parser dan regression
 
-`comparator.ts` hanya membandingkan hasil dynamic terhadap baseline legacy yang diberikan oleh test. Tidak ada overwrite terhadap result legacy dan tidak ada perubahan default data flow.
+`comparator.ts` hanya membandingkan hasil dynamic terhadap baseline legacy yang diberikan oleh test. Adapter production membaca hasil semantic untuk seluruh KPI yang tersedia. Mapping range/index legacy tetap dipertahankan sebagai fallback per-field untuk KPI biasa ketika field semantic belum ter-resolve; `biomassReceiptMonthly` dikecualikan dan tetap strict terhadap skema tujuh pemasok.
 
 Baseline `Juli26-BB`, hari 28:
 
@@ -263,15 +263,20 @@ Pada shell Windows dengan execution policy yang memblokir shim PowerShell, gunak
 
 ### Live read-only verification
 
-Live read ke worksheet `Juli26-BB` berhasil menggunakan environment lokal yang tersedia. Requested dan effective worksheet sama sehingga tidak terjadi fallback. Seluruh field dashboard dan daily series parity dengan baseline dalam tolerance test:
+Live read ke worksheet `Juli26-BB` berhasil menggunakan environment lokal yang tersedia. Requested dan effective worksheet sama sehingga tidak terjadi fallback. Semua field dashboard selain penerimaan Biomassa parity dengan baseline dalam tolerance test; penerimaan mengikuti validasi skema tujuh pemasok terbaru:
 
 | Field | Legacy baseline | Dynamic semantic | Source | Status |
 |---|---:|---:|---|---|
 | `biomassConsumptionMonthly` | `3740.65` | `3740.65` | agregat Biomassa Unit 1–3 pada baris total (`T42` sebagai source pertama) | `PASS` |
 
-Worksheet live masih memiliki candidate dashboard `TOTAL PEMAKAIAN BIOMASSA BULANAN` sebesar `195.2`. Parser menandainya sebagai mismatch diagnostic, lalu menggunakan agregat semantic Unit 1–3 (`1566.5 + 238 + 1936.15 = 3740.65`) untuk menjaga definisi konsumsi dan parity legacy. Agregat kolom pemasok di bawah `Penerimaan → Biomassa` adalah `3223.46` dan tetap dipisahkan sebagai penerimaan.
+| Agregat/metric | Nilai live | Source | Status |
+|---|---:|---|---|
+| `biomassSupplierReceiptMonthly` | `3223.46` (baseline lama) | `3223.46`; 7/7 header terbaru terdeteksi | `PASS` |
+| production `metrics.biomassReceiptMonthly` | `3223.46` (baseline lama) | `3223.46`; total tujuh kolom, tanpa fallback `S52` | `PASS` |
 
-Hasil ini menyelesaikan mismatch teknis parser tanpa menyamarkan perbedaan source. Status semantic source dashboard `195.2` tetap `NEEDS REVIEW` pada level data owner apabila angka tersebut seharusnya diperbaiki di worksheet.
+Worksheet live saat ini memakai seluruh header skema tujuh pemasok terbaru dan smoke test read-only menghasilkan parity receipt `PASS`. Kolom kosong di antara header bernama diabaikan. Mismatch kandidat dashboard konsumsi tetap dipisahkan dari agregat Unit 1–3.
+
+Status source/dashboard yang berbeda tetap `NEEDS REVIEW` pada level data owner apabila angka pada worksheet perlu diperbaiki.
 
 Nilai current coal pada dashboard live tampil dengan presisi lebih rendah daripada baseline (`565.74`, `651.34`, `375.49`); perbedaannya berada dalam tolerance display/source rounding. Daily source tetap exact pada baseline.
 
@@ -303,15 +308,15 @@ Parser pure tidak membaca credential. Adapter `reader.ts` hanya server-side dan 
 1. Google Sheets API yang digunakan saat ini tidak melakukan discovery daftar semua worksheet; fallback mencoba nama valid yang dibangkitkan, lalu mengandalkan response API.
 2. `A1:ZZ500` adalah scan envelope untuk adapter prototype. Jika table dipindah di luar envelope, envelope perlu diperluas secara konfigurasi/keputusan Phase 2; extraction field tetap tidak memakai fixed coordinate.
 3. Merged cell dan header hierarchy yang sangat tidak beraturan dapat menghasilkan `WARNING` atau `UNRESOLVED` dan harus direview.
-4. Label bisnis yang contradictory tetap dilaporkan. Untuk kasus live `195.2` vs `3740.65`, v1 menggunakan agregat Unit 1–3 yang semantic dan parity-validated sebagai source efektif; koreksi nilai dashboard di worksheet tetap membutuhkan keputusan/data-owner review.
-5. Belum ada integrasi default ke `getOverviewData`; penggantian parser memerlukan Phase 2 dengan feature flag, dual-run observability, dan approval parity.
+4. Label bisnis yang contradictory tetap dilaporkan. Untuk kasus kandidat dashboard dan agregat Unit 1–3 yang berbeda, v1 menggunakan agregat Unit 1–3 sebagai source konsumsi efektif; koreksi nilai dashboard di worksheet tetap membutuhkan keputusan/data-owner review.
+5. Adapter production sudah memakai field semantic untuk KPI Google Sheets yang dapat dipetakan; mapping legacy tetap tersedia sebagai fallback per-field untuk KPI biasa. `biomassReceiptMonthly` tetap strict terhadap tujuh pemasok dan tidak memiliki fallback legacy. Perubahan business definition tetap membutuhkan approval parity.
 6. Static test menggunakan Node type stripping karena project belum memiliki test runner. Tidak ada dependency test baru yang ditambahkan.
 
 ## Rekomendasi Phase 2
 
 Perbaikan rekomendasi Phase 2 yang sudah diterapkan pada prototype:
 
-1. Agregat kolom pemasok di bawah `Penerimaan → Biomassa` sekarang dideteksi secara semantic dan disimpan sebagai `biomassSupplierReceiptMonthly`.
+1. Tujuh kolom pemasok (`Sawdust PT Syahroni`, `Sawdust PT Bintang`, `Woodchip PT Syahroni`, `Woodchip PT RAP`, `Woodchip CV Multi Paketindo`, `LRUK`, dan `SRF`) di bawah `Penerimaan → Biomassa` sekarang dideteksi secara semantic dan dijumlahkan sebagai `biomassSupplierReceiptMonthly`. Kolom kosong dan kolom lama/generic di luar daftar tidak ikut dihitung.
 2. `biomassConsumptionMonthly` sekarang memiliki source policy yang jelas: total bulanan Biomassa Unit 1–3, bukan total penerimaan pemasok.
 3. Konflik dashboard `195.2` dicatat sebagai warning dan tidak lagi menyebabkan parity failure ketika agregat Unit 1–3 valid.
 4. Regression fixture menguji table yang bergeser, nilai locale, baris total, agregat pemasok, agregat Unit 1–3, dan fallback source policy.
@@ -324,4 +329,4 @@ Sebelum mengaktifkan dynamic parser sebagai production default, tetap diperlukan
 4. observability dan fallback untuk hasil low-confidence/ambiguous;
 5. feature flag dan rollback path ke legacy parser.
 
-**Status:** parser semantic v1 prototype, static regression, dan live semantic regression `PASS` terhadap baseline legacy; live worksheet tetap memiliki warning source `NEEDS REVIEW` untuk candidate dashboard `195.2`; production replacement `NOT ACTIVATED`.
+**Status:** agregat semantic tujuh pemasok, static regression, pengalihan KPI production ke semantic-first, dan validasi live terhadap worksheet dengan skema terbaru `PASS`. `biomassReceiptMonthly` tidak menggunakan fallback legacy `S52`.

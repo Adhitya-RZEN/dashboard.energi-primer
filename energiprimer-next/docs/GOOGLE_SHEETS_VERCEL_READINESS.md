@@ -12,10 +12,10 @@ Scope: compatibility and secret-boundary audit tanpa provisioning credential.
 | Credential input | GOOGLE_SHEETS_CREDENTIALS_PATH ke JSON lokal |
 | Spreadsheet | GOOGLE_SHEETS_SPREADSHEET_ID, tidak ditulis pada laporan |
 | Worksheet | Dinamis berdasarkan nama bulan Indonesia, tahun 2 digit, dan suffix -BB |
-| Range | B11:CO59 |
+| Range | B11:CO59 untuk mapping legacy; A1:ZZ500 untuk agregat semantic penerimaan Biomassa |
 | Timeout | 15 detik dengan AbortController |
 | Cache | In-memory per process berdasarkan spreadsheet/worksheet/range |
-| Parser | src/services/google-sheets-overview.ts, mempertahankan mapping dan fallback Laravel |
+| Parser | src/services/google-sheets-overview.ts; mapping semantic KPI dan agregat tujuh pemasok Biomassa dengan legacy fallback terbatas |
 | Boundary | src/lib/google-sheets.ts menggunakan server-only |
 
 ## Environment variables
@@ -58,4 +58,3 @@ Provisioning credential, perubahan Google Cloud project, dan rotasi credential t
 ## Status
 
 **PASS WITH WARNINGS untuk source boundary; BLOCKED untuk production credential provisioning.**
-
