@@ -9,21 +9,21 @@ Fondasi App Router sudah mendukung navigasi client-side dan persistent dashboard
 
 ## Temuan berdasarkan area
 
-| Area | Hasil | Status |
-| --- | --- | --- |
-| Internal dashboard navigation | Menggunakan Next `Link`, `usePathname`, dan pending state | PASS |
-| Persistent shell | `(protected)/layout.tsx` membungkus child page dengan shell | PASS |
-| Hard navigation | Tidak ditemukan `window.location.href`/`reload` pada dashboard navigation | PASS |
-| Dashboard filter | Menggunakan transition dan `router.push(..., { scroll: false })` | PASS |
-| Legacy data/report forms | Beberapa form GET di `data-batu-bara`, `monitoring`, dan `laporan` menyebabkan document navigation | NEEDS REVIEW |
-| Server/client split | Page/data fetching tetap Server Component; interaksi chart/filter berada di Client Component | PASS |
-| Client data fetch | Tidak ditemukan pola `useEffect` fetch untuk chart/dashboard utama | PASS |
-| Duplicate chart fetch | Chart menerima data dari page dan tidak memanggil DB/API | PASS |
-| Query parallelism | Query utama menggunakan `Promise.all`/aggregate query yang tersedia | PASS |
-| Chart code split | Recharts berada pada route/client chunks; tidak ada dynamic import tambahan | PASS WITH WARNING |
-| Loading boundary | `loading.tsx` tersedia pada route dashboard utama | PASS |
-| Error isolation | Route error boundary tersedia; granular per-widget belum diterapkan | NEEDS REVIEW |
-| Google cache | Cache in-memory per process, bukan shared cache antar instance | NEEDS REVIEW |
+| Area                          | Hasil                                                                                              | Status            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- | ----------------- |
+| Internal dashboard navigation | Menggunakan Next `Link`, `usePathname`, dan pending state                                          | PASS              |
+| Persistent shell              | `(protected)/layout.tsx` membungkus child page dengan shell                                        | PASS              |
+| Hard navigation               | Tidak ditemukan `window.location.href`/`reload` pada dashboard navigation                          | PASS              |
+| Dashboard filter              | Menggunakan transition dan `router.push(..., { scroll: false })`                                   | PASS              |
+| Legacy data/report forms      | Beberapa form GET di `data-batu-bara`, `monitoring`, dan `laporan` menyebabkan document navigation | NEEDS REVIEW      |
+| Server/client split           | Page/data fetching tetap Server Component; interaksi chart/filter berada di Client Component       | PASS              |
+| Client data fetch             | Tidak ditemukan pola `useEffect` fetch untuk chart/dashboard utama                                 | PASS              |
+| Duplicate chart fetch         | Chart menerima data dari page dan tidak memanggil DB/API                                           | PASS              |
+| Query parallelism             | Query utama menggunakan `Promise.all`/aggregate query yang tersedia                                | PASS              |
+| Chart code split              | Recharts berada pada route/client chunks; tidak ada dynamic import tambahan                        | PASS WITH WARNING |
+| Loading boundary              | `loading.tsx` tersedia pada route dashboard utama                                                  | PASS              |
+| Error isolation               | Route error boundary tersedia; granular per-widget belum diterapkan                                | NEEDS REVIEW      |
+| Google cache                  | Cache in-memory per process, bukan shared cache antar instance                                     | NEEDS REVIEW      |
 
 ## High impact findings
 
@@ -74,4 +74,3 @@ Recharts hanya diimpor pada Client Components chart. Tidak ada bukti credential 
 ## Status
 
 **PASS WITH WARNINGS untuk fondasi runtime; NOT READY untuk performance sign-off production** karena deployment environment belum dapat diuji dan beberapa form masih menggunakan navigasi dokumen penuh.
-

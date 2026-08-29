@@ -1,13 +1,23 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ResponsiveContainer, type MouseHandlerDataParam, type TooltipPayloadEntry } from "recharts";
+import {
+  ResponsiveContainer,
+  type MouseHandlerDataParam,
+  type TooltipPayloadEntry,
+} from "recharts";
 
 export type ChartDataset = {
   key: string;
   label: string;
   color: string;
 };
+
+// Recharts uses these values as a safe first render while ResponsiveContainer
+// is measuring the actual parent. The measured responsive dimensions still
+// take precedence after the container is ready.
+export const CHART_WIDTH_FALLBACK = 640;
+export const CHART_HEIGHT = 320;
 
 type ChartTooltipProps = {
   active?: boolean;
@@ -31,7 +41,9 @@ export function formatChartDate(value: unknown) {
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return raw || "Tanggal tidak tersedia";
 
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const date = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
+  );
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "long",
@@ -47,15 +59,22 @@ export function chartDateFromState(
   if (!state) return null;
   if (typeof state.activeLabel === "string") return state.activeLabel;
 
-  const index = typeof state.activeTooltipIndex === "number"
-    ? state.activeTooltipIndex
-    : typeof state.activeIndex === "number"
-      ? state.activeIndex
-      : null;
-  return index === null ? null : series[index]?.date ?? null;
+  const index =
+    typeof state.activeTooltipIndex === "number"
+      ? state.activeTooltipIndex
+      : typeof state.activeIndex === "number"
+        ? state.activeIndex
+        : null;
+  return index === null ? null : (series[index]?.date ?? null);
 }
 
-export function ChartFrame({ children, label }: { children: ReactNode; label: string }) {
+export function ChartFrame({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
   return (
     <div
       role="group"
@@ -64,9 +83,10 @@ export function ChartFrame({ children, label }: { children: ReactNode; label: st
     >
       <ResponsiveContainer
         width="100%"
-        height={320}
-        minWidth={0}
-        initialDimension={{ width: 640, height: 320 }}
+        height={CHART_HEIGHT}
+        minWidth={1}
+        minHeight={CHART_HEIGHT}
+        initialDimension={{ width: CHART_WIDTH_FALLBACK, height: CHART_HEIGHT }}
       >
         {children}
       </ResponsiveContainer>
@@ -84,7 +104,11 @@ export function ChartLegend({
   onToggle: (key: string) => void;
 }) {
   return (
-    <div className="mb-2 flex flex-wrap items-center justify-end gap-1.5 px-2 text-xs text-slate-600" role="group" aria-label="Legenda chart">
+    <div
+      className="mb-2 flex flex-wrap items-center justify-end gap-1.5 px-2 text-xs text-slate-600"
+      role="group"
+      aria-label="Legenda chart"
+    >
       {datasets.map((dataset) => {
         const isHidden = hidden.has(dataset.key);
         return (
@@ -109,7 +133,11 @@ export function ChartLegend({
   );
 }
 
-export function toggleChartSeries(hidden: ReadonlySet<string>, key: string, total: number) {
+export function toggleChartSeries(
+  hidden: ReadonlySet<string>,
+  key: string,
+  total: number,
+) {
   const next = new Set(hidden);
   if (next.has(key)) {
     next.delete(key);
@@ -129,11 +157,20 @@ export function DashboardChartTooltip({
   totalSeriesCount,
   totalLabel = "Total",
 }: ChartTooltipProps) {
-  const entries = (payload ?? []).filter((entry) => entry.value !== null && entry.value !== undefined && entry.hide !== true);
-  const numericValues = entries.map((entry) => entry.value).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  const canShowTotal = showTotal
-    && numericValues.length === entries.length
-    && (totalSeriesCount === undefined || entries.length === totalSeriesCount);
+  const entries = (payload ?? []).filter(
+    (entry) =>
+      entry.value !== null && entry.value !== undefined && entry.hide !== true,
+  );
+  const numericValues = entries
+    .map((entry) => entry.value)
+    .filter(
+      (value): value is number =>
+        typeof value === "number" && Number.isFinite(value),
+    );
+  const canShowTotal =
+    showTotal &&
+    numericValues.length === entries.length &&
+    (totalSeriesCount === undefined || entries.length === totalSeriesCount);
 
   if (!active || !entries.length) return null;
 
@@ -146,14 +183,19 @@ export function DashboardChartTooltip({
       <p className="font-bold text-slate-950">{formatChartDate(label)}</p>
       <dl className="mt-2 space-y-1.5">
         {entries.map((entry, index) => (
-          <div key={`${String(entry.dataKey)}-${index}`} className="flex items-center justify-between gap-4">
+          <div
+            key={`${String(entry.dataKey)}-${index}`}
+            className="flex items-center justify-between gap-4"
+          >
             <dt className="flex min-w-0 items-center gap-2 text-slate-600">
               <i
                 aria-hidden="true"
                 className="size-2 shrink-0 rounded-full"
                 style={{ backgroundColor: entry.color ?? accentColor }}
               />
-              <span className="truncate">{String(entry.name ?? entry.dataKey ?? "Nilai")}</span>
+              <span className="truncate">
+                {String(entry.name ?? entry.dataKey ?? "Nilai")}
+              </span>
             </dt>
             <dd className="shrink-0 font-bold text-slate-950">
               {formatChartValue(entry.value)} {String(entry.unit ?? unit)}
@@ -164,7 +206,12 @@ export function DashboardChartTooltip({
       {canShowTotal ? (
         <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-100 pt-2 font-bold text-slate-950">
           <span>{totalLabel}</span>
-          <span>{formatChartValue(numericValues.reduce((total, value) => total + value, 0))} {unit}</span>
+          <span>
+            {formatChartValue(
+              numericValues.reduce((total, value) => total + value, 0),
+            )}{" "}
+            {unit}
+          </span>
         </div>
       ) : null}
     </div>

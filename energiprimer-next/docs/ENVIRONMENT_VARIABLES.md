@@ -9,24 +9,24 @@ tidak boleh di-commit.
 
 ## Inventory
 
-| Variable | Required | Server/Client | Sensitive | Used By | Production Required |
-|---|---|---|---|---|---|
-| `DATABASE_URL` | Yes | Server | Yes | Prisma schema, `src/lib/prisma.ts`, data services, `verify-db.mjs` | Yes |
-| `NEXT_PUBLIC_APP_NAME` | Optional | Client-safe | No | `src/lib/env.ts`, metadata, auth shell | Optional |
-| `NEXT_PUBLIC_APP_URL` | Optional | Client-safe | No | `src/lib/env.ts`, reset URL fallback | Recommended |
-| `AUTH_SECRET` | Yes | Server | Yes | Auth.js session/JWT signing | Yes |
-| `AUTH_TRUST_HOST` | Yes for deployment configuration | Server | No | Auth.js host trust | Yes |
-| `AUTH_MAILER` | Optional in development | Server | No | Password-reset delivery mode | Yes, after a real provider is implemented |
-| `AUTH_URL` | Recommended | Server | No | Canonical password-reset URL | Yes for production reset links |
-| `GOOGLE_SHEETS_CREDENTIALS_PATH` | Yes when Sheets is active | Server | Yes/config path | Google Sheets service | Yes when Sheets is active |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | Yes when Sheets is active | Server | Configuration-sensitive | Google Sheets service | Yes when Sheets is active |
-| `GOOGLE_SHEETS_CACHE_TTL` | Optional | Server | No | Google Sheets in-memory range cache | Optional; defaults to `120` |
-| `MAIL_MAILER` | Optional fallback | Server | No | Legacy-compatible fallback in password reset helper | No; prefer `AUTH_MAILER` |
-| `NODE_ENV` | Framework-provided | Server | No | Next.js, cookie `secure` behavior, logging | Managed by platform |
-| `AUTH_TEST_BASE_URL` | Test-only | Server/script | No | `scripts/verify-auth.mjs` | No |
-| `AUTH_TEST_ADMIN_EMAIL` | Test-only | Server/script | Yes | `scripts/verify-auth.mjs` | No |
-| `AUTH_TEST_ADMIN_PASSWORD` | Test-only | Server/script | Yes | `scripts/verify-auth.mjs` | No |
-| `AUTH_TEST_SECRET` | Test-only | Server/script | Yes | `scripts/verify-auth.mjs` | No |
+| Variable                         | Required                         | Server/Client | Sensitive               | Used By                                                            | Production Required                       |
+| -------------------------------- | -------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------ | ----------------------------------------- |
+| `DATABASE_URL`                   | Yes                              | Server        | Yes                     | Prisma schema, `src/lib/prisma.ts`, data services, `verify-db.mjs` | Yes                                       |
+| `NEXT_PUBLIC_APP_NAME`           | Optional                         | Client-safe   | No                      | `src/lib/env.ts`, metadata, auth shell                             | Optional                                  |
+| `NEXT_PUBLIC_APP_URL`            | Optional                         | Client-safe   | No                      | `src/lib/env.ts`, reset URL fallback                               | Recommended                               |
+| `AUTH_SECRET`                    | Yes                              | Server        | Yes                     | Auth.js session/JWT signing                                        | Yes                                       |
+| `AUTH_TRUST_HOST`                | Yes for deployment configuration | Server        | No                      | Auth.js host trust                                                 | Yes                                       |
+| `AUTH_MAILER`                    | Optional in development          | Server        | No                      | Password-reset delivery mode                                       | Yes, after a real provider is implemented |
+| `AUTH_URL`                       | Recommended                      | Server        | No                      | Canonical password-reset URL                                       | Yes for production reset links            |
+| `GOOGLE_SHEETS_CREDENTIALS_PATH` | Yes when Sheets is active        | Server        | Yes/config path         | Google Sheets service                                              | Yes when Sheets is active                 |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`   | Yes when Sheets is active        | Server        | Configuration-sensitive | Google Sheets service                                              | Yes when Sheets is active                 |
+| `GOOGLE_SHEETS_CACHE_TTL`        | Optional                         | Server        | No                      | Google Sheets in-memory range cache                                | Optional; defaults to `120`               |
+| `MAIL_MAILER`                    | Optional fallback                | Server        | No                      | Legacy-compatible fallback in password reset helper                | No; prefer `AUTH_MAILER`                  |
+| `NODE_ENV`                       | Framework-provided               | Server        | No                      | Next.js, cookie `secure` behavior, logging                         | Managed by platform                       |
+| `AUTH_TEST_BASE_URL`             | Test-only                        | Server/script | No                      | `scripts/verify-auth.mjs`                                          | No                                        |
+| `AUTH_TEST_ADMIN_EMAIL`          | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
+| `AUTH_TEST_ADMIN_PASSWORD`       | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
+| `AUTH_TEST_SECRET`               | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
 
 ## Configuration decisions
 

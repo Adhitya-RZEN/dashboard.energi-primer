@@ -1,4 +1,8 @@
-import type { DynamicFieldKey, DynamicParserResult, ResolvedValue } from "./types";
+import type {
+  DynamicFieldKey,
+  DynamicParserResult,
+  ResolvedValue,
+} from "./types";
 
 export type LegacyBaseline = Partial<Record<DynamicFieldKey, number | null>> & {
   daily?: Partial<{
@@ -39,7 +43,11 @@ export type ComparisonResult = {
   unresolvedCount: number;
 };
 
-function equalValue(left: number | null, right: number | null, tolerance: number) {
+function equalValue(
+  left: number | null,
+  right: number | null,
+  tolerance: number,
+) {
   if (left === null || right === null) return left === right;
   return Math.abs(left - right) <= tolerance;
 }
@@ -82,37 +90,75 @@ export function compareLegacyDynamic(
   tolerance = 0.001,
 ): ComparisonResult {
   const rows: ComparisonRow[] = [];
-  for (const field of Object.keys(baseline) as Array<DynamicFieldKey | "daily">) {
+  for (const field of Object.keys(baseline) as Array<
+    DynamicFieldKey | "daily"
+  >) {
     if (field === "daily") continue;
     const legacyValue = baseline[field];
-    if (legacyValue === undefined || typeof legacyValue !== "number" && legacyValue !== null) continue;
-    rows.push(compareValue(field, legacyValue, result.normalized.metrics[field], tolerance));
+    if (
+      legacyValue === undefined ||
+      (typeof legacyValue !== "number" && legacyValue !== null)
+    )
+      continue;
+    rows.push(
+      compareValue(
+        field,
+        legacyValue,
+        result.normalized.metrics[field],
+        tolerance,
+      ),
+    );
   }
   if (baseline.daily) {
-    const point = result.normalized.series.find((candidate) => candidate.day === baseline.daily?.day);
+    const point = result.normalized.series.find(
+      (candidate) => candidate.day === baseline.daily?.day,
+    );
     const dailyFields = [
-      "coal", "biomass", "stock", "solar",
-      "biomassUnit1", "biomassUnit2", "biomassUnit3",
-      "coalUnit1", "coalUnit2", "coalUnit3",
-      "hop1", "hop2", "hop3",
+      "coal",
+      "biomass",
+      "stock",
+      "solar",
+      "biomassUnit1",
+      "biomassUnit2",
+      "biomassUnit3",
+      "coalUnit1",
+      "coalUnit2",
+      "coalUnit3",
+      "hop1",
+      "hop2",
+      "hop3",
     ] as const;
     for (const field of dailyFields) {
       const legacyValue = baseline.daily[field] ?? null;
       const dynamicValue = point?.[field] ?? null;
-      const pass = point ? equalValue(legacyValue, dynamicValue, tolerance) : false;
+      const pass = point
+        ? equalValue(legacyValue, dynamicValue, tolerance)
+        : false;
       rows.push({
         field: `daily.${field}`,
         legacyValue,
         dynamicValue,
-        difference: legacyValue === null || dynamicValue === null ? null : dynamicValue - legacyValue,
+        difference:
+          legacyValue === null || dynamicValue === null
+            ? null
+            : dynamicValue - legacyValue,
         confidence: point ? 0.95 : 0,
         source: point?.date ?? null,
         status: pass ? "PASS" : point ? "MISMATCH" : "UNRESOLVED",
-        note: point ? undefined : `Tanggal ${baseline.daily.day} tidak ditemukan.`,
+        note: point
+          ? undefined
+          : `Tanggal ${baseline.daily.day} tidak ditemukan.`,
       });
     }
   }
   const mismatchCount = rows.filter((row) => row.status === "MISMATCH").length;
-  const unresolvedCount = rows.filter((row) => row.status === "UNRESOLVED" || row.status === "MISSING").length;
-  return { rows, pass: mismatchCount === 0 && unresolvedCount === 0, mismatchCount, unresolvedCount };
+  const unresolvedCount = rows.filter(
+    (row) => row.status === "UNRESOLVED" || row.status === "MISSING",
+  ).length;
+  return {
+    rows,
+    pass: mismatchCount === 0 && unresolvedCount === 0,
+    mismatchCount,
+    unresolvedCount,
+  };
 }

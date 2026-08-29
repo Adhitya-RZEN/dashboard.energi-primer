@@ -46,13 +46,13 @@ dynamic/
 Entry point prototype:
 
 ```ts
-parseDynamicWorksheet(rows, { worksheetName: "Juli26-BB" })
+parseDynamicWorksheet(rows, { worksheetName: "Juli26-BB" });
 ```
 
 Adapter server-side opsional:
 
 ```ts
-readAndParseDynamicBBWorksheet({ month: 7, year: 2026 })
+readAndParseDynamicBBWorksheet({ month: 7, year: 2026 });
 ```
 
 `reader.ts` memakai `import "server-only"`, import relative ke `src/lib/google-sheets.ts`, dan tidak diekspor dari barrel index pure parser. Dengan demikian client component tidak memiliki jalur import ke credential reader.
@@ -77,11 +77,7 @@ Scanner menghasilkan cell metadata berikut:
 
 ```ts
 {
-  row,
-  column,
-  address,
-  rawValue,
-  normalizedValue
+  (row, column, address, rawValue, normalizedValue);
 }
 ```
 
@@ -265,13 +261,13 @@ Pada shell Windows dengan execution policy yang memblokir shim PowerShell, gunak
 
 Live read ke worksheet `Juli26-BB` berhasil menggunakan environment lokal yang tersedia. Requested dan effective worksheet sama sehingga tidak terjadi fallback. Semua field dashboard selain penerimaan Biomassa parity dengan baseline dalam tolerance test; penerimaan mengikuti validasi skema tujuh pemasok terbaru:
 
-| Field | Legacy baseline | Dynamic semantic | Source | Status |
-|---|---:|---:|---|---|
-| `biomassConsumptionMonthly` | `3740.65` | `3740.65` | agregat Biomassa Unit 1–3 pada baris total (`T42` sebagai source pertama) | `PASS` |
+| Field                       | Legacy baseline | Dynamic semantic | Source                                                                    | Status |
+| --------------------------- | --------------: | ---------------: | ------------------------------------------------------------------------- | ------ |
+| `biomassConsumptionMonthly` |       `3740.65` |        `3740.65` | agregat Biomassa Unit 1–3 pada baris total (`T42` sebagai source pertama) | `PASS` |
 
-| Agregat/metric | Nilai live | Source | Status |
-|---|---:|---|---|
-| `biomassSupplierReceiptMonthly` | `3223.46` (baseline lama) | `3223.46`; 7/7 header terbaru terdeteksi | `PASS` |
+| Agregat/metric                             |                Nilai live | Source                                             | Status |
+| ------------------------------------------ | ------------------------: | -------------------------------------------------- | ------ |
+| `biomassSupplierReceiptMonthly`            | `3223.46` (baseline lama) | `3223.46`; 7/7 header terbaru terdeteksi           | `PASS` |
 | production `metrics.biomassReceiptMonthly` | `3223.46` (baseline lama) | `3223.46`; total tujuh kolom, tanpa fallback `S52` | `PASS` |
 
 Worksheet live saat ini memakai seluruh header skema tujuh pemasok terbaru dan smoke test read-only menghasilkan parity receipt `PASS`. Kolom kosong di antara header bernama diabaikan. Mismatch kandidat dashboard konsumsi tetap dipisahkan dari agregat Unit 1–3.

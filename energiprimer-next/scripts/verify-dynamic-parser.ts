@@ -5,13 +5,23 @@ import {
   previousValidBBWorksheets,
   resolveBBWorksheet,
 } from "../src/services/google-sheets/dynamic/index";
-import type { DynamicSheetValue, LegacyBaseline } from "../src/services/google-sheets/dynamic/index";
+import type {
+  DynamicSheetValue,
+  LegacyBaseline,
+} from "../src/services/google-sheets/dynamic/index";
 
 function sheet(rowCount = 80, columnCount = 45) {
-  return Array.from({ length: rowCount }, () => Array<DynamicSheetValue>(columnCount).fill(null));
+  return Array.from({ length: rowCount }, () =>
+    Array<DynamicSheetValue>(columnCount).fill(null),
+  );
 }
 
-function put(rows: DynamicSheetValue[][], row: number, column: number, value: DynamicSheetValue) {
+function put(
+  rows: DynamicSheetValue[][],
+  row: number,
+  column: number,
+  value: DynamicSheetValue,
+) {
   while (rows.length < row) rows.push([]);
   while (rows[row - 1].length < column) rows[row - 1].push(null);
   rows[row - 1][column - 1] = value;
@@ -92,7 +102,8 @@ function regressionFixture() {
     [20, "700,000"],
     [21, "223,460"],
     [22, "9000,000"],
-  ] as const) put(rows, 4, column, value);
+  ] as const)
+    put(rows, 4, column, value);
 
   const labelColumn = 20;
   put(rows, 10, labelColumn, "DASHBOARD");
@@ -170,35 +181,74 @@ function runStaticTests() {
   const worksheet = resolveBBWorksheet(7, 2026);
   assert.equal(worksheet?.name, "Juli26-BB");
   assert.equal(resolveBBWorksheet(7, 2026, ["Juli26-DTS"]), null);
-  const fallbackNames = previousValidBBWorksheets(7, 2026, 12).map((item) => item.name);
+  const fallbackNames = previousValidBBWorksheets(7, 2026, 12).map(
+    (item) => item.name,
+  );
   assert.equal(fallbackNames.length, 12);
   assert.ok(fallbackNames.every((name) => /-BB$/.test(name)));
   assert.ok(!fallbackNames.some((name) => /DTS|ALBES|FLYASH/.test(name)));
 
-  for (const [row, column] of [[5, 3], [12, 18], [22, 28]] as const) {
-    const parsed = parseDynamicWorksheet(targetFixture(row, column, "70,020"), { worksheetName: "Juli26-BB" });
+  for (const [row, column] of [
+    [5, 3],
+    [12, 18],
+    [22, 28],
+  ] as const) {
+    const parsed = parseDynamicWorksheet(targetFixture(row, column, "70,020"), {
+      worksheetName: "Juli26-BB",
+    });
     assert.equal(parsed.normalized.metrics.biomassTarget.value, 70020);
     assert.equal(parsed.normalized.metrics.biomassTarget.available, true);
   }
 
   for (const column of [5, 27]) {
-    const parsed = parseDynamicWorksheet(dashboardFixture(column, 3740.65), { worksheetName: "Juli26-BB" });
-    assert.equal(parsed.normalized.metrics.biomassConsumptionMonthly.value, 3740.65);
-    assert.equal(parsed.normalized.metrics.biomassConsumptionMonthly.available, true);
+    const parsed = parseDynamicWorksheet(dashboardFixture(column, 3740.65), {
+      worksheetName: "Juli26-BB",
+    });
+    assert.equal(
+      parsed.normalized.metrics.biomassConsumptionMonthly.value,
+      3740.65,
+    );
+    assert.equal(
+      parsed.normalized.metrics.biomassConsumptionMonthly.available,
+      true,
+    );
   }
 
-  const regression = parseDynamicWorksheet(regressionFixture(), { worksheetName: "Juli26-BB" });
+  const regression = parseDynamicWorksheet(regressionFixture(), {
+    worksheetName: "Juli26-BB",
+  });
   const comparison = compareLegacyDynamic(regression, baseline);
-  assert.equal(comparison.mismatchCount, 0, JSON.stringify(comparison.rows, null, 2));
-  assert.equal(comparison.unresolvedCount, 0, JSON.stringify(comparison.rows, null, 2));
+  assert.equal(
+    comparison.mismatchCount,
+    0,
+    JSON.stringify(comparison.rows, null, 2),
+  );
+  assert.equal(
+    comparison.unresolvedCount,
+    0,
+    JSON.stringify(comparison.rows, null, 2),
+  );
   assert.equal(comparison.pass, true);
-  assert.equal(regression.aggregates.biomassSupplierReceiptMonthly.value, 3223.46);
-  assert.equal(regression.aggregates.biomassSupplierReceiptMonthly.sourceAddresses?.length, 7);
-  assert.equal(regression.aggregates.biomassUnitConsumptionMonthly.value, 3740.65);
-  assert.equal(regression.normalized.metrics.biomassConsumptionMonthly.value, 3740.65);
+  assert.equal(
+    regression.aggregates.biomassSupplierReceiptMonthly.value,
+    3223.46,
+  );
+  assert.equal(
+    regression.aggregates.biomassSupplierReceiptMonthly.sourceAddresses?.length,
+    7,
+  );
+  assert.equal(
+    regression.aggregates.biomassUnitConsumptionMonthly.value,
+    3740.65,
+  );
+  assert.equal(
+    regression.normalized.metrics.biomassConsumptionMonthly.value,
+    3740.65,
+  );
 
   const receiptRowsOnly = regressionFixture();
-  for (const column of [1, 6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22]) put(receiptRowsOnly, 4, column, null);
+  for (const column of [1, 6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22])
+    put(receiptRowsOnly, 4, column, null);
   for (const [column, value] of [
     [15, "100,000"],
     [16, "200,000"],
@@ -207,15 +257,30 @@ function runStaticTests() {
     [19, "500,000"],
     [20, "600,000"],
     [21, "700,000"],
-  ] as const) put(receiptRowsOnly, 2, column, value);
-  const receiptRowsOnlyResult = parseDynamicWorksheet(receiptRowsOnly, { worksheetName: "Juli26-BB" });
-  assert.equal(receiptRowsOnlyResult.aggregates.biomassSupplierReceiptMonthly.value, 2800);
+  ] as const)
+    put(receiptRowsOnly, 2, column, value);
+  const receiptRowsOnlyResult = parseDynamicWorksheet(receiptRowsOnly, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    receiptRowsOnlyResult.aggregates.biomassSupplierReceiptMonthly.value,
+    2800,
+  );
 
   const incompleteReceiptSchema = regressionFixture();
   put(incompleteReceiptSchema, 1, 21, null);
-  const incompleteReceiptResult = parseDynamicWorksheet(incompleteReceiptSchema, { worksheetName: "Juli26-BB" });
-  assert.equal(incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.available, false);
-  assert.match(incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "", /6\/7/);
+  const incompleteReceiptResult = parseDynamicWorksheet(
+    incompleteReceiptSchema,
+    { worksheetName: "Juli26-BB" },
+  );
+  assert.equal(
+    incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.available,
+    false,
+  );
+  assert.match(
+    incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "",
+    /6\/7/,
+  );
 
   const legacyReceiptSchema = regressionFixture();
   for (const [column, value] of [
@@ -225,15 +290,28 @@ function runStaticTests() {
     [19, "PENERIMAAN BIOMASSA WOODCHIP CV MPI"],
     [20, "PENERIMAAN BIOMASSA LRUK BI"],
     [21, "PENERIMAAN BIOMASSA SRF TPA KONGOK"],
-  ] as const) put(legacyReceiptSchema, 1, column, value);
-  const legacyReceiptResult = parseDynamicWorksheet(legacyReceiptSchema, { worksheetName: "Juli26-BB" });
-  assert.equal(legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.available, false);
-  assert.match(legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "", /1\/7/);
+  ] as const)
+    put(legacyReceiptSchema, 1, column, value);
+  const legacyReceiptResult = parseDynamicWorksheet(legacyReceiptSchema, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.available,
+    false,
+  );
+  assert.match(
+    legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "",
+    /1\/7/,
+  );
 
-  const missing = parseDynamicWorksheet(targetFixture(5, 3, null), { worksheetName: "Juli26-BB" });
+  const missing = parseDynamicWorksheet(targetFixture(5, 3, null), {
+    worksheetName: "Juli26-BB",
+  });
   assert.equal(missing.normalized.metrics.biomassTarget.available, false);
   assert.equal(missing.normalized.metrics.biomassTarget.value, null);
-  const invalid = parseDynamicWorksheet(targetFixture(5, 3, "#DIV/0!"), { worksheetName: "Juli26-BB" });
+  const invalid = parseDynamicWorksheet(targetFixture(5, 3, "#DIV/0!"), {
+    worksheetName: "Juli26-BB",
+  });
   assert.equal(invalid.normalized.metrics.biomassTarget.available, false);
   assert.equal(invalid.normalized.metrics.biomassTarget.status, "malformed");
 
@@ -246,11 +324,19 @@ function runStaticTests() {
   put(missingDaily, 2, 2, "1");
   put(missingDaily, 2, 3, "2");
   put(missingDaily, 2, 4, "3");
-  const missingDailyResult = parseDynamicWorksheet(missingDaily, { worksheetName: "Juli26-BB" });
+  const missingDailyResult = parseDynamicWorksheet(missingDaily, {
+    worksheetName: "Juli26-BB",
+  });
   assert.equal(missingDailyResult.normalized.series[0]?.solar, null);
-  assert.ok(missingDailyResult.diagnostics.warnings.some((warning) => warning.includes("solar")));
+  assert.ok(
+    missingDailyResult.diagnostics.warnings.some((warning) =>
+      warning.includes("solar"),
+    ),
+  );
 
-  const invalidWorksheet = parseDynamicWorksheet(targetFixture(5, 3, 70020), { worksheetName: "Juli26-DTS" });
+  const invalidWorksheet = parseDynamicWorksheet(targetFixture(5, 3, 70020), {
+    worksheetName: "Juli26-DTS",
+  });
   assert.equal(invalidWorksheet.worksheet.isValid, false);
   assert.ok(invalidWorksheet.diagnostics.errors.length > 0);
 
@@ -259,12 +345,18 @@ function runStaticTests() {
   put(duplicate, 12, 7, "TON");
   put(duplicate, 12, 8, 100);
   put(duplicate, 12, 9, "FLAT");
-  const duplicateResult = parseDynamicWorksheet(duplicate, { worksheetName: "Juli26-BB" });
-  assert.equal(duplicateResult.normalized.metrics.biomassConsumptionMonthly.status, "ambiguous");
+  const duplicateResult = parseDynamicWorksheet(duplicate, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    duplicateResult.normalized.metrics.biomassConsumptionMonthly.status,
+    "ambiguous",
+  );
 }
 
 async function runLiveVerification() {
-  const { readAndParseDynamicBBWorksheet } = await import("../src/services/google-sheets/dynamic/reader");
+  const { readAndParseDynamicBBWorksheet } =
+    await import("../src/services/google-sheets/dynamic/reader");
   const result = await readAndParseDynamicBBWorksheet({ month: 7, year: 2026 });
   const comparison = compareLegacyDynamic(result.parsed, baseline, 0.01);
   const summary = comparison.rows.map((row) => ({
@@ -276,19 +368,27 @@ async function runLiveVerification() {
     source: row.source,
     status: row.status,
   }));
-  console.log(JSON.stringify({
-    requested: result.requested,
-    effective: result.effective,
-    isFallback: result.isFallback,
-    fallbackIndex: result.fallbackIndex,
-    comparison: summary,
-    aggregates: {
-      biomassSupplierReceiptMonthly: result.parsed.aggregates.biomassSupplierReceiptMonthly.value,
-      biomassUnitConsumptionMonthly: result.parsed.aggregates.biomassUnitConsumptionMonthly.value,
-    },
-    unresolved: result.parsed.diagnostics.unresolved,
-    warnings: result.parsed.diagnostics.warnings,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        requested: result.requested,
+        effective: result.effective,
+        isFallback: result.isFallback,
+        fallbackIndex: result.fallbackIndex,
+        comparison: summary,
+        aggregates: {
+          biomassSupplierReceiptMonthly:
+            result.parsed.aggregates.biomassSupplierReceiptMonthly.value,
+          biomassUnitConsumptionMonthly:
+            result.parsed.aggregates.biomassUnitConsumptionMonthly.value,
+        },
+        unresolved: result.parsed.diagnostics.unresolved,
+        warnings: result.parsed.diagnostics.warnings,
+      },
+      null,
+      2,
+    ),
+  );
   if (!comparison.pass) process.exitCode = 2;
 }
 

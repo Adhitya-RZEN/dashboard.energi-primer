@@ -5,15 +5,15 @@ Target: Vercel, tanpa deployment pada Phase 10.
 
 ## 1. Framework dan build
 
-| Item | Konfigurasi/temuan | Status |
-| --- | --- | --- |
-| Framework | Next.js 16.3.3, App Router, TypeScript | PASS |
-| Root directory | Repository memiliki `backend` dan `energiprimer-next`; Vercel Root Directory harus diarahkan ke `energiprimer-next` | MANUAL CONFIGURATION |
-| Install | `package-lock.json` tersedia; gunakan `npm install`/deteksi default Vercel | PASS |
-| Build | `npm run build` | PASS pada local environment |
-| Lint/typecheck | `npm run lint`, `npx tsc --noEmit` | PASS pada local environment |
-| Node | Package Next mensyaratkan Node >=20.9.0; local audit memakai Node 24.x | MANUAL PINNING |
-| `vercel.json` | Tidak diperlukan saat ini; tidak ada file tersebut | PASS |
+| Item           | Konfigurasi/temuan                                                                                                  | Status                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Framework      | Next.js 16.3.3, App Router, TypeScript                                                                              | PASS                        |
+| Root directory | Repository memiliki `backend` dan `energiprimer-next`; Vercel Root Directory harus diarahkan ke `energiprimer-next` | MANUAL CONFIGURATION        |
+| Install        | `package-lock.json` tersedia; gunakan `npm install`/deteksi default Vercel                                          | PASS                        |
+| Build          | `npm run build`                                                                                                     | PASS pada local environment |
+| Lint/typecheck | `npm run lint`, `npx tsc --noEmit`                                                                                  | PASS pada local environment |
+| Node           | Package Next mensyaratkan Node >=20.9.0; local audit memakai Node 24.x                                              | MANUAL PINNING              |
+| `vercel.json`  | Tidak diperlukan saat ini; tidak ada file tersebut                                                                  | PASS                        |
 
 Vercel mendukung Node.js 20.x, 22.x, dan 24.x; versi project sebaiknya dipilih dan dipin secara eksplisit pada Project Settings atau `engines.node` setelah operator menyetujui target runtime. Referensi resmi: [Vercel Node.js runtimes](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
@@ -78,4 +78,3 @@ Item 3–5 adalah **REQUIRES MANUAL APPROVAL** dan tidak dilakukan pada Phase 10
 ## Status
 
 **NOT READY untuk deployment Vercel.** Build aplikasi lokal lulus, tetapi database loopback, credential file Google lokal, mail delivery, dan dependency findings masih harus diselesaikan/dikonfirmasi.
-

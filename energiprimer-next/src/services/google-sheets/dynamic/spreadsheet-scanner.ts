@@ -67,15 +67,26 @@ export function nonEmptyCells(cells: readonly ScannedCell[]): ScannedCell[] {
   return cells.filter((cell) => cell.normalizedValue.length > 0);
 }
 
-export function cellsAtRow(cells: readonly ScannedCell[], row: number): ScannedCell[] {
-  return cells.filter((cell) => cell.row === row && cell.normalizedValue.length > 0);
+export function cellsAtRow(
+  cells: readonly ScannedCell[],
+  row: number,
+): ScannedCell[] {
+  return cells.filter(
+    (cell) => cell.row === row && cell.normalizedValue.length > 0,
+  );
 }
 
-export function cellsAtColumn(cells: readonly ScannedCell[], column: number): ScannedCell[] {
-  return cells.filter((cell) => cell.column === column && cell.normalizedValue.length > 0);
+export function cellsAtColumn(
+  cells: readonly ScannedCell[],
+  column: number,
+): ScannedCell[] {
+  return cells.filter(
+    (cell) => cell.column === column && cell.normalizedValue.length > 0,
+  );
 }
 
-export function cellMap(cells: readonly ScannedCell[]): Map<string, ScannedCell> {
+export function cellMap(
+  cells: readonly ScannedCell[],
+): Map<string, ScannedCell> {
   return new Map(cells.map((cell) => [`${cell.row}:${cell.column}`, cell]));
 }
-

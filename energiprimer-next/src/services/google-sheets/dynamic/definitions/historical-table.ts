@@ -7,4 +7,3 @@ export const HISTORICAL_LABEL_ALIASES = [
 ] as const;
 
 export const HISTORICAL_UNITS = ["TON", "TONASE", "%"] as const;
-

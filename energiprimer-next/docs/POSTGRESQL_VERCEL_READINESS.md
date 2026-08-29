@@ -5,18 +5,18 @@ Scope: compatibility review read-only; tidak ada migration atau write query.
 
 ## Hasil ringkas
 
-| Area | Status | Catatan |
-| --- | --- | --- |
-| Prisma schema | PASS | prisma/schema.prisma valid dan tidak diubah. |
-| Prisma client reuse | PASS WITH WARNINGS | Global singleton digunakan saat development; process instance pada production. |
-| Typed data access | PASS | Service memakai Prisma typed query dan select/include terkontrol. |
-| Decimal handling | PASS | Decimal dikonversi eksplisit pada service/presentation. |
-| Date handling | PASS WITH WARNINGS | Database date dan UTC presentation konsisten; timezone production tetap perlu dikonfirmasi. |
-| Relationship handling | PASS | Foreign-key relationship dan orphan check berhasil pada read verification. |
-| Query safety | PASS | Raw aggregate menggunakan Prisma.sql; tidak ada interpolasi input mentah. |
-| Connection pooling | NEEDS REVIEW | Scale-out Vercel dapat membuka koneksi per Function instance. |
-| Production endpoint | BLOCKED | Konfigurasi lokal menggunakan host loopback dan belum reachable dari Vercel. |
-| SSL/TLS | REQUIRES MANUAL CONFIGURATION | Mode SSL/provider belum dapat ditentukan dari repository. |
+| Area                  | Status                        | Catatan                                                                                     |
+| --------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| Prisma schema         | PASS                          | prisma/schema.prisma valid dan tidak diubah.                                                |
+| Prisma client reuse   | PASS WITH WARNINGS            | Global singleton digunakan saat development; process instance pada production.              |
+| Typed data access     | PASS                          | Service memakai Prisma typed query dan select/include terkontrol.                           |
+| Decimal handling      | PASS                          | Decimal dikonversi eksplisit pada service/presentation.                                     |
+| Date handling         | PASS WITH WARNINGS            | Database date dan UTC presentation konsisten; timezone production tetap perlu dikonfirmasi. |
+| Relationship handling | PASS                          | Foreign-key relationship dan orphan check berhasil pada read verification.                  |
+| Query safety          | PASS                          | Raw aggregate menggunakan Prisma.sql; tidak ada interpolasi input mentah.                   |
+| Connection pooling    | NEEDS REVIEW                  | Scale-out Vercel dapat membuka koneksi per Function instance.                               |
+| Production endpoint   | BLOCKED                       | Konfigurasi lokal menggunakan host loopback dan belum reachable dari Vercel.                |
+| SSL/TLS               | REQUIRES MANUAL CONFIGURATION | Mode SSL/provider belum dapat ditentukan dari repository.                                   |
 
 ## Read-only verification
 
@@ -48,4 +48,3 @@ Provider atau endpoint tidak ditentukan karena informasinya belum tersedia. Mene
 ## Status
 
 **PASS WITH WARNINGS untuk code compatibility; BLOCKED untuk production connectivity.**
-

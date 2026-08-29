@@ -1,13 +1,156 @@
 import Link from "next/link";
 
 import { OverviewErrorState } from "@/components/dashboard/OverviewState";
-import { getConsumptionSummary, listMonthlyConsumptionReports } from "@/services/consumption-reports";
+import {
+  getConsumptionSummary,
+  listMonthlyConsumptionReports,
+} from "@/services/consumption-reports";
 
-function number(value: unknown, decimals = 0) { return value === null || value === undefined ? "—" : new Intl.NumberFormat("id-ID", { maximumFractionDigits: decimals, minimumFractionDigits: decimals }).format(Number(value)); }
-function date(value: Date | null) { return value ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(value) : "—"; }
+function number(value: unknown, decimals = 0) {
+  return value === null || value === undefined
+    ? "—"
+    : new Intl.NumberFormat("id-ID", {
+        maximumFractionDigits: decimals,
+        minimumFractionDigits: decimals,
+      }).format(Number(value));
+}
+function date(value: Date | null) {
+  return value
+    ? new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(value)
+    : "—";
+}
 
 export default async function ReportsPage() {
-  let reports; let summary;
-  try { [reports, summary] = await Promise.all([listMonthlyConsumptionReports(), getConsumptionSummary()]); } catch { return <OverviewErrorState label="Laporan Efisiensi" />; }
-  return <div className="mx-auto w-full max-w-6xl space-y-8"><nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-slate-500"><Link href="/dashboard">Dashboard</Link><span aria-hidden="true">/</span><span className="font-semibold text-sky-700">Laporan</span></nav><header><p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">Energi Primer</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Laporan Efisiensi Batu Bara</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Rekap konsumsi dan indikator efisiensi dari data PostgreSQL existing.</p></header><div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900"><strong>Mode read-only:</strong> Generate, preview, dan download belum memiliki endpoint atau persistence pada source Laravel, sehingga tetap disabled.</div><section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[["Total Konsumsi", number(summary.grandTotalCoal, 2), "ton"], ["Efisiensi Rata-rata", number(summary.overallEfficiency, 2), "%"], ["Heat Rate Rata-rata", number(summary.overallHeatRate), "kCal/kWh"], ["Hari Tersedia", number(summary.totalDays), "hari"]].map(([label, value, unit]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span className="text-xs text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-extrabold text-slate-900">{value} <small className="text-xs font-normal text-slate-500">{unit}</small></strong></div>)}</section><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 p-5"><h2 className="text-base font-bold text-slate-900">Riwayat Laporan Bulanan</h2><p className="mt-1 text-xs text-slate-500">Periode data: {date(summary.earliestDate)} sampai {date(summary.latestDate)}</p></div><div className="overflow-x-auto"><table className="min-w-[800px] w-full text-left text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr>{["Periode", "Total Coal (ton)", "Efisiensi (%)", "Heat Rate", "SFC", "Hari", "Status"].map((head) => <th key={head} className="px-4 py-3 font-bold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{reports.length ? reports.map((report) => <tr key={report.yearMonth} className="text-slate-700"><td className="px-4 py-3 font-semibold text-slate-900">{report.periodLabel}</td><td className="px-4 py-3">{number(report.totalCoal, 2)}</td><td className="px-4 py-3">{number(report.averageEfficiency, 2)}</td><td className="px-4 py-3">{number(report.averageHeatRate)}</td><td className="px-4 py-3">{number(report.averageSfc, 2)}</td><td className="px-4 py-3">{report.daysCount}</td><td className="px-4 py-3"><span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">Tersedia</span></td></tr>) : <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500">Belum ada laporan yang tersedia.</td></tr>}</tbody></table></div></section></div>;
+  let reports;
+  let summary;
+  try {
+    [reports, summary] = await Promise.all([
+      listMonthlyConsumptionReports(),
+      getConsumptionSummary(),
+    ]);
+  } catch {
+    return <OverviewErrorState label="Laporan Efisiensi" />;
+  }
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <nav
+        aria-label="Breadcrumb"
+        className="flex items-center gap-2 text-xs text-slate-500"
+      >
+        <Link href="/dashboard">Dashboard</Link>
+        <span aria-hidden="true">/</span>
+        <span className="font-semibold text-sky-700">Laporan</span>
+      </nav>
+      <header>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+          Energi Primer
+        </p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+          Laporan Efisiensi Batu Bara
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+          Rekap konsumsi dan indikator efisiensi dari data PostgreSQL existing.
+        </p>
+      </header>
+      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+        <strong>Mode read-only:</strong> Generate, preview, dan download belum
+        memiliki endpoint atau persistence pada source Laravel, sehingga tetap
+        disabled.
+      </div>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ["Total Konsumsi", number(summary.grandTotalCoal, 2), "ton"],
+          ["Efisiensi Rata-rata", number(summary.overallEfficiency, 2), "%"],
+          ["Heat Rate Rata-rata", number(summary.overallHeatRate), "kCal/kWh"],
+          ["Hari Tersedia", number(summary.totalDays), "hari"],
+        ].map(([label, value, unit]) => (
+          <div
+            key={String(label)}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <span className="text-xs text-slate-500">{label}</span>
+            <strong className="mt-2 block text-2xl font-extrabold text-slate-900">
+              {value}{" "}
+              <small className="text-xs font-normal text-slate-500">
+                {unit}
+              </small>
+            </strong>
+          </div>
+        ))}
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-5">
+          <h2 className="text-base font-bold text-slate-900">
+            Riwayat Laporan Bulanan
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Periode data: {date(summary.earliestDate)} sampai{" "}
+            {date(summary.latestDate)}
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[800px] w-full text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+              <tr>
+                {[
+                  "Periode",
+                  "Total Coal (ton)",
+                  "Efisiensi (%)",
+                  "Heat Rate",
+                  "SFC",
+                  "Hari",
+                  "Status",
+                ].map((head) => (
+                  <th key={head} className="px-4 py-3 font-bold">
+                    {head}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {reports.length ? (
+                reports.map((report) => (
+                  <tr key={report.yearMonth} className="text-slate-700">
+                    <td className="px-4 py-3 font-semibold text-slate-900">
+                      {report.periodLabel}
+                    </td>
+                    <td className="px-4 py-3">{number(report.totalCoal, 2)}</td>
+                    <td className="px-4 py-3">
+                      {number(report.averageEfficiency, 2)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {number(report.averageHeatRate)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {number(report.averageSfc, 2)}
+                    </td>
+                    <td className="px-4 py-3">{report.daysCount}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+                        Tersedia
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-12 text-center text-slate-500"
+                  >
+                    Belum ada laporan yang tersedia.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
 }

@@ -22,6 +22,8 @@ import {
 import type { OverviewDailyPoint } from "@/types/overview";
 
 import {
+  CHART_HEIGHT,
+  CHART_WIDTH_FALLBACK,
   ChartFrame,
   ChartLegend,
   DashboardChartTooltip,
@@ -110,16 +112,29 @@ function SelectedDateLine({
   values,
 }: {
   date: string;
-  values: Array<{ label: string; value: number | null; unit: string; color?: string }>;
+  values: Array<{
+    label: string;
+    value: number | null;
+    unit: string;
+    color?: string;
+  }>;
 }) {
   return (
-    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" aria-live="polite">
+    <div
+      className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+      aria-live="polite"
+    >
       <strong className="text-slate-950">{formatChartDate(date)}</strong>
-      {values.map((item) => item.value === null ? null : (
-        <span key={item.label}>
-          {item.label}: <strong className="text-slate-950">{formatChartValue(item.value)} {item.unit}</strong>
-        </span>
-      ))}
+      {values.map((item) =>
+        item.value === null ? null : (
+          <span key={item.label}>
+            {item.label}:{" "}
+            <strong className="text-slate-950">
+              {formatChartValue(item.value)} {item.unit}
+            </strong>
+          </span>
+        ),
+      )}
     </div>
   );
 }
@@ -136,9 +151,16 @@ export function DetailLineChart({
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const hasValue = series.some((point) => valueFor(point, dataKey) !== null);
 
-  if (!hasValue) return <EmptyChart message={`Tidak ada data ${label.toLowerCase()} untuk divisualisasikan.`} />;
+  if (!hasValue)
+    return (
+      <EmptyChart
+        message={`Tidak ada data ${label.toLowerCase()} untuk divisualisasikan.`}
+      />
+    );
 
-  const selected = selectedDate ? series.find((point) => point.date === selectedDate) : null;
+  const selected = selectedDate
+    ? series.find((point) => point.date === selectedDate)
+    : null;
 
   function handleMove(state: MouseHandlerDataParam) {
     setHoveredDate(chartDateFromState(state, series));
@@ -154,11 +176,17 @@ export function DetailLineChart({
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-2 sm:p-3">
       <div className="mb-2 flex items-center justify-end gap-2 px-2 text-xs text-slate-600">
-        <i aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: color }} />
+        <i
+          aria-hidden="true"
+          className="size-2 rounded-full"
+          style={{ backgroundColor: color }}
+        />
         {label}
       </div>
       <ChartFrame label={`Grafik ${label}`}>
         <LineChart
+          width={CHART_WIDTH_FALLBACK}
+          height={CHART_HEIGHT}
           data={series}
           margin={{ top: 12, right: 18, left: 8, bottom: 8 }}
           accessibilityLayer
@@ -190,7 +218,13 @@ export function DetailLineChart({
             isAnimationActive={false}
           />
           <ChartReferenceLines lines={referenceLines} />
-          {hoveredDate ? <ReferenceLine x={hoveredDate} stroke="#94a3b8" strokeDasharray="3 3" /> : null}
+          {hoveredDate ? (
+            <ReferenceLine
+              x={hoveredDate}
+              stroke="#94a3b8"
+              strokeDasharray="3 3"
+            />
+          ) : null}
           <Line
             type="monotone"
             dataKey={dataKey}
@@ -226,11 +260,18 @@ export function DetailMultiLineChart({
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const visible = datasets.filter((dataset) => !hiddenKeys.has(dataset.key));
-  const hasValue = visible.some((dataset) => series.some((point) => valueFor(point, dataset.key) !== null));
+  const hasValue = visible.some((dataset) =>
+    series.some((point) => valueFor(point, dataset.key) !== null),
+  );
 
-  if (!hasValue) return <EmptyChart message="Pilih minimal satu series untuk divisualisasikan." />;
+  if (!hasValue)
+    return (
+      <EmptyChart message="Pilih minimal satu series untuk divisualisasikan." />
+    );
 
-  const selected = selectedDate ? series.find((point) => point.date === selectedDate) : null;
+  const selected = selectedDate
+    ? series.find((point) => point.date === selectedDate)
+    : null;
   const accentColor = visible[0]?.color ?? "#4f46e5";
 
   function handleMove(state: MouseHandlerDataParam) {
@@ -249,10 +290,16 @@ export function DetailMultiLineChart({
       <ChartLegend
         datasets={datasets}
         hidden={hiddenKeys}
-        onToggle={(key) => setHiddenKeys((current) => toggleChartSeries(current, key, datasets.length))}
+        onToggle={(key) =>
+          setHiddenKeys((current) =>
+            toggleChartSeries(current, key, datasets.length),
+          )
+        }
       />
       <ChartFrame label="Grafik multi-series">
         <LineChart
+          width={CHART_WIDTH_FALLBACK}
+          height={CHART_HEIGHT}
           data={series}
           margin={{ top: 12, right: 18, left: 8, bottom: 8 }}
           accessibilityLayer
@@ -278,13 +325,21 @@ export function DetailMultiLineChart({
             width={54}
           />
           <Tooltip
-            content={<DashboardChartTooltip unit={unit} accentColor={accentColor} />}
+            content={
+              <DashboardChartTooltip unit={unit} accentColor={accentColor} />
+            }
             cursor={{ stroke: "#94a3b8", strokeDasharray: "4 4" }}
             filterNull
             isAnimationActive={false}
           />
           <ChartReferenceLines lines={referenceLines} />
-          {hoveredDate ? <ReferenceLine x={hoveredDate} stroke="#94a3b8" strokeDasharray="3 3" /> : null}
+          {hoveredDate ? (
+            <ReferenceLine
+              x={hoveredDate}
+              stroke="#94a3b8"
+              strokeDasharray="3 3"
+            />
+          ) : null}
           {visible.map((dataset) => (
             <Line
               key={dataset.key}
@@ -304,7 +359,11 @@ export function DetailMultiLineChart({
       {selected ? (
         <SelectedDateLine
           date={selected.date}
-          values={visible.map((dataset) => ({ label: dataset.label, value: valueFor(selected, dataset.key), unit }))}
+          values={visible.map((dataset) => ({
+            label: dataset.label,
+            value: valueFor(selected, dataset.key),
+            unit,
+          }))}
         />
       ) : (
         <ChartHint>Arahkan atau tap titik data untuk melihat detail.</ChartHint>
@@ -323,15 +382,28 @@ export function DetailBarChart({
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const visible = datasets.filter((dataset) => !hiddenKeys.has(dataset.key));
-  const hasValue = visible.some((dataset) => series.some((point) => valueFor(point, dataset.key) !== null));
+  const hasValue = visible.some((dataset) =>
+    series.some((point) => valueFor(point, dataset.key) !== null),
+  );
 
-  if (!hasValue) return <EmptyChart message="Pilih minimal satu series untuk divisualisasikan." />;
+  if (!hasValue)
+    return (
+      <EmptyChart message="Pilih minimal satu series untuk divisualisasikan." />
+    );
 
-  const selected = selectedDate ? series.find((point) => point.date === selectedDate) : null;
-  const accentColor = visible[0]?.color ?? "#2563eb";
-  const selectedTotal = selected && stacked && visible.every((dataset) => valueFor(selected, dataset.key) !== null)
-    ? visible.reduce((total, dataset) => total + (valueFor(selected, dataset.key) ?? 0), 0)
+  const selected = selectedDate
+    ? series.find((point) => point.date === selectedDate)
     : null;
+  const accentColor = visible[0]?.color ?? "#2563eb";
+  const selectedTotal =
+    selected &&
+    stacked &&
+    visible.every((dataset) => valueFor(selected, dataset.key) !== null)
+      ? visible.reduce(
+          (total, dataset) => total + (valueFor(selected, dataset.key) ?? 0),
+          0,
+        )
+      : null;
 
   function handleMove(state: MouseHandlerDataParam) {
     setHoveredDate(chartDateFromState(state, series));
@@ -349,10 +421,18 @@ export function DetailBarChart({
       <ChartLegend
         datasets={datasets}
         hidden={hiddenKeys}
-        onToggle={(key) => setHiddenKeys((current) => toggleChartSeries(current, key, datasets.length))}
+        onToggle={(key) =>
+          setHiddenKeys((current) =>
+            toggleChartSeries(current, key, datasets.length),
+          )
+        }
       />
-      <ChartFrame label={`Grafik ${datasets.map((dataset) => dataset.label).join(", ")}`}>
+      <ChartFrame
+        label={`Grafik ${datasets.map((dataset) => dataset.label).join(", ")}`}
+      >
         <BarChart
+          width={CHART_WIDTH_FALLBACK}
+          height={CHART_HEIGHT}
           data={series}
           margin={{ top: 12, right: 18, left: 8, bottom: 8 }}
           barCategoryGap="18%"
@@ -393,7 +473,13 @@ export function DetailBarChart({
             shared
             isAnimationActive={false}
           />
-          {hoveredDate ? <ReferenceLine x={hoveredDate} stroke="#94a3b8" strokeDasharray="3 3" /> : null}
+          {hoveredDate ? (
+            <ReferenceLine
+              x={hoveredDate}
+              stroke="#94a3b8"
+              strokeDasharray="3 3"
+            />
+          ) : null}
           {visible.map((dataset) => (
             <Bar
               key={dataset.key}
@@ -402,7 +488,11 @@ export function DetailBarChart({
               fill={dataset.color}
               stackId={stacked ? "total" : undefined}
               radius={stacked ? 0 : [4, 4, 0, 0]}
-              activeBar={{ stroke: "#0f172a", strokeWidth: 1.5, fill: dataset.color }}
+              activeBar={{
+                stroke: "#0f172a",
+                strokeWidth: 1.5,
+                fill: dataset.color,
+              }}
               maxBarSize={24}
               isAnimationActive={false}
             />
@@ -413,8 +503,14 @@ export function DetailBarChart({
         <SelectedDateLine
           date={selected.date}
           values={[
-            ...visible.map((dataset) => ({ label: dataset.label, value: valueFor(selected, dataset.key), unit })),
-            ...(selectedTotal === null ? [] : [{ label: "Total", value: selectedTotal, unit }]),
+            ...visible.map((dataset) => ({
+              label: dataset.label,
+              value: valueFor(selected, dataset.key),
+              unit,
+            })),
+            ...(selectedTotal === null
+              ? []
+              : [{ label: "Total", value: selectedTotal, unit }]),
           ]}
         />
       ) : (
@@ -436,15 +532,24 @@ function TargetProgressTooltip({
 
   return (
     <div className="pointer-events-none rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur-sm">
-      <p className="font-bold text-slate-950">{String(entry.name ?? "Progress")}</p>
-      <p className="mt-1 font-bold text-violet-700">{formatChartValue(entry.value)}%</p>
+      <p className="font-bold text-slate-950">
+        {String(entry.name ?? "Progress")}
+      </p>
+      <p className="mt-1 font-bold text-violet-700">
+        {formatChartValue(entry.value)}%
+      </p>
     </div>
   );
 }
 
 export function TargetProgressChart({ progress }: { progress: number }) {
   const safeProgress = Math.min(100, Math.max(0, progress));
-  const progressColor = safeProgress >= 100 ? "#16a34a" : safeProgress >= 70 ? "#f59e0b" : "#7c3aed";
+  const progressColor =
+    safeProgress >= 100
+      ? "#16a34a"
+      : safeProgress >= 70
+        ? "#f59e0b"
+        : "#7c3aed";
   const progressData = [
     { name: "Tercapai", value: safeProgress, color: progressColor },
     { name: "Sisa", value: 100 - safeProgress, color: "#e2e8f0" },
@@ -459,10 +564,11 @@ export function TargetProgressChart({ progress }: { progress: number }) {
       <ResponsiveContainer
         width="100%"
         height={256}
-        minWidth={0}
+        minWidth={1}
+        minHeight={256}
         initialDimension={{ width: 320, height: 256 }}
       >
-        <PieChart>
+        <PieChart width={320} height={256}>
           <Pie
             data={progressData}
             dataKey="value"
@@ -481,7 +587,10 @@ export function TargetProgressChart({ progress }: { progress: number }) {
               <Cell key={entry.name} fill={entry.color} />
             ))}
           </Pie>
-          <Tooltip content={<TargetProgressTooltip />} isAnimationActive={false} />
+          <Tooltip
+            content={<TargetProgressTooltip />}
+            isAnimationActive={false}
+          />
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">

@@ -10,15 +10,15 @@ DataSourceInterface → GoogleSheetsDataSource
 
 Konfigurasi:
 
-| Item | Nilai/source |
-|---|---|
+| Item        | Nilai/source                                                                        |
+| ----------- | ----------------------------------------------------------------------------------- |
 | Credentials | `GOOGLE_SHEETS_CREDENTIALS_PATH`, default `storage/app/google/service-account.json` |
-| Spreadsheet | `GOOGLE_SHEETS_SPREADSHEET_ID` |
-| Cache TTL | `GOOGLE_SHEETS_CACHE_TTL`, default 120 detik |
-| Worksheet | `[NamaBulanIndonesia][2 digit tahun]-BB`, contoh `Januari26-BB` |
-| Range | `B11:CO59` |
-| Read | satu request `spreadsheets_values->get()` |
-| Write | tidak ditemukan |
+| Spreadsheet | `GOOGLE_SHEETS_SPREADSHEET_ID`                                                      |
+| Cache TTL   | `GOOGLE_SHEETS_CACHE_TTL`, default 120 detik                                        |
+| Worksheet   | `[NamaBulanIndonesia][2 digit tahun]-BB`, contoh `Januari26-BB`                     |
+| Range       | `B11:CO59`                                                                          |
+| Read        | satu request `spreadsheets_values->get()`                                           |
+| Write       | tidak ditemukan                                                                     |
 
 Parser mengasumsikan row 11–41 adalah harian, row 42 total bulanan, row 52 penerimaan biomassa, row 56 target biomassa, dan row 59 realisasi kumulatif. Kolom relatif yang digunakan antara lain:
 
@@ -113,17 +113,17 @@ Kesimpulan: tidak ada fitur upload/storage domain yang aktif. Jangan membuatnya 
 
 Nama variabel yang ditemukan di `.env.example`:
 
-| Kelompok | Variabel |
-|---|---|
-| App | `APP_NAME`, `APP_ENV`, `APP_KEY`, `APP_DEBUG`, `APP_URL`, `APP_LOCALE`, `APP_FALLBACK_LOCALE`, `APP_FAKER_LOCALE`, maintenance vars |
-| DB | `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_URL`, `DB_SSLMODE` |
-| Auth/session | `AUTH_GUARD`, `AUTH_PASSWORD_BROKER`, `AUTH_MODEL`, `AUTH_PASSWORD_RESET_TOKEN_TABLE`, `AUTH_PASSWORD_TIMEOUT`, `SESSION_*` |
-| Initial admin | `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` |
-| Google | `GOOGLE_SHEETS_CREDENTIALS_PATH`, `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SHEETS_CACHE_TTL` |
-| Queue/cache | `QUEUE_CONNECTION`, `DB_QUEUE_*`, `CACHE_STORE`, `CACHE_PREFIX` |
-| Redis/memcached | `REDIS_*`, `MEMCACHED_HOST` |
-| Mail | `MAIL_MAILER`, `MAIL_SCHEME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` |
-| Cloud/service | `AWS_*`, `POSTMARK_*`, `RESEND_API_KEY`, `SLACK_*` (config/template) |
-| Vite | `VITE_APP_NAME` |
+| Kelompok        | Variabel                                                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| App             | `APP_NAME`, `APP_ENV`, `APP_KEY`, `APP_DEBUG`, `APP_URL`, `APP_LOCALE`, `APP_FALLBACK_LOCALE`, `APP_FAKER_LOCALE`, maintenance vars |
+| DB              | `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `DB_URL`, `DB_SSLMODE`                          |
+| Auth/session    | `AUTH_GUARD`, `AUTH_PASSWORD_BROKER`, `AUTH_MODEL`, `AUTH_PASSWORD_RESET_TOKEN_TABLE`, `AUTH_PASSWORD_TIMEOUT`, `SESSION_*`         |
+| Initial admin   | `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`                                                                                       |
+| Google          | `GOOGLE_SHEETS_CREDENTIALS_PATH`, `GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SHEETS_CACHE_TTL`                                         |
+| Queue/cache     | `QUEUE_CONNECTION`, `DB_QUEUE_*`, `CACHE_STORE`, `CACHE_PREFIX`                                                                     |
+| Redis/memcached | `REDIS_*`, `MEMCACHED_HOST`                                                                                                         |
+| Mail            | `MAIL_MAILER`, `MAIL_SCHEME`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`     |
+| Cloud/service   | `AWS_*`, `POSTMARK_*`, `RESEND_API_KEY`, `SLACK_*` (config/template)                                                                |
+| Vite            | `VITE_APP_NAME`                                                                                                                     |
 
 Nilai secret tidak disalin ke dokumentasi. `.env.example` sendiri memuat nilai admin yang tampak nyata; ini dicatat sebagai risiko dan harus diperlakukan sebagai secret exposure.

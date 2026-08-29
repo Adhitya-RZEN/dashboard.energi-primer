@@ -7,7 +7,12 @@ import {
   unavailableValue,
 } from "./confidence";
 import { cellsAtRow, nonEmptyCells } from "./spreadsheet-scanner";
-import { isCompatibleUnit, normalizedUnit, parseNumericValue, type NumericParseResult } from "./validators";
+import {
+  isCompatibleUnit,
+  normalizedUnit,
+  parseNumericValue,
+  type NumericParseResult,
+} from "./validators";
 import type {
   DetectedAnchor,
   HeaderPath,
@@ -18,8 +23,13 @@ import type {
   ValueCandidate,
 } from "./types";
 
-function headerForColumn(structure: StructureAnalysis | undefined, column: number): HeaderPath | null {
-  return structure?.headerPaths.find((path) => path.cell.column === column) ?? null;
+function headerForColumn(
+  structure: StructureAnalysis | undefined,
+  column: number,
+): HeaderPath | null {
+  return (
+    structure?.headerPaths.find((path) => path.cell.column === column) ?? null
+  );
 }
 
 function nearbyUnit(
@@ -27,9 +37,13 @@ function nearbyUnit(
   candidate: ScannedCell,
   expectedUnits: readonly string[],
 ) {
-  return cellsAtRow(cells, candidate.row)
-    .filter((cell) => Math.abs(cell.column - candidate.column) <= 6)
-    .find((cell) => isCompatibleUnit(normalizedUnit(cell.normalizedValue), expectedUnits)) ?? null;
+  return (
+    cellsAtRow(cells, candidate.row)
+      .filter((cell) => Math.abs(cell.column - candidate.column) <= 6)
+      .find((cell) =>
+        isCompatibleUnit(normalizedUnit(cell.normalizedValue), expectedUnits),
+      ) ?? null
+  );
 }
 
 function candidateReasons(
@@ -45,7 +59,11 @@ function candidateReasons(
   else reasons.push(`${anchor.matchType} anchor`);
   if (cell.row === anchor.cell.row) reasons.push("same row");
   if (cell.column === anchor.cell.column) reasons.push("same column");
-  if (Math.abs(cell.row - anchor.cell.row) <= 1 && Math.abs(cell.column - anchor.cell.column) <= 4) reasons.push("adjacent");
+  if (
+    Math.abs(cell.row - anchor.cell.row) <= 1 &&
+    Math.abs(cell.column - anchor.cell.column) <= 4
+  )
+    reasons.push("adjacent");
   if (unitCell) reasons.push(`unit ${unitCell.normalizedValue}`);
   if (header?.unit) reasons.push(`header unit ${header.unit}`);
   if (header?.labels.length) reasons.push("compatible header context");
@@ -71,13 +89,26 @@ function makeCandidates(
       const unitCell = nearbyUnit(region.cells, cell, anchor.expectedUnits);
       const sameRow = cell.row === anchor.cell.row;
       const sameColumn = cell.column === anchor.cell.column;
-      const distance = Math.abs(cell.row - anchor.cell.row) + Math.abs(cell.column - anchor.cell.column);
-      const adjacent = Math.abs(cell.row - anchor.cell.row) <= 1 && Math.abs(cell.column - anchor.cell.column) <= 4;
-      const expectedUnit = Boolean(unitCell) || Boolean(header?.unit && isCompatibleUnit(header.unit, anchor.expectedUnits));
-      const compatibleHeader = Boolean(header && (
-        header.labels.some((label) => /VALUE|NILAI|TOTAL|REALISASI|TARGET|PEMAKAIAN|PENERIMAAN|STOK|HOP|SOLAR|BIOMASSA|BATUBARA/.test(label))
-        || header.unit !== null
-      ));
+      const distance =
+        Math.abs(cell.row - anchor.cell.row) +
+        Math.abs(cell.column - anchor.cell.column);
+      const adjacent =
+        Math.abs(cell.row - anchor.cell.row) <= 1 &&
+        Math.abs(cell.column - anchor.cell.column) <= 4;
+      const expectedUnit =
+        Boolean(unitCell) ||
+        Boolean(
+          header?.unit && isCompatibleUnit(header.unit, anchor.expectedUnits),
+        );
+      const compatibleHeader = Boolean(
+        header &&
+        (header.labels.some((label) =>
+          /VALUE|NILAI|TOTAL|REALISASI|TARGET|PEMAKAIAN|PENERIMAAN|STOK|HOP|SOLAR|BIOMASSA|BATUBARA/.test(
+            label,
+          ),
+        ) ||
+          header.unit !== null),
+      );
       const score = scoreCandidate({
         matchType: anchor.matchType,
         sameRow,
@@ -100,7 +131,12 @@ function makeCandidates(
       } satisfies ValueCandidate;
     })
     .filter((candidate) => candidate.status !== "empty")
-    .sort((a, b) => b.score - a.score || a.cell.row - b.cell.row || a.cell.column - b.cell.column);
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.cell.row - b.cell.row ||
+        a.cell.column - b.cell.column,
+    );
 }
 
 export function resolveAnchorValue(
@@ -110,11 +146,18 @@ export function resolveAnchorValue(
   structure?: StructureAnalysis,
   options: ValueResolverOptions = {},
 ): ResolvedValue {
-  if (!region) return unavailableValue(`Tidak ditemukan table boundary untuk anchor ${anchor.label}.`);
+  if (!region)
+    return unavailableValue(
+      `Tidak ditemukan table boundary untuk anchor ${anchor.label}.`,
+    );
   const candidates = makeCandidates(anchor, region, structure, options);
-  const numeric = candidates.filter((candidate) => candidate.status === "numeric" && candidate.value !== null);
+  const numeric = candidates.filter(
+    (candidate) => candidate.status === "numeric" && candidate.value !== null,
+  );
   if (!numeric.length) {
-    const malformed = candidates.some((candidate) => candidate.status === "malformed");
+    const malformed = candidates.some(
+      (candidate) => candidate.status === "malformed",
+    );
     return {
       ...unavailableValue(
         malformed
@@ -127,10 +170,11 @@ export function resolveAnchorValue(
   }
 
   const best = numeric[0];
-  const competing = numeric.filter((candidate) =>
-    candidate !== best
-    && best.score - candidate.score <= 4
-    && candidate.value !== best.value,
+  const competing = numeric.filter(
+    (candidate) =>
+      candidate !== best &&
+      best.score - candidate.score <= 4 &&
+      candidate.value !== best.value,
   );
   if (competing.length) {
     return {
@@ -171,7 +215,12 @@ export function resolveAnchorValue(
 }
 
 export function bestNumericCandidate(candidates: readonly ValueCandidate[]) {
-  return candidates
-    .filter((candidate) => candidate.status === "numeric" && candidate.value !== null)
-    .sort((a, b) => b.score - a.score)[0] ?? null;
+  return (
+    candidates
+      .filter(
+        (candidate) =>
+          candidate.status === "numeric" && candidate.value !== null,
+      )
+      .sort((a, b) => b.score - a.score)[0] ?? null
+  );
 }

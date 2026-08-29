@@ -2,11 +2,7 @@ export type DynamicSheetValue = string | number | null;
 export type DynamicSheetRow = readonly DynamicSheetValue[];
 
 export type SemanticTableKind =
-  | "dashboard"
-  | "daily"
-  | "target"
-  | "historical"
-  | "unknown";
+  "dashboard" | "daily" | "target" | "historical" | "unknown";
 
 export type DynamicFieldKey =
   | "biomassReceiptMonthly"

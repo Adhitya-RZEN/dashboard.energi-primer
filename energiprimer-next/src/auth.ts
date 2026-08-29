@@ -7,7 +7,12 @@ import "server-only";
 import { consumeLoginAttempt, getRequestIp } from "@/lib/login-throttle";
 import { prisma } from "@/lib/prisma";
 
-export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
+export const {
+  handlers: { GET, POST },
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
   pages: {
     signIn: "/login",
   },
@@ -22,12 +27,12 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = typeof credentials?.email === "string"
-          ? credentials.email.trim().toLowerCase()
-          : "";
-        const password = typeof credentials?.password === "string"
-          ? credentials.password
-          : "";
+        const email =
+          typeof credentials?.email === "string"
+            ? credentials.email.trim().toLowerCase()
+            : "";
+        const password =
+          typeof credentials?.password === "string" ? credentials.password : "";
 
         if (!email || !password) {
           return null;
@@ -36,7 +41,10 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
         const requestHeaders = await headers();
         const throttle = await consumeLoginAttempt(
           email,
-          getRequestIp(requestHeaders.get("x-forwarded-for"), requestHeaders.get("x-real-ip")),
+          getRequestIp(
+            requestHeaders.get("x-forwarded-for"),
+            requestHeaders.get("x-real-ip"),
+          ),
         );
         if (!throttle.allowed) return null;
 
@@ -97,12 +105,19 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
         session.user.role = typeof token.role === "string" ? token.role : "";
       }
 
-      if (session.user && token.sub && token.sessionVersion && /^\d+$/.test(token.sub)) {
+      if (
+        session.user &&
+        token.sub &&
+        token.sessionVersion &&
+        /^\d+$/.test(token.sub)
+      ) {
         const currentUser = await prisma.user.findUnique({
           where: { id: BigInt(token.sub) },
           select: { updatedAt: true },
         });
-        if ((currentUser?.updatedAt?.toISOString() ?? "") !== token.sessionVersion) {
+        if (
+          (currentUser?.updatedAt?.toISOString() ?? "") !== token.sessionVersion
+        ) {
           session.user.role = "";
         }
       }

@@ -11,16 +11,16 @@ Status production: **BLOCKED sampai koneksi PostgreSQL yang dapat dijangkau Verc
 
 ## Arsitektur yang diaudit
 
-| Area | Temuan |
-| --- | --- |
-| Provider | PostgreSQL existing |
-| ORM | Prisma 6.19.3 dan `@prisma/client` 6.19.3 |
-| Konfigurasi | `prisma/schema.prisma` membaca `DATABASE_URL` |
-| Client lifecycle | Singleton global pada development; instance per process pada production |
-| Query | Typed Prisma query dan raw aggregate berparameter melalui `Prisma.sql` |
-| Decimal | Dikonversi secara eksplisit pada presentation/service layer |
-| Date/time | Kolom tanggal PostgreSQL dipetakan sesuai schema; presentation memakai UTC secara konsisten |
-| Write operation Phase 10 | Tidak ada |
+| Area                     | Temuan                                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| Provider                 | PostgreSQL existing                                                                         |
+| ORM                      | Prisma 6.19.3 dan `@prisma/client` 6.19.3                                                   |
+| Konfigurasi              | `prisma/schema.prisma` membaca `DATABASE_URL`                                               |
+| Client lifecycle         | Singleton global pada development; instance per process pada production                     |
+| Query                    | Typed Prisma query dan raw aggregate berparameter melalui `Prisma.sql`                      |
+| Decimal                  | Dikonversi secara eksplisit pada presentation/service layer                                 |
+| Date/time                | Kolom tanggal PostgreSQL dipetakan sesuai schema; presentation memakai UTC secara konsisten |
+| Write operation Phase 10 | Tidak ada                                                                                   |
 
 ## Verifikasi read-only
 
@@ -76,4 +76,3 @@ Rekomendasi manual: gunakan pooler yang disediakan operator PostgreSQL atau prov
 ## Status
 
 **BLOCKED / NOT READY untuk deployment database production.** Implementasi aplikasi dan schema tetap tidak diubah. Blocker ini dapat diselesaikan melalui konfigurasi infrastructure dan environment secara manual tanpa migration database.
-

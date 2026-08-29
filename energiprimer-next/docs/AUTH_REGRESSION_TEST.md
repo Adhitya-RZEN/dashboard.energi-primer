@@ -11,24 +11,24 @@ Tidak ada credential, password, token, atau cookie value yang dicatat pada dokum
 
 ## Hasil test
 
-| Test | Result | Notes |
-| --- | --- | --- |
-| Empty credentials | PASS | Server action menolak email/password kosong sebelum signIn. |
-| Valid login | BLOCKED | Membutuhkan test account disposable; login valid memperbarui metadata login pada database. |
-| Invalid password | BLOCKED | Jalur aman untuk mengujinya belum tersedia; throttle menyimpan counter pada tabel cache. |
-| Nonexistent user | BLOCKED | Sama seperti invalid password; tidak dijalankan pada database existing. |
-| Session creation/refresh | BLOCKED | Membutuhkan valid login dan cookie session. Konfigurasi JWT/maxAge telah diaudit. |
-| Session expiration | BLOCKED | maxAge 120 menit diverifikasi dari konfigurasi; tidak menunggu expiry pada audit. |
-| Logout | BLOCKED | Membutuhkan valid session; handler Auth.js dan sign-out path tersedia. |
-| Protected route, no session | PASS | HTTP check ke protected routes tidak merender main-content dan mengirim NEXT_REDIRECT ke /login melalui streaming response Next.js. |
-| Protected route, authenticated | BLOCKED | Membutuhkan valid session dari test environment. |
-| Admin authorization | PASS (static) | proxy/ProtectedLayout/server actions memeriksa role === "admin" server-side. |
-| Unauthorized role | PASS (static) | Role non-admin ditolak pada authorization callback dan protected layout. |
-| Forgot-password page | PASS | HTTP page check berhasil; action tidak dipanggil. |
-| Forgot-password action | BLOCKED | Action membuat atau memperbarui reset token. |
-| Reset token validation | PASS (static) | Token dibandingkan menggunakan bcrypt, memiliki expiry 60 menit, dan dihapus setelah sukses. |
-| Reset password update | BLOCKED | Akan mengubah password, remember token, updated timestamp, dan menghapus token. |
-| Reused token | PASS (static) | Token dihapus dalam transaction setelah berhasil sehingga tidak dapat digunakan ulang. |
+| Test                           | Result        | Notes                                                                                                                               |
+| ------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Empty credentials              | PASS          | Server action menolak email/password kosong sebelum signIn.                                                                         |
+| Valid login                    | BLOCKED       | Membutuhkan test account disposable; login valid memperbarui metadata login pada database.                                          |
+| Invalid password               | BLOCKED       | Jalur aman untuk mengujinya belum tersedia; throttle menyimpan counter pada tabel cache.                                            |
+| Nonexistent user               | BLOCKED       | Sama seperti invalid password; tidak dijalankan pada database existing.                                                             |
+| Session creation/refresh       | BLOCKED       | Membutuhkan valid login dan cookie session. Konfigurasi JWT/maxAge telah diaudit.                                                   |
+| Session expiration             | BLOCKED       | maxAge 120 menit diverifikasi dari konfigurasi; tidak menunggu expiry pada audit.                                                   |
+| Logout                         | BLOCKED       | Membutuhkan valid session; handler Auth.js dan sign-out path tersedia.                                                              |
+| Protected route, no session    | PASS          | HTTP check ke protected routes tidak merender main-content dan mengirim NEXT_REDIRECT ke /login melalui streaming response Next.js. |
+| Protected route, authenticated | BLOCKED       | Membutuhkan valid session dari test environment.                                                                                    |
+| Admin authorization            | PASS (static) | proxy/ProtectedLayout/server actions memeriksa role === "admin" server-side.                                                        |
+| Unauthorized role              | PASS (static) | Role non-admin ditolak pada authorization callback dan protected layout.                                                            |
+| Forgot-password page           | PASS          | HTTP page check berhasil; action tidak dipanggil.                                                                                   |
+| Forgot-password action         | BLOCKED       | Action membuat atau memperbarui reset token.                                                                                        |
+| Reset token validation         | PASS (static) | Token dibandingkan menggunakan bcrypt, memiliki expiry 60 menit, dan dihapus setelah sukses.                                        |
+| Reset password update          | BLOCKED       | Akan mengubah password, remember token, updated timestamp, dan menghapus token.                                                     |
+| Reused token                   | PASS (static) | Token dihapus dalam transaction setelah berhasil sehingga tidak dapat digunakan ulang.                                              |
 
 ## HTTP smoke check yang aman
 
@@ -65,4 +65,3 @@ Catatan: pada response streaming App Router, status awal dapat berupa 200 dengan
 2. Isi AUTH_TEST_BASE_URL, AUTH_TEST_ADMIN_EMAIL, AUTH_TEST_ADMIN_PASSWORD, dan AUTH_TEST_SECRET hanya pada environment test.
 3. Jalankan npm run auth:verify.
 4. Pastikan user test dan cache test dapat dibersihkan sesuai prosedur environment tersebut.
-

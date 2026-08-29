@@ -16,13 +16,19 @@ export const INDONESIAN_MONTH_NAMES = [
   "Desember",
 ] as const;
 
-const VALID_BB_WORKSHEET = /^(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\d{2}-BB$/;
+const VALID_BB_WORKSHEET =
+  /^(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\d{2}-BB$/;
 
 function metadata(name: string): WorksheetMetadata | null {
   if (!VALID_BB_WORKSHEET.test(name)) return null;
-  const match = name.match(/^(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)(\d{2})-BB$/);
+  const match = name.match(
+    /^(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)(\d{2})-BB$/,
+  );
   if (!match) return null;
-  const month = INDONESIAN_MONTH_NAMES.indexOf(match[1] as typeof INDONESIAN_MONTH_NAMES[number]) + 1;
+  const month =
+    INDONESIAN_MONTH_NAMES.indexOf(
+      match[1] as (typeof INDONESIAN_MONTH_NAMES)[number],
+    ) + 1;
   return {
     name,
     month,
@@ -41,7 +47,15 @@ export function isValidBBWorksheetName(name: unknown): name is string {
 }
 
 export function worksheetNameFor(month: number, year: number) {
-  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000 || year > 2099) return null;
+  if (
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12 ||
+    !Number.isInteger(year) ||
+    year < 2000 ||
+    year > 2099
+  )
+    return null;
   return `${INDONESIAN_MONTH_NAMES[month - 1]}${String(year).slice(-2)}-BB`;
 }
 
@@ -54,7 +68,8 @@ export function resolveBBWorksheet(
   if (!name) return null;
   const parsed = metadata(name);
   if (!parsed) return null;
-  if (availableNames && !availableNames.some((candidate) => candidate === name)) return null;
+  if (availableNames && !availableNames.some((candidate) => candidate === name))
+    return null;
   return {
     ...parsed,
     requestedMonth: month,
@@ -79,7 +94,14 @@ export function previousValidBBWorksheets(
       currentYear -= 1;
     }
     const candidate = resolveBBWorksheet(currentMonth, currentYear);
-    if (candidate) result.push({ ...candidate, isFallback: true, fallbackIndex: index, requestedMonth: month, requestedYear: year });
+    if (candidate)
+      result.push({
+        ...candidate,
+        isFallback: true,
+        fallbackIndex: index,
+        requestedMonth: month,
+        requestedYear: year,
+      });
   }
   return result;
 }
@@ -94,4 +116,3 @@ export function validBBWorksheets(names: readonly string[]) {
 export function normalizeWorksheetName(name: string) {
   return normalizeCellText(name).replace(/\s+/g, "");
 }
-

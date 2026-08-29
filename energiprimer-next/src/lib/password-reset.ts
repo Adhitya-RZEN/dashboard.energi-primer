@@ -22,7 +22,11 @@ export function isPasswordResetThrottled(createdAt: Date, now = new Date()) {
 }
 
 export function getPasswordResetUrl(token: string, email: string) {
-  const baseUrl = (process.env.AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const baseUrl = (
+    process.env.AUTH_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:3000"
+  ).replace(/\/$/, "");
   const params = new URLSearchParams({ email });
   return `${baseUrl}/reset-password/${encodeURIComponent(token)}?${params.toString()}`;
 }
@@ -35,7 +39,9 @@ export async function deliverPasswordResetEmail(email: string, token: string) {
   const mailer = process.env.AUTH_MAILER || process.env.MAIL_MAILER || "log";
 
   if (mailer !== "log" || process.env.NODE_ENV === "production") {
-    throw new Error("Password reset mailer is not configured for this environment.");
+    throw new Error(
+      "Password reset mailer is not configured for this environment.",
+    );
   }
 
   console.info("[auth] Development password reset link", {

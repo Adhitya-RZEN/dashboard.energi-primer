@@ -63,10 +63,10 @@ export type OverviewData = {
     biomassConsumptionMonthly: OverviewMetric;
     coalConsumptionMonthly: OverviewMetric;
     coalStock: OverviewMetric & { progressPercent: number | null };
-      solarConsumptionDaily: OverviewMetric;
-      solarConsumptionMonthly: OverviewMetric;
-      solarReceiptMonthly: OverviewMetric;
-      biomassCumulative: OverviewMetric;
+    solarConsumptionDaily: OverviewMetric;
+    solarConsumptionMonthly: OverviewMetric;
+    solarReceiptMonthly: OverviewMetric;
+    biomassCumulative: OverviewMetric;
     biomassTargetProgress: OverviewMetric;
     coalReceiptMonthly: OverviewMetric;
   };

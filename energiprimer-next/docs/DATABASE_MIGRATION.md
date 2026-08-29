@@ -48,16 +48,16 @@ Prisma CLI hanya dipakai untuk `generate` dan `validate`. Tidak ada folder
 
 ## Laravel Model → Prisma Model
 
-| Laravel model | Prisma model | PostgreSQL table | Relationship |
-|---|---|---|---|
-| `User` | `User` | `users` | Tidak ada domain relation pada Laravel |
-| `Unit` | `Unit` | `units` | `Unit` has many quality, consumption, generation, target |
-| `CoalStock` | `CoalStock` | `coal_stock` | Tidak ada relation; satu row per tanggal |
-| `CoalQuality` | `CoalQuality` | `coal_quality` | belongs to `Unit` melalui `unit_id` |
-| `CoalConsumption` | `CoalConsumption` | `coal_consumption` | belongs to `Unit` melalui `unit_id` |
-| `PowerGeneration` | `PowerGeneration` | `power_generation` | belongs to `Unit` melalui `unit_id` |
-| `KpiTarget` | `KpiTarget` | `kpi_targets` | belongs to `Unit` melalui `unit_id` |
-| `SpreadsheetImportLog` | `SpreadsheetImportLog` | `spreadsheet_import_logs` | Tidak ada relation |
+| Laravel model          | Prisma model           | PostgreSQL table          | Relationship                                             |
+| ---------------------- | ---------------------- | ------------------------- | -------------------------------------------------------- |
+| `User`                 | `User`                 | `users`                   | Tidak ada domain relation pada Laravel                   |
+| `Unit`                 | `Unit`                 | `units`                   | `Unit` has many quality, consumption, generation, target |
+| `CoalStock`            | `CoalStock`            | `coal_stock`              | Tidak ada relation; satu row per tanggal                 |
+| `CoalQuality`          | `CoalQuality`          | `coal_quality`            | belongs to `Unit` melalui `unit_id`                      |
+| `CoalConsumption`      | `CoalConsumption`      | `coal_consumption`        | belongs to `Unit` melalui `unit_id`                      |
+| `PowerGeneration`      | `PowerGeneration`      | `power_generation`        | belongs to `Unit` melalui `unit_id`                      |
+| `KpiTarget`            | `KpiTarget`            | `kpi_targets`             | belongs to `Unit` melalui `unit_id`                      |
+| `SpreadsheetImportLog` | `SpreadsheetImportLog` | `spreadsheet_import_logs` | Tidak ada relation                                       |
 
 Tabel framework Laravel juga dipetakan untuk menjaga kelengkapan schema:
 `PasswordResetToken`, `Session`, `Cache`, `CacheLock`, `Job`, `JobBatch`, dan
@@ -65,15 +65,15 @@ Tabel framework Laravel juga dipetakan untuk menjaga kelengkapan schema:
 
 ## Laravel table → PostgreSQL/Prisma mapping
 
-| Table | Key fields | Prisma type mapping | Constraint yang dipertahankan |
-|---|---|---|---|
-| `units` | `id`, `code`, `name`, `status` | `BigInt`, `String`, `Boolean` | PK `id`, unique `code` |
-| `coal_stock` | `date`, stock amounts | `Date`, `Decimal(12,2)` | unique `date` |
-| `coal_quality` | `unit_id`, `date`, GAR metrics | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `coal_consumption` | `unit_id`, `date`, consumption metrics | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `power_generation` | `unit_id`, `date`, load/generation | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `kpi_targets` | `unit_id`, `date`, SFC/heat rate | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `spreadsheet_import_logs` | source/status/import metadata | `String`, `Int`, nullable `DateTime` | tidak ada unique tambahan |
+| Table                     | Key fields                             | Prisma type mapping                  | Constraint yang dipertahankan          |
+| ------------------------- | -------------------------------------- | ------------------------------------ | -------------------------------------- |
+| `units`                   | `id`, `code`, `name`, `status`         | `BigInt`, `String`, `Boolean`        | PK `id`, unique `code`                 |
+| `coal_stock`              | `date`, stock amounts                  | `Date`, `Decimal(12,2)`              | unique `date`                          |
+| `coal_quality`            | `unit_id`, `date`, GAR metrics         | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `coal_consumption`        | `unit_id`, `date`, consumption metrics | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `power_generation`        | `unit_id`, `date`, load/generation     | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `kpi_targets`             | `unit_id`, `date`, SFC/heat rate       | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `spreadsheet_import_logs` | source/status/import metadata          | `String`, `Int`, nullable `DateTime` | tidak ada unique tambahan              |
 
 Semua kolom `created_at` dan `updated_at` dipetakan sebagai nullable
 `DateTime` karena migration Laravel memakai `$table->timestamps()`.

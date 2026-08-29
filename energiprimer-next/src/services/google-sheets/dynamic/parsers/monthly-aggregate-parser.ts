@@ -24,7 +24,7 @@ const RECEIPT_SUPPLIER_ALIASES = [
   ["SRF", ["SRF"]],
 ] as const;
 
-type ReceiptSupplierName = typeof RECEIPT_SUPPLIER_ALIASES[number][0];
+type ReceiptSupplierName = (typeof RECEIPT_SUPPLIER_ALIASES)[number][0];
 
 type ReceiptSupplierColumn = {
   name: ReceiptSupplierName;
@@ -32,21 +32,27 @@ type ReceiptSupplierColumn = {
 };
 
 function cellAt(cells: readonly ScannedCell[], row: number, column: number) {
-  return cells.find((cell) => cell.row === row && cell.column === column) ?? null;
+  return (
+    cells.find((cell) => cell.row === row && cell.column === column) ?? null
+  );
 }
 
 function isSummaryMarker(cell: ScannedCell) {
   return /^(?:TOTAL|TOTAL\s+(?:BULANAN|MONTHLY))$/.test(cell.normalizedValue);
 }
 
-function summaryMarkers(cells: readonly ScannedCell[], structure: StructureAnalysis) {
+function summaryMarkers(
+  cells: readonly ScannedCell[],
+  structure: StructureAnalysis,
+) {
   const dateColumn = structure.dateColumn;
   const minColumn = dateColumn === null ? 1 : Math.max(1, dateColumn - 3);
   const maxColumn = dateColumn === null ? 8 : dateColumn + 3;
-  return cells.filter((cell) =>
-    cell.column >= minColumn
-    && cell.column <= maxColumn
-    && isSummaryMarker(cell),
+  return cells.filter(
+    (cell) =>
+      cell.column >= minColumn &&
+      cell.column <= maxColumn &&
+      isSummaryMarker(cell),
   );
 }
 
@@ -57,7 +63,10 @@ function numericCoverage(
 ) {
   return columns.reduce((count, column) => {
     const cell = cellAt(cells, row, column);
-    return count + (cell && parseNumericValue(cell.rawValue).status === "numeric" ? 1 : 0);
+    return (
+      count +
+      (cell && parseNumericValue(cell.rawValue).status === "numeric" ? 1 : 0)
+    );
   }, 0);
 }
 
@@ -66,10 +75,20 @@ function chooseSummaryMarker(
   structure: StructureAnalysis,
   columns: readonly number[],
 ) {
-  return summaryMarkers(cells, structure)
-    .map((marker) => ({ marker, coverage: numericCoverage(cells, marker.row, columns) }))
-    .filter(({ coverage }) => coverage > 0)
-    .sort((a, b) => b.coverage - a.coverage || a.marker.row - b.marker.row || a.marker.column - b.marker.column)[0]?.marker ?? null;
+  return (
+    summaryMarkers(cells, structure)
+      .map((marker) => ({
+        marker,
+        coverage: numericCoverage(cells, marker.row, columns),
+      }))
+      .filter(({ coverage }) => coverage > 0)
+      .sort(
+        (a, b) =>
+          b.coverage - a.coverage ||
+          a.marker.row - b.marker.row ||
+          a.marker.column - b.marker.column,
+      )[0]?.marker ?? null
+  );
 }
 
 function aggregateFromSummaryRow(
@@ -91,7 +110,9 @@ function aggregateFromSummaryRow(
     if (parsed.status === "malformed" && cell) malformedCells.push(cell);
   }
 
-  const sourceAddresses = [...numericCells, ...malformedCells].map((cell) => cell.address);
+  const sourceAddresses = [...numericCells, ...malformedCells].map(
+    (cell) => cell.address,
+  );
   const source = numericCells[0] ?? malformedCells[0] ?? null;
   if (malformedCells.length) {
     return {
@@ -111,25 +132,39 @@ function aggregateFromSummaryRow(
 
   if (!numericCells.length) {
     return {
-      ...unavailableValue(`${spec.label} tidak memiliki nilai numerik pada baris ${marker.address}.`),
-      source: { sheet: worksheet, address: marker.address, anchor: marker.address },
+      ...unavailableValue(
+        `${spec.label} tidak memiliki nilai numerik pada baris ${marker.address}.`,
+      ),
+      source: {
+        sheet: worksheet,
+        address: marker.address,
+        anchor: marker.address,
+      },
     };
   }
 
-  const value = numericCells.reduce((sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0), 0);
+  const value = numericCells.reduce(
+    (sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0),
+    0,
+  );
   const emptyCount = spec.columns.length - numericCells.length;
   return {
     value,
     available: true,
     confidence: 0.95,
     level: "HIGH",
-    source: { sheet: worksheet, address: numericCells[0].address, anchor: marker.address },
+    source: {
+      sheet: worksheet,
+      address: numericCells[0].address,
+      anchor: marker.address,
+    },
     status: "resolved",
     candidates: [],
     sourceAddresses,
-    note: emptyCount > 0
-      ? `${spec.label} dijumlahkan dari ${numericCells.length} kolom numerik; ${emptyCount} kolom kosong diperlakukan sebagai tidak tersedia.`
-      : `${spec.label} dijumlahkan dari ${numericCells.length} kolom semantic pada baris ${marker.address}.`,
+    note:
+      emptyCount > 0
+        ? `${spec.label} dijumlahkan dari ${numericCells.length} kolom numerik; ${emptyCount} kolom kosong diperlakukan sebagai tidak tersedia.`
+        : `${spec.label} dijumlahkan dari ${numericCells.length} kolom semantic pada baris ${marker.address}.`,
   };
 }
 
@@ -162,7 +197,11 @@ function aggregateFromDataRows(
       confidence: 0,
       level: "UNRESOLVED",
       source: sourceCells[0]
-        ? { sheet: worksheet, address: sourceCells[0].address, anchor: sourceCells[0].address }
+        ? {
+            sheet: worksheet,
+            address: sourceCells[0].address,
+            anchor: sourceCells[0].address,
+          }
         : null,
       status: "malformed",
       candidates: [],
@@ -172,10 +211,15 @@ function aggregateFromDataRows(
   }
 
   if (!numericCells.length) {
-    return unavailableValue(`${spec.label} tidak memiliki nilai numerik pada baris data tabel.`);
+    return unavailableValue(
+      `${spec.label} tidak memiliki nilai numerik pada baris data tabel.`,
+    );
   }
 
-  const value = numericCells.reduce((sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0), 0);
+  const value = numericCells.reduce(
+    (sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0),
+    0,
+  );
   const first = numericCells[0];
   const last = numericCells[numericCells.length - 1];
   return {
@@ -183,7 +227,11 @@ function aggregateFromDataRows(
     available: true,
     confidence: 0.9,
     level: "HIGH",
-    source: { sheet: worksheet, address: first.address, anchor: `${first.address}..${last.address}` },
+    source: {
+      sheet: worksheet,
+      address: first.address,
+      anchor: `${first.address}..${last.address}`,
+    },
     status: "resolved",
     candidates: [],
     sourceAddresses: sourceCells.map((cell) => cell.address),
@@ -192,33 +240,55 @@ function aggregateFromDataRows(
 }
 
 function isSupplierBiomassPath(path: HeaderPath) {
-  return path.resource === "biomass"
-    && path.labels.some((label) => /\bPENERIMAAN\b|\bRECEIPT\b|\bINCOMING\b/.test(label))
-    && path.unit !== "LITER"
-    && path.unitNumber === null
-    && !path.isTotal
-    && !path.isStock
-    && !path.isHop
-    && !path.labels.some((label) => /\bUNIT\s*[123]\b|BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label));
+  return (
+    path.resource === "biomass" &&
+    path.labels.some((label) =>
+      /\bPENERIMAAN\b|\bRECEIPT\b|\bINCOMING\b/.test(label),
+    ) &&
+    path.unit !== "LITER" &&
+    path.unitNumber === null &&
+    !path.isTotal &&
+    !path.isStock &&
+    !path.isHop &&
+    !path.labels.some((label) =>
+      /\bUNIT\s*[123]\b|BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(
+        label,
+      ),
+    )
+  );
 }
 
 function supplierName(path: HeaderPath) {
   const labels = path.labels;
   const joined = labels.join(" ");
   for (const [name, aliases] of RECEIPT_SUPPLIER_ALIASES) {
-    if (aliases.some((alias) => labels.some((label) => label === alias || label.endsWith(` ${alias}`)) || joined.endsWith(alias))) return name;
+    if (
+      aliases.some(
+        (alias) =>
+          labels.some(
+            (label) => label === alias || label.endsWith(` ${alias}`),
+          ) || joined.endsWith(alias),
+      )
+    )
+      return name;
   }
   return null;
 }
 
-function supplierColumns(structure: StructureAnalysis): ReceiptSupplierColumn[] {
+function supplierColumns(
+  structure: StructureAnalysis,
+): ReceiptSupplierColumn[] {
   return structure.headerPaths
     .flatMap((path) => {
       if (!isSupplierBiomassPath(path)) return [];
       const name = supplierName(path);
       return name ? [{ name, column: path.cell.column }] : [];
     })
-    .filter((supplier, index, suppliers) => suppliers.findIndex((candidate) => candidate.name === supplier.name) === index);
+    .filter(
+      (supplier, index, suppliers) =>
+        suppliers.findIndex((candidate) => candidate.name === supplier.name) ===
+        index,
+    );
 }
 
 function unitColumns(columns: {
@@ -226,8 +296,11 @@ function unitColumns(columns: {
   biomassUnit2: number | null;
   biomassUnit3: number | null;
 }) {
-  return [columns.biomassUnit1, columns.biomassUnit2, columns.biomassUnit3]
-    .filter((column): column is number => column !== null);
+  return [
+    columns.biomassUnit1,
+    columns.biomassUnit2,
+    columns.biomassUnit3,
+  ].filter((column): column is number => column !== null);
 }
 
 export function parseMonthlyBiomassAggregates(
@@ -244,7 +317,9 @@ export function parseMonthlyBiomassAggregates(
   const supplier = detectedSuppliers.map(({ column }) => column);
   const expectedSupplierNames = RECEIPT_SUPPLIER_ALIASES.map(([name]) => name);
   const detectedSupplierNames = detectedSuppliers.map(({ name }) => name);
-  const missingSupplierNames = expectedSupplierNames.filter((name) => !detectedSupplierNames.includes(name));
+  const missingSupplierNames = expectedSupplierNames.filter(
+    (name) => !detectedSupplierNames.includes(name),
+  );
   const unit = unitColumns(columns);
   const summaryColumns = [...new Set([...supplier, ...unit])];
   const marker = chooseSummaryMarker(cells, structure, summaryColumns);
@@ -252,24 +327,46 @@ export function parseMonthlyBiomassAggregates(
   const supplierSpec = {
     label: "Total penerimaan pemasok pada tabel Penerimaan → Biomassa",
     columns: supplier,
-    emptyNote: "Kolom Sawdust PT Syahroni, Sawdust PT Bintang, Woodchip PT Syahroni, Woodchip PT RAP, Woodchip CV Multi Paketindo, LRUK, dan SRF belum terdeteksi secara semantic.",
+    emptyNote:
+      "Kolom Sawdust PT Syahroni, Sawdust PT Bintang, Woodchip PT Syahroni, Woodchip PT RAP, Woodchip CV Multi Paketindo, LRUK, dan SRF belum terdeteksi secara semantic.",
   } satisfies MonthlyAggregateSpec;
-  const summarySupplier = aggregateFromSummaryRow(cells, worksheet, marker, supplierSpec);
-  const calculatedSupplier = summarySupplier.status === "missing" && structure.dataRows.length
-    ? aggregateFromDataRows(cells, worksheet, structure.dataRows, supplierSpec)
-    : summarySupplier;
+  const summarySupplier = aggregateFromSummaryRow(
+    cells,
+    worksheet,
+    marker,
+    supplierSpec,
+  );
+  const calculatedSupplier =
+    summarySupplier.status === "missing" && structure.dataRows.length
+      ? aggregateFromDataRows(
+          cells,
+          worksheet,
+          structure.dataRows,
+          supplierSpec,
+        )
+      : summarySupplier;
   const supplierReceipt: ResolvedValue = missingSupplierNames.length
-    ? unavailableValue(`${supplierSchemaNote} Kolom yang belum terdeteksi: ${missingSupplierNames.join(", ")}. Total penerimaan tidak dihitung dari skema parsial.`)
+    ? unavailableValue(
+        `${supplierSchemaNote} Kolom yang belum terdeteksi: ${missingSupplierNames.join(", ")}. Total penerimaan tidak dihitung dari skema parsial.`,
+      )
     : {
-      ...calculatedSupplier,
-      note: calculatedSupplier.note ? `${calculatedSupplier.note} ${supplierSchemaNote}` : supplierSchemaNote,
-    };
+        ...calculatedSupplier,
+        note: calculatedSupplier.note
+          ? `${calculatedSupplier.note} ${supplierSchemaNote}`
+          : supplierSchemaNote,
+      };
   return {
     biomassSupplierReceiptMonthly: supplierReceipt,
-    biomassUnitConsumptionMonthly: aggregateFromSummaryRow(cells, worksheet, marker, {
-      label: "Total pemakaian bulanan Biomassa Unit 1–3",
-      columns: unit,
-      emptyNote: "Kolom Biomassa Unit 1–3 belum tersedia untuk menghitung total pemakaian bulanan.",
-    }),
+    biomassUnitConsumptionMonthly: aggregateFromSummaryRow(
+      cells,
+      worksheet,
+      marker,
+      {
+        label: "Total pemakaian bulanan Biomassa Unit 1–3",
+        columns: unit,
+        emptyNote:
+          "Kolom Biomassa Unit 1–3 belum tersedia untuk menghitung total pemakaian bulanan.",
+      },
+    ),
   };
 }

@@ -15,6 +15,8 @@ import {
 import type { OverviewDailyPoint } from "@/types/overview";
 
 import {
+  CHART_HEIGHT,
+  CHART_WIDTH_FALLBACK,
   ChartFrame,
   ChartLegend,
   DashboardChartTooltip,
@@ -43,16 +45,22 @@ function ChartEmptyState() {
   );
 }
 
-export function EnergyConsumptionChart({ series }: EnergyConsumptionChartProps) {
+export function EnergyConsumptionChart({
+  series,
+}: EnergyConsumptionChartProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const hasData = series.some((point) => point.coal !== null || point.biomass !== null);
+  const hasData = series.some(
+    (point) => point.coal !== null || point.biomass !== null,
+  );
 
   if (!hasData) return <ChartEmptyState />;
 
   const visible = DATASETS.filter((dataset) => !hidden.has(dataset.key));
-  const selected = selectedDate ? series.find((point) => point.date === selectedDate) : null;
+  const selected = selectedDate
+    ? series.find((point) => point.date === selectedDate)
+    : null;
 
   function handleMove(state: MouseHandlerDataParam) {
     setHoveredDate(chartDateFromState(state, series));
@@ -70,10 +78,16 @@ export function EnergyConsumptionChart({ series }: EnergyConsumptionChartProps) 
       <ChartLegend
         datasets={DATASETS}
         hidden={hidden}
-        onToggle={(key) => setHidden((current) => toggleChartSeries(current, key, DATASETS.length))}
+        onToggle={(key) =>
+          setHidden((current) =>
+            toggleChartSeries(current, key, DATASETS.length),
+          )
+        }
       />
       <ChartFrame label="Grafik konsumsi energi primer harian">
         <LineChart
+          width={CHART_WIDTH_FALLBACK}
+          height={CHART_HEIGHT}
           data={series}
           margin={{ top: 12, right: 18, left: 8, bottom: 8 }}
           accessibilityLayer
@@ -104,7 +118,13 @@ export function EnergyConsumptionChart({ series }: EnergyConsumptionChartProps) 
             filterNull
             isAnimationActive={false}
           />
-          {hoveredDate ? <ReferenceLine x={hoveredDate} stroke="#94a3b8" strokeDasharray="3 3" /> : null}
+          {hoveredDate ? (
+            <ReferenceLine
+              x={hoveredDate}
+              stroke="#94a3b8"
+              strokeDasharray="3 3"
+            />
+          ) : null}
           <Line
             hide={hidden.has("coal")}
             type="monotone"
@@ -132,19 +152,29 @@ export function EnergyConsumptionChart({ series }: EnergyConsumptionChartProps) 
         </LineChart>
       </ChartFrame>
       {selected ? (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" aria-live="polite">
-          <strong className="text-slate-950">{formatChartDate(selected.date)}</strong>
+        <div
+          className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+          aria-live="polite"
+        >
+          <strong className="text-slate-950">
+            {formatChartDate(selected.date)}
+          </strong>
           {visible.map((dataset) => {
             const value = selected[dataset.key as "coal" | "biomass"];
             return value === null || value === undefined ? null : (
               <span key={dataset.key}>
-                {dataset.label}: <strong className="text-slate-950">{formatChartValue(value)} ton</strong>
+                {dataset.label}:{" "}
+                <strong className="text-slate-950">
+                  {formatChartValue(value)} ton
+                </strong>
               </span>
             );
           })}
         </div>
       ) : (
-        <p className="px-2 text-[11px] text-slate-400">Arahkan atau tap titik data untuk melihat detail.</p>
+        <p className="px-2 text-[11px] text-slate-400">
+          Arahkan atau tap titik data untuk melihat detail.
+        </p>
       )}
     </div>
   );

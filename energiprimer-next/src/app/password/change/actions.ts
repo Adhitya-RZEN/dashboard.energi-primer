@@ -21,11 +21,15 @@ export async function changePassword(
 
   const currentPassword = String(formData.get("current_password") ?? "");
   const password = String(formData.get("password") ?? "");
-  const passwordConfirmation = String(formData.get("password_confirmation") ?? "");
+  const passwordConfirmation = String(
+    formData.get("password_confirmation") ?? "",
+  );
 
   if (!currentPassword) return { error: "Password saat ini wajib diisi." };
-  if (password.length < 12) return { error: "Password baru minimal 12 karakter." };
-  if (password !== passwordConfirmation) return { error: "Konfirmasi password tidak cocok." };
+  if (password.length < 12)
+    return { error: "Password baru minimal 12 karakter." };
+  if (password !== passwordConfirmation)
+    return { error: "Konfirmasi password tidak cocok." };
 
   if (!/^\d+$/.test(session.user.id)) {
     return { error: "Sesi tidak valid. Silakan login kembali." };

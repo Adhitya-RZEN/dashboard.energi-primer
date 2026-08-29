@@ -18,10 +18,15 @@ export const proxy = auth((request) => {
     if (searchParams.get("reset") === "1") {
       FILTER_COOKIES.forEach((name) => response.cookies.delete(name));
     } else {
-      const paramsToCookie: Array<[typeof FILTER_COOKIES[number], string | null]> = [
+      const paramsToCookie: Array<
+        [(typeof FILTER_COOKIES)[number], string | null]
+      > = [
         ["dashboard_filter_month", searchParams.get("month")],
         ["dashboard_filter_year", searchParams.get("year")],
-        ["dashboard_filter_day", searchParams.has("day") ? searchParams.get("day") : null],
+        [
+          "dashboard_filter_day",
+          searchParams.has("day") ? searchParams.get("day") : null,
+        ],
       ];
       paramsToCookie.forEach(([name, value]) => {
         if (value !== null) {

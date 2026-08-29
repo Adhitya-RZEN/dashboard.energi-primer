@@ -11,17 +11,17 @@ Status production: **BLOCKED** karena implementasi saat ini membaca credential d
 
 ## Konfigurasi yang diverifikasi
 
-| Item | Hasil |
-| --- | --- |
-| Authentication | Service account JWT dengan RSA-SHA256 |
-| Credential source | Path server-side dari `GOOGLE_SHEETS_CREDENTIALS_PATH` |
-| Spreadsheet | ID hanya dibaca dari `GOOGLE_SHEETS_SPREADSHEET_ID`; tidak dicetak |
-| Worksheet | Dibentuk mengikuti periode: `[MonthIndonesia][2-digit year]-BB` |
-| Range | `B11:CO59` untuk mapping legacy; `A1:ZZ500` untuk agregat semantic penerimaan Biomassa |
-| API operation | Read-only Google Sheets v4 values endpoint |
-| Timeout | 15 detik |
-| Cache | In-memory process cache dengan TTL `GOOGLE_SHEETS_CACHE_TTL` |
-| Client boundary | `server-only`; tidak diimpor Client Component |
+| Item              | Hasil                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| Authentication    | Service account JWT dengan RSA-SHA256                                                  |
+| Credential source | Path server-side dari `GOOGLE_SHEETS_CREDENTIALS_PATH`                                 |
+| Spreadsheet       | ID hanya dibaca dari `GOOGLE_SHEETS_SPREADSHEET_ID`; tidak dicetak                     |
+| Worksheet         | Dibentuk mengikuti periode: `[MonthIndonesia][2-digit year]-BB`                        |
+| Range             | `B11:CO59` untuk mapping legacy; `A1:ZZ500` untuk agregat semantic penerimaan Biomassa |
+| API operation     | Read-only Google Sheets v4 values endpoint                                             |
+| Timeout           | 15 detik                                                                               |
+| Cache             | In-memory process cache dengan TTL `GOOGLE_SHEETS_CACHE_TTL`                           |
+| Client boundary   | `server-only`; tidak diimpor Client Component                                          |
 
 Nama file credential lokal dan isi JSON/private key tidak ditulis di dokumen ini.
 

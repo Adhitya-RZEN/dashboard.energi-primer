@@ -7,20 +7,20 @@ Scope: performance review tanpa architecture rewrite atau business-logic change.
 
 ### HIGH IMPACT
 
-| Finding | Evidence | Action |
-| --- | --- | --- |
-| Database endpoint | Local DATABASE_URL uses loopback; Vercel connectivity cannot be measured yet | Configure reachable existing PostgreSQL/pooler manually |
-| Google Sheets credential path | Service reads local file; Vercel provisioning unresolved | Choose server-side secret/file strategy manually |
-| Production observability | No preview Web Vitals/Lighthouse baseline in repository | Measure after manual preview configuration |
+| Finding                       | Evidence                                                                     | Action                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Database endpoint             | Local DATABASE_URL uses loopback; Vercel connectivity cannot be measured yet | Configure reachable existing PostgreSQL/pooler manually |
+| Google Sheets credential path | Service reads local file; Vercel provisioning unresolved                     | Choose server-side secret/file strategy manually        |
+| Production observability      | No preview Web Vitals/Lighthouse baseline in repository                      | Measure after manual preview configuration              |
 
 ### MEDIUM IMPACT
 
-| Finding | Evidence | Action |
-| --- | --- | --- |
-| Full document navigation | GET forms on data-batu-bara, monitoring, and laporan still use normal browser navigation | Evaluate route-preserving router.push/replace per feature; do not change blindly |
-| Per-instance Google cache | Map cache is not shared across Functions | Consider shared cache only after freshness/cost review |
-| Chart client payload | Build contains a chart-related client chunk around 411 KB raw and another around 52 KB raw | Measure compressed/baseline size before considering lazy loading |
-| Widget-level boundaries | Loading/error exists at route level, not independently for every widget | Add only if measurement shows value |
+| Finding                   | Evidence                                                                                   | Action                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Full document navigation  | GET forms on data-batu-bara, monitoring, and laporan still use normal browser navigation   | Evaluate route-preserving router.push/replace per feature; do not change blindly |
+| Per-instance Google cache | Map cache is not shared across Functions                                                   | Consider shared cache only after freshness/cost review                           |
+| Chart client payload      | Build contains a chart-related client chunk around 411 KB raw and another around 52 KB raw | Measure compressed/baseline size before considering lazy loading                 |
+| Widget-level boundaries   | Loading/error exists at route level, not independently for every widget                    | Add only if measurement shows value                                              |
 
 ### LOW IMPACT / TECHNICAL DEBT
 
@@ -46,4 +46,3 @@ Tidak ada perubahan pada data source, query formula, Prisma schema, API contract
 ## Status
 
 **PASS WITH WARNINGS.** Code-level performance foundation is acceptable, but production performance sign-off requires deployment configuration and measurement. Form navigation and cache strategy remain NEEDS REVIEW.
-

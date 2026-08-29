@@ -6,4 +6,3 @@ export const TARGET_LABEL_ALIASES = [
 ] as const;
 
 export const TARGET_UNITS = ["TON", "TONASE"] as const;
-

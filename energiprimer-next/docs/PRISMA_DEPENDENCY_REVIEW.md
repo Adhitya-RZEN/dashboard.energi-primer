@@ -13,11 +13,11 @@ npm audit --omit=dev --json selesai dengan exit code 1 dan melaporkan 3 HIGH, 0 
 
 ## Findings
 
-| Package | Current | Severity | Root Cause | Fix Available | Action |
-| --- | --- | --- | --- | --- | --- |
-| deepmerge-ts | 7.1.5 | HIGH | Recursive object graph dapat menyebabkan stack exhaustion; GHSA-ggr8-5vv4-36mx | Audit reports Prisma 6.12.0 sebagai fix candidate | **REQUIRES MANUAL APPROVAL**; tidak diubah |
-| @prisma/config | 6.19.3 | HIGH | Membawa deepmerge-ts vulnerable | Terpengaruh oleh fix Prisma yang dilaporkan | Review release/compatibility Prisma secara manual |
-| prisma | 6.19.3 | HIGH | Direct dev dependency dan bagian installed dependency tree | Tool melaporkan 6.12.0, lebih rendah dari current dan ditandai semver-major | Jangan downgrade/upgrade otomatis |
+| Package        | Current | Severity | Root Cause                                                                     | Fix Available                                                               | Action                                            |
+| -------------- | ------- | -------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------- |
+| deepmerge-ts   | 7.1.5   | HIGH     | Recursive object graph dapat menyebabkan stack exhaustion; GHSA-ggr8-5vv4-36mx | Audit reports Prisma 6.12.0 sebagai fix candidate                           | **REQUIRES MANUAL APPROVAL**; tidak diubah        |
+| @prisma/config | 6.19.3  | HIGH     | Membawa deepmerge-ts vulnerable                                                | Terpengaruh oleh fix Prisma yang dilaporkan                                 | Review release/compatibility Prisma secara manual |
+| prisma         | 6.19.3  | HIGH     | Direct dev dependency dan bagian installed dependency tree                     | Tool melaporkan 6.12.0, lebih rendah dari current dan ditandai semver-major | Jangan downgrade/upgrade otomatis                 |
 
 Dependency path pada installed tree:
 
@@ -42,4 +42,3 @@ Pemilik proyek perlu memilih versi Prisma yang telah diperiksa release note dan 
 ## Status
 
 **FAIL untuk dependency clearance production / NEEDS REVIEW.** Tidak ada perubahan dependency pada Phase 10A.
-

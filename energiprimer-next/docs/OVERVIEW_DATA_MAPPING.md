@@ -25,16 +25,16 @@ Filter `day` memilih baris tanggal yang cocok. Bila tidak ada, Laravel memilih b
 
 ## KPI mapping
 
-| KPI | Laravel source/query | Formula dan unit | Next.js mapping | Parity |
-|---|---|---|---|---|
-| Penerimaan Biomassa | Tabel `Penerimaan → Biomassa` dengan tujuh kolom skema terbaru | Total tujuh pemasok; ton; bulanan | `metrics.biomassReceiptMonthly`, Google adapter | Production memakai agregat semantic; tidak ada fallback `S52`; scan gagal/skema parsial menjadi unavailable |
-| Pemakaian Biomassa | `AC` index 27 pada row 42 | Nilai sel; ton; bulanan | `metrics.biomassConsumptionMonthly`, Google adapter | Formula sama |
-| Pemakaian Batubara | `AB` index 26 pada row 42 | Nilai sel; ton; bulanan | Google: nilai `AB42`; PostgreSQL: `SUM(coal_consumption.coal_used)` pada periode | Google sama; PG adalah padanan schema |
-| Stock Batubara | `AD` index 28 pada baris fokus | Nilai sel; ton; harian | Google: nilai `AD` baris fokus; PG: `coal_stock.closing_stock` tanggal fokus | Formula sama pada Google; PG padanan |
-| Total Pemakaian Solar | `CJ` index 86 pada row 42 | Nilai sel; liter; bulanan | `metrics.solarConsumptionMonthly`, Google adapter | Formula sama |
-| Realisasi Biomassa Kumulatif | `CO` index 91 pada row 59 | Nilai sel; ton; kumulatif sampai periode | `metrics.biomassCumulative`, Google adapter | Formula sama |
-| Progress Target Biomassa | target `CO` row 56 dan realisasi `CO` row 59 | `min(100, realisasi / target * 100)`; persen | `metrics.biomassTargetProgress` dan `target` | Formula sama |
-| Penerimaan Batubara | `I` index 7 pada row 42 | Nilai sel; ton; bulanan | Google: nilai `I42`; PG: `SUM(coal_stock.received)` pada periode | Google sama; PG padanan |
+| KPI                          | Laravel source/query                                           | Formula dan unit                             | Next.js mapping                                                                  | Parity                                                                                                      |
+| ---------------------------- | -------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Penerimaan Biomassa          | Tabel `Penerimaan → Biomassa` dengan tujuh kolom skema terbaru | Total tujuh pemasok; ton; bulanan            | `metrics.biomassReceiptMonthly`, Google adapter                                  | Production memakai agregat semantic; tidak ada fallback `S52`; scan gagal/skema parsial menjadi unavailable |
+| Pemakaian Biomassa           | `AC` index 27 pada row 42                                      | Nilai sel; ton; bulanan                      | `metrics.biomassConsumptionMonthly`, Google adapter                              | Formula sama                                                                                                |
+| Pemakaian Batubara           | `AB` index 26 pada row 42                                      | Nilai sel; ton; bulanan                      | Google: nilai `AB42`; PostgreSQL: `SUM(coal_consumption.coal_used)` pada periode | Google sama; PG adalah padanan schema                                                                       |
+| Stock Batubara               | `AD` index 28 pada baris fokus                                 | Nilai sel; ton; harian                       | Google: nilai `AD` baris fokus; PG: `coal_stock.closing_stock` tanggal fokus     | Formula sama pada Google; PG padanan                                                                        |
+| Total Pemakaian Solar        | `CJ` index 86 pada row 42                                      | Nilai sel; liter; bulanan                    | `metrics.solarConsumptionMonthly`, Google adapter                                | Formula sama                                                                                                |
+| Realisasi Biomassa Kumulatif | `CO` index 91 pada row 59                                      | Nilai sel; ton; kumulatif sampai periode     | `metrics.biomassCumulative`, Google adapter                                      | Formula sama                                                                                                |
+| Progress Target Biomassa     | target `CO` row 56 dan realisasi `CO` row 59                   | `min(100, realisasi / target * 100)`; persen | `metrics.biomassTargetProgress` dan `target`                                     | Formula sama                                                                                                |
+| Penerimaan Batubara          | `I` index 7 pada row 42                                        | Nilai sel; ton; bulanan                      | Google: nilai `I42`; PG: `SUM(coal_stock.received)` pada periode                 | Google sama; PG padanan                                                                                     |
 
 Target fallback Laravel `70020` ton jika nilai target kosong/invalid/<=0 dipertahankan oleh Google adapter. Format target seperti `70.020` atau `70,020` diperlakukan sebagai 70.020 ton sesuai helper Laravel `targetValue`.
 
@@ -42,12 +42,12 @@ Stock card juga menampilkan persentase kapasitas dengan formula `round(stock / 7
 
 ## Daily detail mapping
 
-| Detail | Laravel column | Next.js |
-|---|---|---|
-| Biomassa Unit 1/2/3 | `T/W/Z` index `18/21/24` | `biomassDaily` |
-| Batubara Unit 1/2/3 | `S/V/Y` index `17/20/23` | `coalDaily` |
-| Solar harian | `CJ` index `86` | `metrics.solarConsumptionDaily` |
-| HOP Unit 1/2/3 | `AL/AK/AJ` index `36/35/34` | `hop` |
+| Detail              | Laravel column              | Next.js                         |
+| ------------------- | --------------------------- | ------------------------------- |
+| Biomassa Unit 1/2/3 | `T/W/Z` index `18/21/24`    | `biomassDaily`                  |
+| Batubara Unit 1/2/3 | `S/V/Y` index `17/20/23`    | `coalDaily`                     |
+| Solar harian        | `CJ` index `86`             | `metrics.solarConsumptionDaily` |
+| HOP Unit 1/2/3      | `AL/AK/AJ` index `36/35/34` | `hop`                           |
 
 Nilai harian kosong tetap `null` pada adapter Google. Jumlah konsumsi biomassa harian hanya dijumlahkan dari unit yang hadir; jika seluruh unit kosong, hasilnya `null`. Ini mengikuti `nullableVal` dan `sumNullableValues` Laravel.
 
@@ -77,13 +77,13 @@ Next.js merender chart sebagai SVG server component sehingga tidak menambahkan d
 
 ## Laravel → Next.js feature mapping
 
-| Laravel implementation | Target Next.js implementation | Dependency | Database/API dependency | Complexity | Migration risk |
-|---|---|---|---|---|---|
-| `DashboardController@overview` + `DashboardService` | `getOverviewData` + server page `/dashboard` | Next App Router, Prisma client, native server `fetch` | Google Sheets API atau PostgreSQL existing | High | High: source Google dan cache/fallback harus konsisten |
-| `overview-kpis.blade.php` | `OverviewDashboard`, `OverviewKpiCard` | React, Tailwind | Tidak langsung | Medium | Medium: format/null state harus parity |
-| Chart.js `daily_series` | `EnergyConsumptionChart` SVG | React/SVG native | Data daily series | Medium | Medium: visual berbeda, data contract sama |
-| Filter GET Laravel | HTML GET form pada `/dashboard` | App Router search params | Query period ke source aktif | Low | Medium: fallback tanggal/periode |
-| Target/HOP panel | `TargetPanel`, `HopPanel` | React, Tailwind | Kolom Google; belum ada padanan PG | Medium | High: PostgreSQL tidak memiliki data ini |
+| Laravel implementation                              | Target Next.js implementation                | Dependency                                            | Database/API dependency                    | Complexity | Migration risk                                         |
+| --------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------- | ------------------------------------------ | ---------- | ------------------------------------------------------ |
+| `DashboardController@overview` + `DashboardService` | `getOverviewData` + server page `/dashboard` | Next App Router, Prisma client, native server `fetch` | Google Sheets API atau PostgreSQL existing | High       | High: source Google dan cache/fallback harus konsisten |
+| `overview-kpis.blade.php`                           | `OverviewDashboard`, `OverviewKpiCard`       | React, Tailwind                                       | Tidak langsung                             | Medium     | Medium: format/null state harus parity                 |
+| Chart.js `daily_series`                             | `EnergyConsumptionChart` SVG                 | React/SVG native                                      | Data daily series                          | Medium     | Medium: visual berbeda, data contract sama             |
+| Filter GET Laravel                                  | HTML GET form pada `/dashboard`              | App Router search params                              | Query period ke source aktif               | Low        | Medium: fallback tanggal/periode                       |
+| Target/HOP panel                                    | `TargetPanel`, `HopPanel`                    | React, Tailwind                                       | Kolom Google; belum ada padanan PG         | Medium     | High: PostgreSQL tidak memiliki data ini               |
 
 ## Validation
 
@@ -100,34 +100,34 @@ Read verification tanpa migration/schema write:
 
 Route verification pada query `month=12&year=2025&day=26`:
 
-| Nilai | PostgreSQL query yang dipakai Next.js | Next.js rendered result |
-|---|---:|---:|
-| Pemakaian batubara bulanan | `SUM(coal_consumption.coal_used)` = `91379` ton | `91379` ton (`91.379` display) |
-| Penerimaan batubara bulanan | `SUM(coal_stock.received)` = `41975` ton | `41975` ton (`41.975` display) |
-| Stock tanggal fokus | `coal_stock.closing_stock` = `-360889.96` ton | `-360889.96` ton (display dibulatkan sesuai card) |
-| Batubara Unit 1 tanggal fokus | `1047.7` ton | `1047.7` ton |
-| Batubara Unit 2 tanggal fokus | `1003.64` ton | `1003.64` ton |
-| Batubara Unit 3 tanggal fokus | `923` ton | `923` ton |
+| Nilai                         |           PostgreSQL query yang dipakai Next.js |                           Next.js rendered result |
+| ----------------------------- | ----------------------------------------------: | ------------------------------------------------: |
+| Pemakaian batubara bulanan    | `SUM(coal_consumption.coal_used)` = `91379` ton |                    `91379` ton (`91.379` display) |
+| Penerimaan batubara bulanan   |        `SUM(coal_stock.received)` = `41975` ton |                    `41975` ton (`41.975` display) |
+| Stock tanggal fokus           |   `coal_stock.closing_stock` = `-360889.96` ton | `-360889.96` ton (display dibulatkan sesuai card) |
+| Batubara Unit 1 tanggal fokus |                                    `1047.7` ton |                                      `1047.7` ton |
+| Batubara Unit 2 tanggal fokus |                                   `1003.64` ton |                                     `1003.64` ton |
+| Batubara Unit 3 tanggal fokus |                                       `923` ton |                                         `923` ton |
 
 ### Google Sheets
 
 Validasi source Laravel dan render Next.js dijalankan read-only untuk worksheet `Juli26-BB`, tanggal 28. Request sempat mengembalikan HTTP `503 UNAVAILABLE`, kemudian berhasil saat pengujian diulang.
 
-| Nilai | Laravel result | Next.js result | Status |
-|---|---:|---:|---|
-| Penerimaan biomassa bulanan | `3223.46` ton (baseline lama) | `3223.46` ton; seluruh `7/7` header pemasok terbaru terdeteksi | PASS |
-| Pemakaian biomassa bulanan | `3740.65` ton | `3740.65` ton | PASS |
-| Pemakaian batubara bulanan | `34940.444` ton | `34940.444` ton | PASS |
-| Stock batubara tanggal 28 | `19152.296` ton | `19152.296` ton | PASS |
-| Pemakaian solar harian | `854` liter | `854` liter | PASS |
-| Pemakaian solar bulanan | `24274` liter | `24274` liter | PASS |
-| Realisasi biomassa kumulatif | `29103.77` ton | `29103.77` ton | PASS |
-| Target biomassa | `70020` ton | `70020` ton | PASS |
-| Progress target | `41.564938588974584%` | `41.564938588974584%` | PASS |
-| Penerimaan batubara bulanan | `30084.842` ton | `30084.842` ton | PASS |
-| Biomassa Unit 1/2/3 harian | `74.8 / 47.6 / 61.2` ton | `74.8 / 47.6 / 61.2` ton | PASS |
-| Batubara Unit 1/2/3 harian | `565.739 / 651.344 / 375.487` ton | `565.739 / 651.344 / 375.487` ton | PASS |
-| HOP Unit 1/2/3 | `31.9 / 16 / 10.64` hari | `31.9 / 16 / 10.64` hari | PASS |
+| Nilai                        |                    Laravel result |                                                 Next.js result | Status |
+| ---------------------------- | --------------------------------: | -------------------------------------------------------------: | ------ |
+| Penerimaan biomassa bulanan  |     `3223.46` ton (baseline lama) | `3223.46` ton; seluruh `7/7` header pemasok terbaru terdeteksi | PASS   |
+| Pemakaian biomassa bulanan   |                     `3740.65` ton |                                                  `3740.65` ton | PASS   |
+| Pemakaian batubara bulanan   |                   `34940.444` ton |                                                `34940.444` ton | PASS   |
+| Stock batubara tanggal 28    |                   `19152.296` ton |                                                `19152.296` ton | PASS   |
+| Pemakaian solar harian       |                       `854` liter |                                                    `854` liter | PASS   |
+| Pemakaian solar bulanan      |                     `24274` liter |                                                  `24274` liter | PASS   |
+| Realisasi biomassa kumulatif |                    `29103.77` ton |                                                 `29103.77` ton | PASS   |
+| Target biomassa              |                       `70020` ton |                                                    `70020` ton | PASS   |
+| Progress target              |             `41.564938588974584%` |                                          `41.564938588974584%` | PASS   |
+| Penerimaan batubara bulanan  |                   `30084.842` ton |                                                `30084.842` ton | PASS   |
+| Biomassa Unit 1/2/3 harian   |          `74.8 / 47.6 / 61.2` ton |                                       `74.8 / 47.6 / 61.2` ton | PASS   |
+| Batubara Unit 1/2/3 harian   | `565.739 / 651.344 / 375.487` ton |                              `565.739 / 651.344 / 375.487` ton | PASS   |
+| HOP Unit 1/2/3               |          `31.9 / 16 / 10.64` hari |                                       `31.9 / 16 / 10.64` hari | PASS   |
 
 Chart row validation untuk hari ke-28 juga sama: biomass `183.6` ton (`74.8 + 47.6 + 61.2`) dan batubara `1592.57` ton dari kolom `AB` harian.
 

@@ -5,17 +5,17 @@ Target: Vercel, tanpa project mutation atau deployment.
 
 ## Recommended configuration
 
-| Item | Recommendation | Status |
-| --- | --- | --- |
-| Root Directory | energiprimer-next karena repository juga berisi Laravel backend | REQUIRES MANUAL CONFIGURATION |
-| Framework | Next.js 16.3.3 App Router | PASS |
-| Install command | Default npm install dari package-lock.json | PASS |
-| Build command | npm run build | PASS locally |
-| Start command | Vercel managed; local equivalent npm run start | PASS |
-| Node runtime | Pin a compatible Node 20/22/24 version; local audit used Node 24.x | REQUIRES MANUAL CONFIGURATION |
-| Prisma generation | @prisma/client postinstall generates client; no migration in build | PASS WITH WARNINGS |
-| Runtime | proxy.ts/server modules require Node-compatible runtime | PASS WITH WARNINGS |
-| vercel.json | Not required by current project | PASS |
+| Item              | Recommendation                                                     | Status                        |
+| ----------------- | ------------------------------------------------------------------ | ----------------------------- |
+| Root Directory    | energiprimer-next karena repository juga berisi Laravel backend    | REQUIRES MANUAL CONFIGURATION |
+| Framework         | Next.js 16.3.3 App Router                                          | PASS                          |
+| Install command   | Default npm install dari package-lock.json                         | PASS                          |
+| Build command     | npm run build                                                      | PASS locally                  |
+| Start command     | Vercel managed; local equivalent npm run start                     | PASS                          |
+| Node runtime      | Pin a compatible Node 20/22/24 version; local audit used Node 24.x | REQUIRES MANUAL CONFIGURATION |
+| Prisma generation | @prisma/client postinstall generates client; no migration in build | PASS WITH WARNINGS            |
+| Runtime           | proxy.ts/server modules require Node-compatible runtime            | PASS WITH WARNINGS            |
+| vercel.json       | Not required by current project                                    | PASS                          |
 
 Vercel documents Node.js 20.x, 22.x, and 24.x as available runtimes; choose one explicitly for reproducibility. See [Vercel Node.js versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
@@ -70,4 +70,3 @@ No persistent upload/storage, queue worker, scheduler, or background job require
 ## Status
 
 **READY FOR MANUAL CONFIGURATION, NOT READY FOR DEPLOYMENT.**
-

@@ -29,24 +29,37 @@ export function parseHistoricalTable(
   structure?: StructureAnalysis,
 ): HistoricalParseResult {
   const matches = anchorsForKey(anchors, "biomassCumulative");
-  if (!matches.length) return { cumulative: unavailableValue("Realisasi kumulatif biomassa tidak ditemukan."), historicalYear: null };
+  if (!matches.length)
+    return {
+      cumulative: unavailableValue(
+        "Realisasi kumulatif biomassa tidak ditemukan.",
+      ),
+      historicalYear: null,
+    };
   const preferred = [...matches].sort((a, b) => {
     const aExact = a.matchedLabel === "KUMULATIF PEMAKAIAN BIOMASSA" ? 1 : 0;
     const bExact = b.matchedLabel === "KUMULATIF PEMAKAIAN BIOMASSA" ? 1 : 0;
     const aYear = yearInLabel(a) === year ? 1 : 0;
     const bYear = yearInLabel(b) === year ? 1 : 0;
-    return (bExact + bYear) - (aExact + aYear);
+    return bExact + bYear - (aExact + aYear);
   });
-  const resolutions = preferred.map((anchor) => resolveAnchorValue(
-    anchor,
-    nearestRegion(regions, anchor, "historical") ?? nearestRegion(regions, anchor, "dashboard"),
-    worksheet,
-    structure,
-  ));
-  const result = resolutions.find((resolution) => resolution.available && resolution.value !== null)
-    ?? resolutions.find((resolution) => resolution.status === "malformed")
-    ?? resolutions[0]
-    ?? unavailableValue("Realisasi kumulatif biomassa tidak memiliki nilai valid.");
+  const resolutions = preferred.map((anchor) =>
+    resolveAnchorValue(
+      anchor,
+      nearestRegion(regions, anchor, "historical") ??
+        nearestRegion(regions, anchor, "dashboard"),
+      worksheet,
+      structure,
+    ),
+  );
+  const result =
+    resolutions.find(
+      (resolution) => resolution.available && resolution.value !== null,
+    ) ??
+    resolutions.find((resolution) => resolution.status === "malformed") ??
+    resolutions[0] ??
+    unavailableValue(
+      "Realisasi kumulatif biomassa tidak memiliki nilai valid.",
+    );
   return { cumulative: result, historicalYear: yearInLabel(preferred[0]) };
 }
-

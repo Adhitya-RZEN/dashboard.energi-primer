@@ -27,11 +27,11 @@ Response login gagal generik: “Email atau password tidak valid.”
 
 ## Password recovery dan change password
 
-| Flow | Laravel implementation | Validasi/aturan | Penyimpanan |
-|---|---|---|---|
-| Forgot password | Cari email case-insensitive dan role admin, lalu `Password::sendResetLink` | `email` required + email | `password_reset_tokens`; response sama untuk email dikenal/tidak |
-| Reset password | Native broker `Password::reset` setelah memastikan email milik admin | token, email, password required + confirmed + minimum 12 karakter | password hashed; remember token baru; invalidasi session |
-| Change password | Cek password saat ini dengan `Hash::check`, simpan password baru | current password required; password confirmed + minimum 12 | invalidasi seluruh database session user; logout paksa |
+| Flow            | Laravel implementation                                                     | Validasi/aturan                                                   | Penyimpanan                                                      |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Forgot password | Cari email case-insensitive dan role admin, lalu `Password::sendResetLink` | `email` required + email                                          | `password_reset_tokens`; response sama untuk email dikenal/tidak |
+| Reset password  | Native broker `Password::reset` setelah memastikan email milik admin       | token, email, password required + confirmed + minimum 12 karakter | password hashed; remember token baru; invalidasi session         |
+| Change password | Cek password saat ini dengan `Hash::check`, simpan password baru           | current password required; password confirmed + minimum 12        | invalidasi seluruh database session user; logout paksa           |
 
 Reset token berlaku 60 menit dan throttle broker 60 detik. Route POST terkait juga memakai throttle `6,1` (enam request per menit). Mailer default `.env.example` adalah `log`, sehingga email reset lokal ditulis ke log, bukan dikirim ke SMTP.
 

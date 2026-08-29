@@ -11,7 +11,8 @@ import {
   isPasswordResetThrottled,
 } from "@/lib/password-reset";
 
-const GENERIC_MESSAGE = "Jika email tersebut terdaftar sebagai akun admin, instruksi reset password telah dikirim.";
+const GENERIC_MESSAGE =
+  "Jika email tersebut terdaftar sebagai akun admin, instruksi reset password telah dikirim.";
 
 export type PasswordResetRequestState = {
   message?: string;
@@ -22,7 +23,9 @@ export async function requestPasswordReset(
   _previousState: PasswordResetRequestState,
   formData: FormData,
 ): Promise<PasswordResetRequestState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
 
   if (!email || !email.includes("@")) {
     return { error: "Masukkan alamat email yang valid." };
@@ -45,7 +48,10 @@ export async function requestPasswordReset(
     select: { createdAt: true },
   });
 
-  if (existingToken?.createdAt && isPasswordResetThrottled(existingToken.createdAt)) {
+  if (
+    existingToken?.createdAt &&
+    isPasswordResetThrottled(existingToken.createdAt)
+  ) {
     return { message: GENERIC_MESSAGE };
   }
 
@@ -77,16 +83,22 @@ export async function resetPassword(
   formData: FormData,
 ): Promise<ResetPasswordState> {
   const token = String(formData.get("token") ?? "");
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const passwordConfirmation = String(formData.get("password_confirmation") ?? "");
+  const passwordConfirmation = String(
+    formData.get("password_confirmation") ?? "",
+  );
 
   if (!token || !email || !email.includes("@")) {
     return { error: "Link reset password tidak valid atau sudah kedaluwarsa." };
   }
 
   if (password.length < 12 || password !== passwordConfirmation) {
-    return { error: "Password minimal 12 karakter dan harus dikonfirmasi ulang." };
+    return {
+      error: "Password minimal 12 karakter dan harus dikonfirmasi ulang.",
+    };
   }
 
   const resetRecord = await prisma.passwordResetToken.findFirst({
@@ -127,5 +139,7 @@ export async function resetPassword(
     prisma.passwordResetToken.delete({ where: { email: resetRecord.email } }),
   ]);
 
-  return { message: "Password berhasil direset. Silakan login dengan password baru." };
+  return {
+    message: "Password berhasil direset. Silakan login dengan password baru.",
+  };
 }

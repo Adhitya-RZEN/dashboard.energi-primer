@@ -57,7 +57,10 @@ export const DASHBOARD_FIELD_DEFINITIONS: readonly DynamicFieldDefinition[] = [
     field: "coalConsumptionMonthly",
     key: "coalConsumptionMonthly",
     label: "TOTAL PEMAKAIAN BATUBARA BULANAN",
-    aliases: ["TOTAL PEMAKAIAN BATU BARA BULANAN", "PEMAKAIAN BATUBARA BULANAN"],
+    aliases: [
+      "TOTAL PEMAKAIAN BATU BARA BULANAN",
+      "PEMAKAIAN BATUBARA BULANAN",
+    ],
     tableKind: "dashboard",
     expectedUnits: unit.ton,
   },
@@ -65,7 +68,10 @@ export const DASHBOARD_FIELD_DEFINITIONS: readonly DynamicFieldDefinition[] = [
     field: "coalReceiptMonthly",
     key: "coalReceiptMonthly",
     label: "TOTAL PENERIMAAN BATUBARA BULANAN",
-    aliases: ["TOTAL PENERIMAAN BATU BARA BULANAN", "PENERIMAAN BATUBARA BULANAN"],
+    aliases: [
+      "TOTAL PENERIMAAN BATU BARA BULANAN",
+      "PENERIMAAN BATUBARA BULANAN",
+    ],
     tableKind: "dashboard",
     expectedUnits: unit.ton,
   },
@@ -228,4 +234,3 @@ export const DASHBOARD_STRUCTURAL_DEFINITIONS: readonly AnchorDefinition[] = [
     match: (value) => /^(?:TOTAL|PEMAKAIAN)\s+\d{4}$/.test(value),
   },
 ];
-

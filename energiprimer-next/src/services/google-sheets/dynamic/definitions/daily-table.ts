@@ -1,7 +1,15 @@
 export const DAILY_HEADER_ALIASES = {
   date: ["TANGGAL", "TGL", "DATE"],
   unit: ["UNIT", "UNIT 1", "UNIT 2", "UNIT 3"],
-  biomass: ["BIOMASSA", "BIOMASS", "SAWDUST", "WOODCHIP", "LRUK", "SRF", "BONGGOL"],
+  biomass: [
+    "BIOMASSA",
+    "BIOMASS",
+    "SAWDUST",
+    "WOODCHIP",
+    "LRUK",
+    "SRF",
+    "BONGGOL",
+  ],
   coal: ["BATUBARA", "BATU BARA", "COAL"],
   solar: ["SOLAR", "HSD"],
   total: ["TOTAL", "TOTAL (TON)", "TOTAL TON"],
@@ -22,4 +30,3 @@ export const DAILY_TABLE_HINTS = [
   "STOK",
   "HOP",
 ] as const;
-

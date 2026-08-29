@@ -59,20 +59,20 @@ backend/
 
 ## Modul yang benar-benar ditemukan
 
-| Modul | Implementasi aktual | Kondisi |
-|---|---|---|
-| Authentication | Login admin, logout, forgot/reset password, change password | Aktif |
-| Authorization | Middleware `EnsureAdmin`, role string `admin` | Aktif, hanya satu tingkat izin |
-| Dashboard | 6 halaman dashboard melalui satu `DashboardController` | Aktif, sumber Google Sheets |
-| Data kualitas batubara | Query `coal_quality` + filter + pagination | Aktif |
-| Monitoring | View dan filter UI; controller mengirim data kosong | Placeholder |
-| Laporan | Agregasi bulanan/summary `coal_consumption` | Read-only; generate/download dummy |
-| Pengaturan | Menampilkan profil; ubah password melalui route auth | Profil readonly |
-| Import | Seeder CSV; tidak ada endpoint/UI import aktif | Seeder only |
-| Google Sheets | Read-only API v4, parser range tetap | Aktif untuk dashboard |
-| PostgreSQL | Eloquent/query builder dan konfigurasi `pgsql` | Aktif untuk sebagian halaman |
-| Queue/scheduler | Tabel queue dan config database tersedia | Tidak ada Job/Schedule aktual |
-| File upload/storage | Konfigurasi filesystem tersedia | Tidak ada pemakaian aplikasi |
+| Modul                  | Implementasi aktual                                         | Kondisi                            |
+| ---------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| Authentication         | Login admin, logout, forgot/reset password, change password | Aktif                              |
+| Authorization          | Middleware `EnsureAdmin`, role string `admin`               | Aktif, hanya satu tingkat izin     |
+| Dashboard              | 6 halaman dashboard melalui satu `DashboardController`      | Aktif, sumber Google Sheets        |
+| Data kualitas batubara | Query `coal_quality` + filter + pagination                  | Aktif                              |
+| Monitoring             | View dan filter UI; controller mengirim data kosong         | Placeholder                        |
+| Laporan                | Agregasi bulanan/summary `coal_consumption`                 | Read-only; generate/download dummy |
+| Pengaturan             | Menampilkan profil; ubah password melalui route auth        | Profil readonly                    |
+| Import                 | Seeder CSV; tidak ada endpoint/UI import aktif              | Seeder only                        |
+| Google Sheets          | Read-only API v4, parser range tetap                        | Aktif untuk dashboard              |
+| PostgreSQL             | Eloquent/query builder dan konfigurasi `pgsql`              | Aktif untuk sebagian halaman       |
+| Queue/scheduler        | Tabel queue dan config database tersedia                    | Tidak ada Job/Schedule aktual      |
+| File upload/storage    | Konfigurasi filesystem tersedia                             | Tidak ada pemakaian aplikasi       |
 
 ## Database dan data
 

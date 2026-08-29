@@ -28,13 +28,22 @@ export type DailyParseResult = {
   warnings: string[];
 };
 
-function cellAt(cells: readonly ScannedCell[], row: number, column: number | null) {
+function cellAt(
+  cells: readonly ScannedCell[],
+  row: number,
+  column: number | null,
+) {
   return column === null
     ? null
-    : cells.find((cell) => cell.row === row && cell.column === column) ?? null;
+    : (cells.find((cell) => cell.row === row && cell.column === column) ??
+        null);
 }
 
-function numberAt(cells: readonly ScannedCell[], row: number, column: number | null) {
+function numberAt(
+  cells: readonly ScannedCell[],
+  row: number,
+  column: number | null,
+) {
   const cell = cellAt(cells, row, column);
   return cell ? parseNumericValue(cell.rawValue).value : null;
 }
@@ -44,12 +53,18 @@ function sumNullable(values: readonly (number | null)[]) {
   return present.length ? present.reduce((sum, value) => sum + value, 0) : null;
 }
 
-function usableScore(path: HeaderPath, dataRows: readonly number[], cells: readonly ScannedCell[]) {
+function usableScore(
+  path: HeaderPath,
+  dataRows: readonly number[],
+  cells: readonly ScannedCell[],
+) {
   const numericCount = dataRows.filter((row) => {
     const cell = cellAt(cells, row, path.cell.column);
     return cell && parseNumericValue(cell.rawValue).status === "numeric";
   }).length;
-  return numericCount * 10 + (path.unit ? 5 : 0) + (path.labels.length > 1 ? 2 : 0);
+  return (
+    numericCount * 10 + (path.unit ? 5 : 0) + (path.labels.length > 1 ? 2 : 0)
+  );
 }
 
 function choosePath(
@@ -58,9 +73,15 @@ function choosePath(
   cells: readonly ScannedCell[],
   predicate: (path: HeaderPath) => boolean,
 ) {
-  return paths
-    .filter(predicate)
-    .sort((a, b) => usableScore(b, dataRows, cells) - usableScore(a, dataRows, cells) || a.cell.column - b.cell.column)[0] ?? null;
+  return (
+    paths
+      .filter(predicate)
+      .sort(
+        (a, b) =>
+          usableScore(b, dataRows, cells) - usableScore(a, dataRows, cells) ||
+          a.cell.column - b.cell.column,
+      )[0] ?? null
+  );
 }
 
 function unitPath(
@@ -69,17 +90,35 @@ function unitPath(
   unitNumber: number,
   cells: readonly ScannedCell[],
 ) {
-  const candidates = resourceColumns(structure, resource, unitNumber)
-    .filter((path) => !path.isTotal && !path.isStock && !path.isHop);
-  const direct = candidates.filter((path) =>
-    path.unit === "TON"
-    && !path.labels.some((label) => /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label)),
+  const candidates = resourceColumns(structure, resource, unitNumber).filter(
+    (path) => !path.isTotal && !path.isStock && !path.isHop,
   );
-  return choosePath(direct.length ? direct : candidates, structure.dataRows, cells, () => true);
+  const direct = candidates.filter(
+    (path) =>
+      path.unit === "TON" &&
+      !path.labels.some((label) =>
+        /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label),
+      ),
+  );
+  return choosePath(
+    direct.length ? direct : candidates,
+    structure.dataRows,
+    cells,
+    () => true,
+  );
 }
 
-function hopPath(structure: StructureAnalysis, unitNumber: number, cells: readonly ScannedCell[]) {
-  return choosePath(structure.headerPaths, structure.dataRows, cells, (path) => path.isHop && path.unitNumber === unitNumber);
+function hopPath(
+  structure: StructureAnalysis,
+  unitNumber: number,
+  cells: readonly ScannedCell[],
+) {
+  return choosePath(
+    structure.headerPaths,
+    structure.dataRows,
+    cells,
+    (path) => path.isHop && path.unitNumber === unitNumber,
+  );
 }
 
 function dailyRecord(
@@ -92,11 +131,20 @@ function dailyRecord(
   const dateCell = cellAt(cells, row, columns.date);
   const rawDay = dateCell?.rawValue;
   const date = dateFromRaw(rawDay, month, year);
-  const parsedDay = rawDay === undefined ? null : (() => {
-    const text = String(rawDay).trim().match(/^(\d{1,2})/);
-    const value = text ? Number(text[1]) : typeof rawDay === "number" ? Math.trunc(rawDay) : null;
-    return value !== null && value >= 1 && value <= 31 ? value : null;
-  })();
+  const parsedDay =
+    rawDay === undefined
+      ? null
+      : (() => {
+          const text = String(rawDay)
+            .trim()
+            .match(/^(\d{1,2})/);
+          const value = text
+            ? Number(text[1])
+            : typeof rawDay === "number"
+              ? Math.trunc(rawDay)
+              : null;
+          return value !== null && value >= 1 && value <= 31 ? value : null;
+        })();
   if (date === null || parsedDay === null) return null;
 
   const biomassUnit1 = numberAt(cells, row, columns.biomassUnit1);
@@ -129,22 +177,50 @@ export function parseDailyTable(
   year: number,
 ): DailyParseResult {
   const paths = structure.headerPaths;
-  const biomass = [1, 2, 3].map((unit) => unitPath(structure, "biomass", unit, cells));
-  const coal = [1, 2, 3].map((unit) => unitPath(structure, "coal", unit, cells));
+  const biomass = [1, 2, 3].map((unit) =>
+    unitPath(structure, "biomass", unit, cells),
+  );
+  const coal = [1, 2, 3].map((unit) =>
+    unitPath(structure, "coal", unit, cells),
+  );
   const hop = [1, 2, 3].map((unit) => hopPath(structure, unit, cells));
-  const coalTotal = choosePath(paths, structure.dataRows, cells, (path) => path.resource === "coal" && path.isTotal && !path.isStock && !path.isHop);
-  const stockCandidates = paths.filter((path) => path.resource === "coal" && path.isStock);
+  const coalTotal = choosePath(
+    paths,
+    structure.dataRows,
+    cells,
+    (path) =>
+      path.resource === "coal" && path.isTotal && !path.isStock && !path.isHop,
+  );
+  const stockCandidates = paths.filter(
+    (path) => path.resource === "coal" && path.isStock,
+  );
   const stock = choosePath(
-    stockCandidates.filter((path) => path.labels.some((label) => /STOK AKHIR|STOCK AKHIR/.test(label))).length
-      ? stockCandidates.filter((path) => path.labels.some((label) => /STOK AKHIR|STOCK AKHIR/.test(label)))
+    stockCandidates.filter((path) =>
+      path.labels.some((label) => /STOK AKHIR|STOCK AKHIR/.test(label)),
+    ).length
+      ? stockCandidates.filter((path) =>
+          path.labels.some((label) => /STOK AKHIR|STOCK AKHIR/.test(label)),
+        )
       : stockCandidates,
     structure.dataRows,
     cells,
     () => true,
   );
-  const solar = choosePath(paths, structure.dataRows, cells, (path) => path.resource === "solar" && path.isTotal);
-  const solarReceipt = choosePath(paths, structure.dataRows, cells, (path) =>
-    path.resource === "solar" && path.labels.some((label) => /TOP UP|INPUT|PENERIMAAN|RECEIPT/.test(label)),
+  const solar = choosePath(
+    paths,
+    structure.dataRows,
+    cells,
+    (path) => path.resource === "solar" && path.isTotal,
+  );
+  const solarReceipt = choosePath(
+    paths,
+    structure.dataRows,
+    cells,
+    (path) =>
+      path.resource === "solar" &&
+      path.labels.some((label) =>
+        /TOP UP|INPUT|PENERIMAAN|RECEIPT/.test(label),
+      ),
   );
 
   const columns = {
@@ -164,8 +240,13 @@ export function parseDailyTable(
     solarReceipt: solarReceipt?.cell.column ?? null,
   } satisfies DailyParseResult["columns"];
   const warnings: string[] = [];
-  const missing = Object.entries(columns).filter(([key, value]) => value === null && key !== "solarReceipt").map(([key]) => key);
-  if (missing.length) warnings.push(`Kolom semantic daily tidak ditemukan: ${missing.join(", ")}.`);
+  const missing = Object.entries(columns)
+    .filter(([key, value]) => value === null && key !== "solarReceipt")
+    .map(([key]) => key);
+  if (missing.length)
+    warnings.push(
+      `Kolom semantic daily tidak ditemukan: ${missing.join(", ")}.`,
+    );
   const series = structure.dataRows
     .map((row) => dailyRecord(cells, row, columns, month, year))
     .filter((record): record is DynamicDailyRecord => record !== null);

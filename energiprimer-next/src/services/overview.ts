@@ -4,8 +4,16 @@ import { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 
 import { prisma } from "@/lib/prisma";
-import { getGoogleSheetsOverviewData, isGoogleSheetsOverviewConfigured } from "@/services/google-sheets-overview";
-import type { OverviewData, OverviewMetric, OverviewQuery, OverviewUnitValue } from "@/types/overview";
+import {
+  getGoogleSheetsOverviewData,
+  isGoogleSheetsOverviewConfigured,
+} from "@/services/google-sheets-overview";
+import type {
+  OverviewData,
+  OverviewMetric,
+  OverviewQuery,
+  OverviewUnitValue,
+} from "@/types/overview";
 
 const MONTH_NAMES = [
   "Januari",
@@ -44,10 +52,15 @@ function decimalToNumber(value: Prisma.Decimal | null | undefined) {
 
 function sum(values: Array<number | null>) {
   const present = values.filter((value): value is number => value !== null);
-  return present.length ? present.reduce((total, value) => total + value, 0) : null;
+  return present.length
+    ? present.reduce((total, value) => total + value, 0)
+    : null;
 }
 
-function unitLabel(name: string | null | undefined, code: string | null | undefined) {
+function unitLabel(
+  name: string | null | undefined,
+  code: string | null | undefined,
+) {
   return name?.trim() || code?.trim() || "Unit";
 }
 
@@ -86,13 +99,21 @@ export function normalizeOverviewQuery(input: {
   const currentYear = now.getUTCFullYear();
   const monthValue = Number.parseInt(input.month ?? "", 10);
   const yearValue = Number.parseInt(input.year ?? "", 10);
-  const dayValue = input.day === undefined || input.day === "" ? null : Number.parseInt(input.day, 10);
-  const month = Number.isFinite(monthValue) ? Math.min(12, Math.max(1, monthValue)) : now.getUTCMonth() + 1;
-  const year = Number.isFinite(yearValue) ? Math.min(currentYear + 1, Math.max(2024, yearValue)) : currentYear;
+  const dayValue =
+    input.day === undefined || input.day === ""
+      ? null
+      : Number.parseInt(input.day, 10);
+  const month = Number.isFinite(monthValue)
+    ? Math.min(12, Math.max(1, monthValue))
+    : now.getUTCMonth() + 1;
+  const year = Number.isFinite(yearValue)
+    ? Math.min(currentYear + 1, Math.max(2024, yearValue))
+    : currentYear;
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const day = dayValue === null || !Number.isFinite(dayValue)
-    ? null
-    : Math.min(daysInMonth, Math.max(1, dayValue));
+  const day =
+    dayValue === null || !Number.isFinite(dayValue)
+      ? null
+      : Math.min(daysInMonth, Math.max(1, dayValue));
 
   return { month, year, day };
 }
@@ -123,7 +144,9 @@ function unavailableMetric(unit: string, note: string): OverviewMetric {
   };
 }
 
-async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewData> {
+async function getPostgresOverviewData(
+  query: OverviewQuery,
+): Promise<OverviewData> {
   let effectiveQuery = query;
   let [consumptionRows, stockRows] = await loadOverviewRows(effectiveQuery);
   let isFallback = false;
@@ -141,31 +164,58 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
         select: { date: true },
       }),
     ]);
-    const availableMonths = [...new Set([
-      ...fallbackConsumption.map((row) => monthKey(row.date)),
-      ...fallbackStock.map((row) => monthKey(row.date)),
-    ])].filter((value) => value <= `${query.year}-${String(query.month).padStart(2, "0")}`).sort();
+    const availableMonths = [
+      ...new Set([
+        ...fallbackConsumption.map((row) => monthKey(row.date)),
+        ...fallbackStock.map((row) => monthKey(row.date)),
+      ]),
+    ]
+      .filter(
+        (value) =>
+          value <= `${query.year}-${String(query.month).padStart(2, "0")}`,
+      )
+      .sort();
     const fallbackMonth = availableMonths.at(-1);
 
     if (fallbackMonth) {
-      effectiveQuery = { month: Number(fallbackMonth.slice(5)), year: Number(fallbackMonth.slice(0, 4)), day: null };
+      effectiveQuery = {
+        month: Number(fallbackMonth.slice(5)),
+        year: Number(fallbackMonth.slice(0, 4)),
+        day: null,
+      };
       [consumptionRows, stockRows] = await loadOverviewRows(effectiveQuery);
       isFallback = true;
     }
   }
 
-  const requestedFocusKey = dateKey(toUtcDate(effectiveQuery.year, effectiveQuery.month, effectiveQuery.day ?? new Date().getUTCDate()));
-  const availableDates = [...new Set([
-    ...consumptionRows.map((row) => dateKey(row.date)),
-    ...stockRows.map((row) => dateKey(row.date)),
-  ])].sort();
+  const requestedFocusKey = dateKey(
+    toUtcDate(
+      effectiveQuery.year,
+      effectiveQuery.month,
+      effectiveQuery.day ?? new Date().getUTCDate(),
+    ),
+  );
+  const availableDates = [
+    ...new Set([
+      ...consumptionRows.map((row) => dateKey(row.date)),
+      ...stockRows.map((row) => dateKey(row.date)),
+    ]),
+  ].sort();
   const focusDate = availableDates.includes(requestedFocusKey)
     ? requestedFocusKey
-    : [...availableDates].reverse().find((value) => value <= requestedFocusKey) ?? availableDates.at(-1) ?? null;
+    : ([...availableDates]
+        .reverse()
+        .find((value) => value <= requestedFocusKey) ??
+      availableDates.at(-1) ??
+      null);
 
-  const monthlyCoal = sum(consumptionRows.map((row) => decimalToNumber(row.coalUsed))) ?? 0;
-  const monthlyReceived = sum(stockRows.map((row) => decimalToNumber(row.received))) ?? 0;
-  const focusConsumption = consumptionRows.filter((row) => dateKey(row.date) === focusDate);
+  const monthlyCoal =
+    sum(consumptionRows.map((row) => decimalToNumber(row.coalUsed))) ?? 0;
+  const monthlyReceived =
+    sum(stockRows.map((row) => decimalToNumber(row.received))) ?? 0;
+  const focusConsumption = consumptionRows.filter(
+    (row) => dateKey(row.date) === focusDate,
+  );
   const focusStock = stockRows.find((row) => dateKey(row.date) === focusDate);
 
   const unitValues = new Map<string, number | null>();
@@ -185,7 +235,10 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
   }
 
   const stockValue = decimalToNumber(focusStock?.closingStock);
-  const stockProgress = stockValue === null ? null : Math.min(100, Math.round((stockValue / STOCK_CAPACITY_TON) * 100));
+  const stockProgress =
+    stockValue === null
+      ? null
+      : Math.min(100, Math.round((stockValue / STOCK_CAPACITY_TON) * 100));
   const coalDaily: OverviewUnitValue[] = [...unitValues.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([unit, value]) => ({ unit, value }));
@@ -208,8 +261,14 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
       note: "Metrik biomassa, solar, HOP, dan target biomassa tetap unavailable karena tidak ada padanan kolom pada schema PostgreSQL.",
     },
     metrics: {
-      biomassReceiptMonthly: unavailableMetric("ton", "Laravel mengambil S52 dari Google Sheets."),
-      biomassConsumptionMonthly: unavailableMetric("ton", "Laravel menghitung SUM(J42:Q42) dari Google Sheets."),
+      biomassReceiptMonthly: unavailableMetric(
+        "ton",
+        "Laravel mengambil S52 dari Google Sheets.",
+      ),
+      biomassConsumptionMonthly: unavailableMetric(
+        "ton",
+        "Laravel menghitung SUM(J42:Q42) dari Google Sheets.",
+      ),
       coalConsumptionMonthly: {
         value: monthlyCoal,
         unit: "ton",
@@ -225,11 +284,26 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
         progressPercent: stockProgress,
         note: "Padanan PostgreSQL; source Laravel Overview adalah kolom AD pada baris harian.",
       },
-      solarConsumptionDaily: unavailableMetric("liter", "Laravel mengambil CJ dari baris harian Google Sheets."),
-      solarConsumptionMonthly: unavailableMetric("liter", "Laravel mengambil CJ42 dari Google Sheets."),
-      solarReceiptMonthly: unavailableMetric("liter", "Laravel mengambil CC42 dari Google Sheets."),
-      biomassCumulative: unavailableMetric("ton", "Laravel mengambil CO row 59 dari Google Sheets."),
-      biomassTargetProgress: unavailableMetric("%", "Laravel memakai target CO row 56 dan realisasi CO row 59."),
+      solarConsumptionDaily: unavailableMetric(
+        "liter",
+        "Laravel mengambil CJ dari baris harian Google Sheets.",
+      ),
+      solarConsumptionMonthly: unavailableMetric(
+        "liter",
+        "Laravel mengambil CJ42 dari Google Sheets.",
+      ),
+      solarReceiptMonthly: unavailableMetric(
+        "liter",
+        "Laravel mengambil CC42 dari Google Sheets.",
+      ),
+      biomassCumulative: unavailableMetric(
+        "ton",
+        "Laravel mengambil CO row 59 dari Google Sheets.",
+      ),
+      biomassTargetProgress: unavailableMetric(
+        "%",
+        "Laravel memakai target CO row 56 dan realisasi CO row 59.",
+      ),
       coalReceiptMonthly: {
         value: monthlyReceived,
         unit: "ton",
@@ -264,7 +338,9 @@ async function getPostgresOverviewData(query: OverviewQuery): Promise<OverviewDa
   };
 }
 
-export async function getOverviewData(query: OverviewQuery): Promise<OverviewData> {
+export async function getOverviewData(
+  query: OverviewQuery,
+): Promise<OverviewData> {
   if (isGoogleSheetsOverviewConfigured()) {
     return getGoogleSheetsOverviewData(query);
   }

@@ -12,42 +12,42 @@ Fondasi dan local build berhasil diverifikasi, tetapi production belum siap kare
 
 ## Production Readiness
 
-| Area | Status |
-| --- | --- |
-| Project Structure | PASS WITH WARNINGS |
-| Environment | FAIL / NEEDS CONFIGURATION |
-| Git & Secrets | PASS WITH WARNINGS |
-| Dependencies | FAIL |
-| TypeScript | PASS |
-| Build | PASS |
-| Authentication | PASS WITH WARNINGS |
-| Authorization | PASS WITH WARNINGS |
-| Mail | BLOCKED |
-| PostgreSQL | BLOCKED |
-| Prisma | PASS WITH WARNINGS |
-| Google Sheets | BLOCKED |
-| API Security | PASS WITH WARNINGS |
-| Error Handling | PASS WITH WARNINGS |
-| Performance | PASS WITH WARNINGS |
-| Vercel Compatibility | NOT READY |
+| Area                 | Status                     |
+| -------------------- | -------------------------- |
+| Project Structure    | PASS WITH WARNINGS         |
+| Environment          | FAIL / NEEDS CONFIGURATION |
+| Git & Secrets        | PASS WITH WARNINGS         |
+| Dependencies         | FAIL                       |
+| TypeScript           | PASS                       |
+| Build                | PASS                       |
+| Authentication       | PASS WITH WARNINGS         |
+| Authorization        | PASS WITH WARNINGS         |
+| Mail                 | BLOCKED                    |
+| PostgreSQL           | BLOCKED                    |
+| Prisma               | PASS WITH WARNINGS         |
+| Google Sheets        | BLOCKED                    |
+| API Security         | PASS WITH WARNINGS         |
+| Error Handling       | PASS WITH WARNINGS         |
+| Performance          | PASS WITH WARNINGS         |
+| Vercel Compatibility | NOT READY                  |
 
 ## Phase 10A Matrix
 
-| Area | Status | Severity | Notes |
-| --- | --- | --- | --- |
-| Authentication | PASS WITH WARNINGS | MEDIUM | Full valid-login/logout regression needs isolated test environment. |
-| Authorization | PASS | MEDIUM | Server-side admin checks are present. |
-| PostgreSQL | BLOCKED | HIGH | Production endpoint/pooler/SSL not configured for Vercel. |
-| Prisma | PASS WITH WARNINGS | HIGH | Three HIGH npm audit findings require manual remediation decision. |
-| Google Sheets | BLOCKED | HIGH | Production credential provisioning is unresolved. |
-| Mail | BLOCKED | HIGH | MAIL_PROVIDER_REQUIRED for forgot/reset password. |
-| Environment | BLOCKED | HIGH | Production values are not provisioned in the audited environment. |
-| Secrets | PASS WITH WARNINGS | HIGH | No tracked credential path or public bundle exposure found; local secrets remain ignored. |
-| API Security | PASS WITH WARNINGS | MEDIUM | Public reset rate-limit policy and trusted forwarded IP need review. |
-| Error Handling | PASS WITH WARNINGS | LOW | Generic UI errors pass; provider/runtime log policy needs production review. |
-| Performance | PASS WITH WARNINGS | MEDIUM | Local code review passes; preview measurement and some full navigations remain. |
-| Vercel Compatibility | READY FOR MANUAL CONFIGURATION | HIGH | Root Directory, runtime, database, Google, and mail require manual setup. |
-| Build | PASS | LOW | Lint, typecheck, and production build pass locally. |
+| Area                 | Status                         | Severity | Notes                                                                                     |
+| -------------------- | ------------------------------ | -------- | ----------------------------------------------------------------------------------------- |
+| Authentication       | PASS WITH WARNINGS             | MEDIUM   | Full valid-login/logout regression needs isolated test environment.                       |
+| Authorization        | PASS                           | MEDIUM   | Server-side admin checks are present.                                                     |
+| PostgreSQL           | BLOCKED                        | HIGH     | Production endpoint/pooler/SSL not configured for Vercel.                                 |
+| Prisma               | PASS WITH WARNINGS             | HIGH     | Three HIGH npm audit findings require manual remediation decision.                        |
+| Google Sheets        | BLOCKED                        | HIGH     | Production credential provisioning is unresolved.                                         |
+| Mail                 | BLOCKED                        | HIGH     | MAIL_PROVIDER_REQUIRED for forgot/reset password.                                         |
+| Environment          | BLOCKED                        | HIGH     | Production values are not provisioned in the audited environment.                         |
+| Secrets              | PASS WITH WARNINGS             | HIGH     | No tracked credential path or public bundle exposure found; local secrets remain ignored. |
+| API Security         | PASS WITH WARNINGS             | MEDIUM   | Public reset rate-limit policy and trusted forwarded IP need review.                      |
+| Error Handling       | PASS WITH WARNINGS             | LOW      | Generic UI errors pass; provider/runtime log policy needs production review.              |
+| Performance          | PASS WITH WARNINGS             | MEDIUM   | Local code review passes; preview measurement and some full navigations remain.           |
+| Vercel Compatibility | READY FOR MANUAL CONFIGURATION | HIGH     | Root Directory, runtime, database, Google, and mail require manual setup.                 |
+| Build                | PASS                           | LOW      | Lint, typecheck, and production build pass locally.                                       |
 
 ## Audit evidence
 
@@ -69,26 +69,26 @@ Auth end-to-end script tidak dijalankan pada Phase 10A karena script tersebut me
 
 ## Security findings
 
-| Severity | Finding | Status |
-| --- | --- | --- |
-| CRITICAL | Tidak ada credential exposure kritis yang terkonfirmasi melalui static scan | PASS |
-| HIGH | `DATABASE_URL` local loopback tidak dapat dipakai oleh Vercel; production endpoint belum dikonfigurasi | BLOCKER |
-| HIGH | Google Sheets service masih bergantung pada credential file lokal yang tidak tersedia otomatis di Vercel | BLOCKER |
-| HIGH | `AUTH_MAILER=log` hanya development; mail delivery/reset password production belum dikonfigurasi | REQUIRED FIX |
-| HIGH | Audit npm menemukan advisory pada dependency chain Prisma | REQUIRES MANUAL APPROVAL |
-| MEDIUM | Auth.js beta, JWT cutover, operator role, dan session policy legacy perlu regression/keputusan manual | NEEDS REVIEW |
-| MEDIUM | Security headers eksplisit belum dikonfigurasi pada next.config.ts | NEEDS REVIEW |
-| LOW | Beberapa dokumen historis Phase 0-9 masih menyebut keadaan sebelum Recharts/auth/foundation terbaru | DOCUMENTATION DEBT |
+| Severity | Finding                                                                                                  | Status                   |
+| -------- | -------------------------------------------------------------------------------------------------------- | ------------------------ |
+| CRITICAL | Tidak ada credential exposure kritis yang terkonfirmasi melalui static scan                              | PASS                     |
+| HIGH     | `DATABASE_URL` local loopback tidak dapat dipakai oleh Vercel; production endpoint belum dikonfigurasi   | BLOCKER                  |
+| HIGH     | Google Sheets service masih bergantung pada credential file lokal yang tidak tersedia otomatis di Vercel | BLOCKER                  |
+| HIGH     | `AUTH_MAILER=log` hanya development; mail delivery/reset password production belum dikonfigurasi         | REQUIRED FIX             |
+| HIGH     | Audit npm menemukan advisory pada dependency chain Prisma                                                | REQUIRES MANUAL APPROVAL |
+| MEDIUM   | Auth.js beta, JWT cutover, operator role, dan session policy legacy perlu regression/keputusan manual    | NEEDS REVIEW             |
+| MEDIUM   | Security headers eksplisit belum dikonfigurasi pada next.config.ts                                       | NEEDS REVIEW             |
+| LOW      | Beberapa dokumen historis Phase 0-9 masih menyebut keadaan sebelum Recharts/auth/foundation terbaru      | DOCUMENTATION DEBT       |
 
 Static scan tidak menemukan `DATABASE_URL`, `AUTH_SECRET`, Google secret names/values, private-key marker, password hash, atau token field pada public client chunks. Nilai environment dan isi credential tidak dicantumkan pada laporan.
 
 ## Dependency findings
 
-| Package/chain | Severity | Issue | Recommendation |
-| --- | --- | --- | --- |
-| `deepmerge-ts` melalui `@prisma/config` dan `prisma` 6.19.3 | HIGH | Advisory recursive stack exhaustion yang dilaporkan `npm audit` | Review advisory dan compatibility; pilih patch/upgrade Prisma yang disetujui, lalu regression test. Jangan downgrade/upgrade otomatis. |
-| `@prisma/config` 6.19.3 | HIGH | Terkena dependency chain audit | Manual Prisma release review. |
-| `prisma` 6.19.3 | HIGH | Terkena dependency chain audit | Manual Prisma release review. |
+| Package/chain                                               | Severity | Issue                                                           | Recommendation                                                                                                                         |
+| ----------------------------------------------------------- | -------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `deepmerge-ts` melalui `@prisma/config` dan `prisma` 6.19.3 | HIGH     | Advisory recursive stack exhaustion yang dilaporkan `npm audit` | Review advisory dan compatibility; pilih patch/upgrade Prisma yang disetujui, lalu regression test. Jangan downgrade/upgrade otomatis. |
+| `@prisma/config` 6.19.3                                     | HIGH     | Terkena dependency chain audit                                  | Manual Prisma release review.                                                                                                          |
+| `prisma` 6.19.3                                             | HIGH     | Terkena dependency chain audit                                  | Manual Prisma release review.                                                                                                          |
 
 `@prisma/client` dan `prisma` tetap 6.19.3 pada Phase 10. Major/minor dependency change tidak dilakukan.
 

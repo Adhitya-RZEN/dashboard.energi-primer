@@ -21,13 +21,14 @@ export type CandidateScoreInput = {
 };
 
 export function scoreCandidate(input: CandidateScoreInput) {
-  let score = input.matchType === "exact"
-    ? 40
-    : input.matchType === "alias"
-      ? 30
-      : input.matchType === "context"
-        ? 20
-        : 15;
+  let score =
+    input.matchType === "exact"
+      ? 40
+      : input.matchType === "alias"
+        ? 30
+        : input.matchType === "context"
+          ? 20
+          : 15;
   if (input.sameRow) score += 15;
   if (input.sameColumn) score += 15;
   if (input.adjacent) score += 20;
@@ -50,7 +51,11 @@ export function confidenceLevel(confidence: number): ConfidenceLevel {
   return "UNRESOLVED";
 }
 
-export function resolvedSource(sheet: string, address: string, anchor: DetectedAnchor): ResolvedSource {
+export function resolvedSource(
+  sheet: string,
+  address: string,
+  anchor: DetectedAnchor,
+): ResolvedSource {
   return { sheet, address, anchor: anchor.cell.address };
 }
 
@@ -89,4 +94,3 @@ export function resolvedValue(
     note,
   };
 }
-

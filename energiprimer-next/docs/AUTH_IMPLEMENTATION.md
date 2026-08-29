@@ -51,22 +51,22 @@ atau disimpan plaintext.
 
 ## Laravel mapping
 
-| Laravel behavior | Next.js implementation |
-|---|---|
-| `Auth::attempt` dengan `email`, `password`, `role=admin` | Auth.js Credentials `authorize()` + Prisma user query + bcrypt compare |
-| Session guard `web` | Auth.js JWT httpOnly cookie, max age 120 menit |
-| Session regenerate saat login | Auth.js menerbitkan session cookie baru |
-| `last_login_at` diperbarui | Prisma update setelah credentials valid |
-| `Auth::logout` + invalidate session | Auth.js `signOut()` menghapus JWT cookie |
-| `EnsureAdmin` middleware | `callbacks.authorized` di Proxy + protected layout server check |
-| `/login` | `src/app/login/page.tsx` |
-| `POST /login` | Login Server Action → Auth.js credentials callback |
-| `/logout` | `SignOutButton` Server Action → Auth.js signOut |
-| `/forgot-password` | Request Server Action, admin-only lookup, generic response |
-| `/reset-password/{token}` | Dynamic App Router page + reset Server Action |
-| `/password/change` | Authenticated page + Server Action, current-password check, bcrypt, dan sign-out |
-| Laravel bcrypt `Hash::check` / `Hash::make` | `bcryptjs.compare` / `bcryptjs.hash` |
-| `password_reset_tokens`, expiry 60 min, throttle 60 sec | Existing Prisma model, bcrypt token hash, 60/60 policy |
+| Laravel behavior                                         | Next.js implementation                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `Auth::attempt` dengan `email`, `password`, `role=admin` | Auth.js Credentials `authorize()` + Prisma user query + bcrypt compare           |
+| Session guard `web`                                      | Auth.js JWT httpOnly cookie, max age 120 menit                                   |
+| Session regenerate saat login                            | Auth.js menerbitkan session cookie baru                                          |
+| `last_login_at` diperbarui                               | Prisma update setelah credentials valid                                          |
+| `Auth::logout` + invalidate session                      | Auth.js `signOut()` menghapus JWT cookie                                         |
+| `EnsureAdmin` middleware                                 | `callbacks.authorized` di Proxy + protected layout server check                  |
+| `/login`                                                 | `src/app/login/page.tsx`                                                         |
+| `POST /login`                                            | Login Server Action → Auth.js credentials callback                               |
+| `/logout`                                                | `SignOutButton` Server Action → Auth.js signOut                                  |
+| `/forgot-password`                                       | Request Server Action, admin-only lookup, generic response                       |
+| `/reset-password/{token}`                                | Dynamic App Router page + reset Server Action                                    |
+| `/password/change`                                       | Authenticated page + Server Action, current-password check, bcrypt, dan sign-out |
+| Laravel bcrypt `Hash::check` / `Hash::make`              | `bcryptjs.compare` / `bcryptjs.hash`                                             |
+| `password_reset_tokens`, expiry 60 min, throttle 60 sec  | Existing Prisma model, bcrypt token hash, 60/60 policy                           |
 
 ## Protected routes
 

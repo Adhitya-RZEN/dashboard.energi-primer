@@ -91,4 +91,3 @@ export function metricDefinitions(): readonly DynamicFieldDefinition[] {
 export function isExactOrAliasAnchor(anchor: DetectedAnchor): boolean {
   return anchor.matchType === "exact" || anchor.matchType === "alias";
 }
-

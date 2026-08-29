@@ -5,15 +5,15 @@ Scope: route handler dan Server Action yang tersedia pada target; tidak membuat 
 
 ## Endpoint inventory
 
-| Endpoint/action | Auth | Validation | Output/error | Finding |
-| --- | --- | --- | --- | --- |
-| /api/auth/[...nextauth] GET/POST | Auth.js managed | Auth.js credentials/CSRF handling | Auth.js response; tidak mengembalikan database object mentah | PASS WITH WARNINGS |
-| authenticate | Public login action | Email non-empty/contains @, password non-empty; credential throttle di authorize | Generic invalid credential message | PASS |
-| requestPasswordReset | Public, admin lookup | Email basic validation; 60-second existing-token throttle | Generic response untuk user ada/tidak ada | PASS WITH WARNINGS |
-| resetPassword | Reset token | Email/token, password min 12, confirmation, expiry, bcrypt token compare | Generic invalid-token message | PASS WITH WARNINGS |
-| changePassword | Server session + admin role | Current password, new password min 12, confirmation | Generic session/password error; sign-out after success | PASS |
-| Dashboard/data services | Server pages only | Query filters bounded in service; no public handler | Page-level generic error states | PASS WITH WARNINGS |
-| scripts/verify-*.mjs | Local operator/test only | Environment checks | CLI output; not production endpoint | PASS WITH WARNINGS |
+| Endpoint/action                  | Auth                        | Validation                                                                       | Output/error                                                 | Finding            |
+| -------------------------------- | --------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------ |
+| /api/auth/[...nextauth] GET/POST | Auth.js managed             | Auth.js credentials/CSRF handling                                                | Auth.js response; tidak mengembalikan database object mentah | PASS WITH WARNINGS |
+| authenticate                     | Public login action         | Email non-empty/contains @, password non-empty; credential throttle di authorize | Generic invalid credential message                           | PASS               |
+| requestPasswordReset             | Public, admin lookup        | Email basic validation; 60-second existing-token throttle                        | Generic response untuk user ada/tidak ada                    | PASS WITH WARNINGS |
+| resetPassword                    | Reset token                 | Email/token, password min 12, confirmation, expiry, bcrypt token compare         | Generic invalid-token message                                | PASS WITH WARNINGS |
+| changePassword                   | Server session + admin role | Current password, new password min 12, confirmation                              | Generic session/password error; sign-out after success       | PASS               |
+| Dashboard/data services          | Server pages only           | Query filters bounded in service; no public handler                              | Page-level generic error states                              | PASS WITH WARNINGS |
+| scripts/verify-*.mjs             | Local operator/test only    | Environment checks                                                               | CLI output; not production endpoint                          | PASS WITH WARNINGS |
 
 ## Security checks
 

@@ -29,24 +29,34 @@ export function parseTargetTable(
   structure?: StructureAnalysis,
 ): TargetParseResult {
   const matches = anchorsForKey(anchors, "biomassTarget");
-  if (!matches.length) return { target: unavailableValue("Target biomassa tidak ditemukan."), targetYear: null };
+  if (!matches.length)
+    return {
+      target: unavailableValue("Target biomassa tidak ditemukan."),
+      targetYear: null,
+    };
 
-  const resolutions = matches.map((anchor) => resolveAnchorValue(
-    anchor,
-    nearestRegion(regions, anchor, "target") ?? nearestRegion(regions, anchor, "dashboard"),
-    worksheet,
-    structure,
-    { parse: parseTargetNumber },
-  ));
+  const resolutions = matches.map((anchor) =>
+    resolveAnchorValue(
+      anchor,
+      nearestRegion(regions, anchor, "target") ??
+        nearestRegion(regions, anchor, "dashboard"),
+      worksheet,
+      structure,
+      { parse: parseTargetNumber },
+    ),
+  );
   const available = resolutions
     .map((resolution, index) => ({ resolution, anchor: matches[index] }))
-    .filter(({ resolution }) => resolution.available && resolution.value !== null)
+    .filter(
+      ({ resolution }) => resolution.available && resolution.value !== null,
+    )
     .sort((a, b) => b.resolution.confidence - a.resolution.confidence);
   if (!available.length) {
     return {
-      target: resolutions.find((resolution) => resolution.status === "malformed")
-        ?? resolutions[0]
-        ?? unavailableValue("Target biomassa tidak memiliki nilai valid."),
+      target:
+        resolutions.find((resolution) => resolution.status === "malformed") ??
+        resolutions[0] ??
+        unavailableValue("Target biomassa tidak memiliki nilai valid."),
       targetYear: targetYearFromAnchor(matches[0]),
     };
   }
@@ -56,4 +66,3 @@ export function parseTargetTable(
     targetYear: targetYearFromAnchor(best.anchor),
   };
 }
-

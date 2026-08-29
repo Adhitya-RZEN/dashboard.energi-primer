@@ -4,17 +4,17 @@
 
 Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang tercantum pada `FEATURE_MAPPING.md`. Laravel tetap reference dan tidak diubah. Query data dipusatkan di service; component hanya menerima typed data.
 
-| Feature | Route | Source | Status |
-|---|---|---|---|
-| Biomassa | `/dashboard/biomassa` | Google Sheets `B11:CO59`, atau PostgreSQL fallback | PASS |
-| Batubara | `/dashboard/batubara` | Google Sheets `B11:CO59`, atau PostgreSQL fallback | PASS |
-| Stok dan HOP | `/dashboard/stok` | Google Sheets `AD/AJ/AK/AL`, atau PostgreSQL stock partial | PASS |
-| Solar | `/dashboard/solar` | Google Sheets `CC/CJ`, PostgreSQL unavailable | PASS dengan limitation source |
-| Target dan Kinerja | `/dashboard/target` | Google Sheets `CO56/CO59`, PostgreSQL unavailable | PASS dengan limitation source |
-| Data kualitas batubara | `/data-batu-bara` | PostgreSQL `coal_quality` + `units` | PASS |
-| Laporan efisiensi | `/laporan` | PostgreSQL `coal_consumption` | PASS read-only |
-| Pengaturan profil | `/pengaturan` | Auth.js session dari `users` | PASS read-only |
-| Monitoring terperinci | `/monitoring` | Laravel source masih placeholder | NEEDS REVIEW |
+| Feature                | Route                 | Source                                                     | Status                        |
+| ---------------------- | --------------------- | ---------------------------------------------------------- | ----------------------------- |
+| Biomassa               | `/dashboard/biomassa` | Google Sheets `B11:CO59`, atau PostgreSQL fallback         | PASS                          |
+| Batubara               | `/dashboard/batubara` | Google Sheets `B11:CO59`, atau PostgreSQL fallback         | PASS                          |
+| Stok dan HOP           | `/dashboard/stok`     | Google Sheets `AD/AJ/AK/AL`, atau PostgreSQL stock partial | PASS                          |
+| Solar                  | `/dashboard/solar`    | Google Sheets `CC/CJ`, PostgreSQL unavailable              | PASS dengan limitation source |
+| Target dan Kinerja     | `/dashboard/target`   | Google Sheets `CO56/CO59`, PostgreSQL unavailable          | PASS dengan limitation source |
+| Data kualitas batubara | `/data-batu-bara`     | PostgreSQL `coal_quality` + `units`                        | PASS                          |
+| Laporan efisiensi      | `/laporan`            | PostgreSQL `coal_consumption`                              | PASS read-only                |
+| Pengaturan profil      | `/pengaturan`         | Auth.js session dari `users`                               | PASS read-only                |
+| Monitoring terperinci  | `/monitoring`         | Laravel source masih placeholder                           | NEEDS REVIEW                  |
 
 ## 1. Biomassa
 
@@ -29,12 +29,12 @@ Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang
 
 Validation Laravel vs Next, `Juli26-BB`, hari 28:
 
-| Nilai | Laravel | Next.js | Result |
-|---|---:|---:|---|
-| Penerimaan bulanan | 3223.46 ton (baseline lama) | 3223.46 ton; seluruh 7 header skema terbaru terdeteksi | PASS |
-| Pemakaian bulanan | 3740.65 ton | 3740.65 ton | PASS |
-| Unit 1/2/3 harian | 74.8 / 47.6 / 61.2 ton | sama | PASS |
-| Chart total harian | 183.6 ton | 183.6 ton | PASS |
+| Nilai              |                     Laravel |                                                Next.js | Result |
+| ------------------ | --------------------------: | -----------------------------------------------------: | ------ |
+| Penerimaan bulanan | 3223.46 ton (baseline lama) | 3223.46 ton; seluruh 7 header skema terbaru terdeteksi | PASS   |
+| Pemakaian bulanan  |                 3740.65 ton |                                            3740.65 ton | PASS   |
+| Unit 1/2/3 harian  |      74.8 / 47.6 / 61.2 ton |                                                   sama | PASS   |
+| Chart total harian |                   183.6 ton |                                              183.6 ton | PASS   |
 
 ## 2. Batubara
 
@@ -48,12 +48,12 @@ Validation Laravel vs Next, `Juli26-BB`, hari 28:
 
 Validation `Juli26-BB`, hari 28:
 
-| Nilai | Laravel | Next.js | Result |
-|---|---:|---:|---|
-| Penerimaan bulanan | 30084.842 ton | 30084.842 ton | PASS |
-| Pemakaian bulanan | 34940.444 ton | 34940.444 ton | PASS |
-| Unit 1/2/3 harian | 565.739 / 651.344 / 375.487 ton | sama | PASS |
-| Total harian | 1592.57 ton | 1592.57 ton | PASS |
+| Nilai              |                         Laravel |       Next.js | Result |
+| ------------------ | ------------------------------: | ------------: | ------ |
+| Penerimaan bulanan |                   30084.842 ton | 30084.842 ton | PASS   |
+| Pemakaian bulanan  |                   34940.444 ton | 34940.444 ton | PASS   |
+| Unit 1/2/3 harian  | 565.739 / 651.344 / 375.487 ton |          sama | PASS   |
+| Total harian       |                     1592.57 ton |   1592.57 ton | PASS   |
 
 ## 3. Stok dan HOP
 

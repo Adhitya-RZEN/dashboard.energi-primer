@@ -48,7 +48,9 @@ export function parseDynamicWorksheet(
   rows: readonly DynamicSheetRow[],
   options: DynamicParserOptions,
 ): DynamicParserResult {
-  const worksheet = parseBBWorksheetName(options.worksheetName) ?? invalidWorksheet(options.worksheetName);
+  const worksheet =
+    parseBBWorksheetName(options.worksheetName) ??
+    invalidWorksheet(options.worksheetName);
   const scannedCells = scanSpreadsheet(rows, {
     rowOffset: options.rowOffset ?? 1,
     columnOffset: options.columnOffset ?? 1,
@@ -57,8 +59,20 @@ export function parseDynamicWorksheet(
   const detectedRegions = detectTableRegions(scannedCells, anchors);
   const tables = classifyRegions(detectedRegions);
   const structure = analyzeTableStructure(scannedCells);
-  const dashboard = parseDashboardTable(scannedCells, anchors, tables, options.worksheetName, structure);
-  const target = parseTargetTable(scannedCells, anchors, tables, options.worksheetName, structure);
+  const dashboard = parseDashboardTable(
+    scannedCells,
+    anchors,
+    tables,
+    options.worksheetName,
+    structure,
+  );
+  const target = parseTargetTable(
+    scannedCells,
+    anchors,
+    tables,
+    options.worksheetName,
+    structure,
+  );
   const historical = parseHistoricalTable(
     scannedCells,
     anchors,
@@ -67,9 +81,36 @@ export function parseDynamicWorksheet(
     worksheet.year || options.year || 0,
     structure,
   );
-  const daily = worksheet.isValid && worksheet.month > 0 && worksheet.year > 0
-    ? parseDailyTable(scannedCells, structure, worksheet.month, worksheet.year)
-    : { series: [], columns: { date: null, coal: null, biomassUnit1: null, biomassUnit2: null, biomassUnit3: null, coalUnit1: null, coalUnit2: null, coalUnit3: null, stock: null, hop1: null, hop2: null, hop3: null, solar: null, solarReceipt: null }, warnings: ["Worksheet name tidak valid; daily date context tidak dapat ditentukan."] };
+  const daily =
+    worksheet.isValid && worksheet.month > 0 && worksheet.year > 0
+      ? parseDailyTable(
+          scannedCells,
+          structure,
+          worksheet.month,
+          worksheet.year,
+        )
+      : {
+          series: [],
+          columns: {
+            date: null,
+            coal: null,
+            biomassUnit1: null,
+            biomassUnit2: null,
+            biomassUnit3: null,
+            coalUnit1: null,
+            coalUnit2: null,
+            coalUnit3: null,
+            stock: null,
+            hop1: null,
+            hop2: null,
+            hop3: null,
+            solar: null,
+            solarReceipt: null,
+          },
+          warnings: [
+            "Worksheet name tidak valid; daily date context tidak dapat ditentukan.",
+          ],
+        };
   const aggregates = parseMonthlyBiomassAggregates(
     scannedCells,
     structure,
@@ -83,15 +124,22 @@ export function parseDynamicWorksheet(
     series: daily.series,
     aggregates,
   });
-  const unresolved = fieldKeys.filter((field) => !normalized.metrics[field].available);
-  const ambiguous = fieldKeys.filter((field) => normalized.metrics[field].status === "ambiguous");
+  const unresolved = fieldKeys.filter(
+    (field) => !normalized.metrics[field].available,
+  );
+  const ambiguous = fieldKeys.filter(
+    (field) => normalized.metrics[field].status === "ambiguous",
+  );
   const warnings = [
     ...dashboard.warnings,
     ...daily.warnings,
-    ...(dashboard.fields.biomassConsumptionMonthly?.available
-      && aggregates.biomassUnitConsumptionMonthly.available
-      && dashboard.fields.biomassConsumptionMonthly.value !== aggregates.biomassUnitConsumptionMonthly.value
-      ? ["Nilai dashboard TOTAL PEMAKAIAN BIOMASSA BULANAN berbeda dari total semantic Biomassa Unit 1–3; parser memakai total Unit 1–3 untuk menjaga definisi konsumsi dan parity legacy."]
+    ...(dashboard.fields.biomassConsumptionMonthly?.available &&
+    aggregates.biomassUnitConsumptionMonthly.available &&
+    dashboard.fields.biomassConsumptionMonthly.value !==
+      aggregates.biomassUnitConsumptionMonthly.value
+      ? [
+          "Nilai dashboard TOTAL PEMAKAIAN BIOMASSA BULANAN berbeda dari total semantic Biomassa Unit 1–3; parser memakai total Unit 1–3 untuk menjaga definisi konsumsi dan parity legacy.",
+        ]
       : []),
     ...Object.values(aggregates)
       .filter((value) => value.status === "malformed" && value.note)
@@ -100,7 +148,11 @@ export function parseDynamicWorksheet(
       .filter(([, value]) => value.level === "WARNING" && value.note)
       .map(([, value]) => value.note as string),
   ];
-  const errors = worksheet.isValid ? [] : [`Worksheet ${options.worksheetName} tidak mengikuti pola [Bulan][YY]-BB.`];
+  const errors = worksheet.isValid
+    ? []
+    : [
+        `Worksheet ${options.worksheetName} tidak mengikuti pola [Bulan][YY]-BB.`,
+      ];
   return {
     worksheet,
     scannedCells,
