@@ -23,6 +23,7 @@ assert.equal(data.period.focusDate, "2026-07-28");
 assert.equal(data.period.isFallback, false);
 assertApproximately(data.metrics.biomassReceiptMonthly.value, 3223.46);
 assertApproximately(data.metrics.biomassConsumptionMonthly.value, 3740.65);
+assertApproximately(data.metrics.coalReceiptMonthly.value, 30084.842);
 assertApproximately(data.metrics.solarConsumptionMonthly.value, 24274);
 assertApproximately(data.metrics.solarReceiptMonthly.value, 25000);
 assertApproximately(data.metrics.biomassCumulative.value, 29103.77);
@@ -66,6 +67,7 @@ console.log(
       metrics: {
         biomassReceiptMonthly: data.metrics.biomassReceiptMonthly.value,
         biomassConsumptionMonthly: data.metrics.biomassConsumptionMonthly.value,
+        coalReceiptMonthly: data.metrics.coalReceiptMonthly.value,
         solarConsumptionMonthly: data.metrics.solarConsumptionMonthly.value,
         solarReceiptMonthly: data.metrics.solarReceiptMonthly.value,
         biomassTarget: data.target?.target,

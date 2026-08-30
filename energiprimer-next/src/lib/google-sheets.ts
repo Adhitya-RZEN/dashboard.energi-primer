@@ -8,7 +8,9 @@ export type GoogleSheetCell = string | number | null;
 export type GoogleSheetRow = GoogleSheetCell[];
 
 export type GoogleSheetsConfig = {
-  credentialsPath: string;
+  credentialsPath?: string;
+  serviceAccountEmail?: string;
+  serviceAccountPrivateKey?: string;
   spreadsheetId: string;
   cacheTtlSeconds: number;
 };
@@ -17,6 +19,15 @@ export type GoogleSheetsReadResult = {
   worksheet: string;
   range: string;
   rows: GoogleSheetRow[];
+};
+
+export type GoogleSheetsWorksheetMetadata = {
+  sheetId: string;
+  title: string;
+  index: number | null;
+  sheetType: string | null;
+  rowCount: number | null;
+  columnCount: number | null;
 };
 
 export type GoogleSheetsErrorCode =
@@ -57,13 +68,31 @@ const rangeCache = new Map<
   string,
   { expiresAt: number; result: GoogleSheetsReadResult }
 >();
+const worksheetMetadataCache = new Map<
+  string,
+  { expiresAt: number; result: GoogleSheetsWorksheetMetadata[] }
+>();
 
 export function getGoogleSheetsConfig(): GoogleSheetsConfig {
   const credentialsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH?.trim();
+  const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+  const serviceAccountPrivateKey =
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
   const configuredTtl = Number(process.env.GOOGLE_SHEETS_CACHE_TTL ?? "120");
 
-  if (!credentialsPath || !spreadsheetId) {
+  const hasFileCredentials = Boolean(credentialsPath);
+  const hasEnvironmentCredentials = Boolean(
+    serviceAccountEmail && serviceAccountPrivateKey,
+  );
+  const hasPartialEnvironmentCredentials = Boolean(
+    serviceAccountEmail || serviceAccountPrivateKey,
+  );
+  if (
+    (!hasFileCredentials && !hasEnvironmentCredentials) ||
+    hasPartialEnvironmentCredentials && !hasEnvironmentCredentials ||
+    !spreadsheetId
+  ) {
     throw new GoogleSheetsIntegrationError(
       "configuration",
       "Google Sheets configuration is incomplete.",
@@ -77,7 +106,13 @@ export function getGoogleSheetsConfig(): GoogleSheetsConfig {
     );
   }
 
-  return { credentialsPath, spreadsheetId, cacheTtlSeconds: configuredTtl };
+  return {
+    credentialsPath,
+    serviceAccountEmail,
+    serviceAccountPrivateKey,
+    spreadsheetId,
+    cacheTtlSeconds: configuredTtl,
+  };
 }
 
 export function classifyGoogleSheetsStatus(
@@ -102,27 +137,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function readServiceAccount(credentialsPath: string) {
-  let raw: string;
-  try {
-    raw = await readFile(credentialsPath, "utf8");
-  } catch {
-    throw new GoogleSheetsIntegrationError(
-      "credentials",
-      "Google Sheets credentials could not be read.",
-    );
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new GoogleSheetsIntegrationError(
-      "credentials",
-      "Google Sheets credentials are not valid JSON.",
-    );
-  }
-
+function validateServiceAccount(parsed: unknown) {
   if (
     !isRecord(parsed) ||
     typeof parsed.client_email !== "string" ||
@@ -143,6 +158,40 @@ async function readServiceAccount(credentialsPath: string) {
   }
 
   return { client_email: parsed.client_email, private_key: privateKey };
+}
+
+async function readServiceAccount(config: GoogleSheetsConfig) {
+  if (config.serviceAccountEmail && config.serviceAccountPrivateKey)
+    return validateServiceAccount({
+      client_email: config.serviceAccountEmail,
+      private_key: config.serviceAccountPrivateKey,
+    });
+
+  if (!config.credentialsPath)
+    throw new GoogleSheetsIntegrationError(
+      "credentials",
+      "Google Sheets credentials are unavailable.",
+    );
+  let raw: string;
+  try {
+    raw = await readFile(config.credentialsPath, "utf8");
+  } catch {
+    throw new GoogleSheetsIntegrationError(
+      "credentials",
+      "Google Sheets credentials could not be read.",
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new GoogleSheetsIntegrationError(
+      "credentials",
+      "Google Sheets credentials are not valid JSON.",
+    );
+  }
+  return validateServiceAccount(parsed);
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit) {
@@ -253,7 +302,7 @@ export async function readGoogleSheetsRange(
   if (cached && cached.expiresAt > Date.now()) return cached.result;
   if (cached) rangeCache.delete(cacheKey);
 
-  const credentials = await readServiceAccount(config.credentialsPath);
+  const credentials = await readServiceAccount(config);
   const token = await getAccessToken(credentials);
   const a1Range = encodeURIComponent(`'${worksheet}'!${range}`);
   const url = `${SHEETS_API_URL}/${encodeURIComponent(config.spreadsheetId)}/values/${a1Range}`;
@@ -323,4 +372,111 @@ export async function readGoogleSheetsRange(
       result,
     });
   return result;
+}
+
+/**
+ * Reads spreadsheet metadata without downloading cell values. The sheet ID is
+ * the stable identity used by the synchronization registry; title is treated
+ * as mutable display metadata.
+ */
+export async function listGoogleSheetsWorksheets(): Promise<
+  GoogleSheetsWorksheetMetadata[]
+> {
+  const config = getGoogleSheetsConfig();
+  const cacheKey = config.spreadsheetId;
+  const cached = worksheetMetadataCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
+  if (cached) worksheetMetadataCache.delete(cacheKey);
+
+  const credentials = await readServiceAccount(config);
+  const token = await getAccessToken(credentials);
+  const fields =
+    "sheets(properties(sheetId,title,index,sheetType,gridProperties(rowCount,columnCount)))";
+  const url = `${SHEETS_API_URL}/${encodeURIComponent(config.spreadsheetId)}?includeGridData=false&fields=${encodeURIComponent(fields)}`;
+  const response = await fetchWithTimeout(url, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const code = classifyGoogleSheetsStatus(response.status);
+    if (code === "authentication") accessToken = null;
+    throw new GoogleSheetsIntegrationError(
+      code,
+      "Google Sheets metadata request failed.",
+      { status: response.status },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new GoogleSheetsIntegrationError(
+      "malformed_response",
+      "Google Sheets metadata response is invalid.",
+    );
+  }
+
+  if (!isRecord(body) || body.sheets === undefined) {
+    throw new GoogleSheetsIntegrationError(
+      "malformed_response",
+      "Google Sheets metadata response is incomplete.",
+    );
+  }
+
+  if (!Array.isArray(body.sheets)) {
+    throw new GoogleSheetsIntegrationError(
+      "malformed_response",
+      "Google Sheets metadata has an invalid worksheet list.",
+    );
+  }
+
+  const worksheets: GoogleSheetsWorksheetMetadata[] = [];
+  for (const sheet of body.sheets) {
+    if (!isRecord(sheet) || !isRecord(sheet.properties)) {
+      throw new GoogleSheetsIntegrationError(
+        "malformed_response",
+        "Google Sheets metadata contains an invalid worksheet.",
+      );
+    }
+
+    const properties = sheet.properties;
+    const rawSheetId = properties.sheetId;
+    const title = properties.title;
+    if (
+      (typeof rawSheetId !== "number" && typeof rawSheetId !== "string") ||
+      typeof title !== "string" ||
+      !title.trim()
+    ) {
+      throw new GoogleSheetsIntegrationError(
+        "malformed_response",
+        "Google Sheets worksheet metadata is incomplete.",
+      );
+    }
+
+    const gridProperties = isRecord(properties.gridProperties)
+      ? properties.gridProperties
+      : null;
+    const numberOrNull = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value) ? value : null;
+    worksheets.push({
+      sheetId: String(rawSheetId),
+      title: title.trim(),
+      index: numberOrNull(properties.index),
+      sheetType:
+        typeof properties.sheetType === "string"
+          ? properties.sheetType
+          : null,
+      rowCount: numberOrNull(gridProperties?.rowCount),
+      columnCount: numberOrNull(gridProperties?.columnCount),
+    });
+  }
+
+  if (config.cacheTtlSeconds > 0) {
+    worksheetMetadataCache.set(cacheKey, {
+      expiresAt: Date.now() + config.cacheTtlSeconds * 1000,
+      result: worksheets,
+    });
+  }
+  return worksheets;
 }

@@ -134,6 +134,7 @@ function statusForHop(value: number) {
 function hasRows(rows: {
   coalConsumption: readonly unknown[];
   coalStock: readonly unknown[];
+  coalReceipts: readonly unknown[];
   biomassReceipts: readonly unknown[];
   biomassConsumption: readonly unknown[];
   solarReceipts: readonly unknown[];
@@ -143,6 +144,7 @@ function hasRows(rows: {
   return [
     rows.coalConsumption,
     rows.coalStock,
+    rows.coalReceipts,
     rows.biomassReceipts,
     rows.biomassConsumption,
     rows.solarReceipts,
@@ -158,6 +160,7 @@ async function loadOverviewRows(query: OverviewQuery) {
   const [
     coalConsumption,
     coalStock,
+    coalReceipts,
     biomassReceipts,
     biomassConsumption,
     solarReceipts,
@@ -179,6 +182,11 @@ async function loadOverviewRows(query: OverviewQuery) {
       where: { date: { gte: periodStart, lt: periodEnd } },
       orderBy: { date: "asc" },
       select: { date: true, received: true, closingStock: true },
+    }),
+    prisma.coalReceipt.findMany({
+      where: { periodStart },
+      orderBy: { periodStart: "asc" },
+      select: { periodStart: true, quantityTon: true },
     }),
     prisma.biomassReceipt.findMany({
       where: { periodStart },
@@ -227,6 +235,7 @@ async function loadOverviewRows(query: OverviewQuery) {
   return {
     coalConsumption,
     coalStock,
+    coalReceipts,
     biomassReceipts,
     biomassConsumption,
     solarReceipts: solarReceipts ? [solarReceipts] : [],
@@ -243,6 +252,7 @@ async function findAvailableMonths(query: OverviewQuery) {
   const [
     coalConsumption,
     coalStock,
+    coalReceipts,
     biomassReceipts,
     biomassConsumption,
     solarReceipts,
@@ -257,6 +267,10 @@ async function findAvailableMonths(query: OverviewQuery) {
     prisma.coalStock.findMany({
       where: { date: { gte: start, lt: end } },
       select: { date: true },
+    }),
+    prisma.coalReceipt.findMany({
+      where: { periodStart: { gte: start, lt: end } },
+      select: { periodStart: true },
     }),
     prisma.biomassReceipt.findMany({
       where: { periodStart: { gte: start, lt: end } },
@@ -288,6 +302,7 @@ async function findAvailableMonths(query: OverviewQuery) {
     ...new Set([
       ...coalConsumption.map((row) => monthKey(row.date)),
       ...coalStock.map((row) => monthKey(row.date)),
+      ...coalReceipts.map((row) => monthKey(row.periodStart)),
       ...biomassReceipts.map((row) => monthKey(row.periodStart)),
       ...biomassConsumption.map((row) => monthKey(row.readingDate)),
       ...solarReceipts.map((row) => monthKey(row.periodStart)),
@@ -465,9 +480,10 @@ export async function getPostgresOverviewData(
   const coalConsumption = sum(
     rows.coalConsumption.map((row) => decimalToNumber(row.coalUsed)),
   );
-  const coalReceipt = sum(
-    rows.coalStock.map((row) => decimalToNumber(row.received)),
-  );
+  const hasNormalizedCoalReceipt = rows.coalReceipts.length > 0;
+  const coalReceipt = hasNormalizedCoalReceipt
+    ? sum(rows.coalReceipts.map((row) => decimalToNumber(row.quantityTon)))
+    : sum(rows.coalStock.map((row) => decimalToNumber(row.received)));
   const solarConsumption = sum(
     rows.solarConsumption.map((row) => decimalToNumber(row.quantityLiter)),
   );
@@ -572,8 +588,12 @@ export async function getPostgresOverviewData(
       coalReceiptMonthly: metric(
         coalReceipt,
         "ton",
-        "coal_stock.received (SUM periode)",
-        "Data penerimaan batubara existing PostgreSQL.",
+        hasNormalizedCoalReceipt
+          ? "coal_receipts.quantity_ton (SUM periode)"
+          : "coal_stock.received (SUM periode; fallback legacy)",
+        hasNormalizedCoalReceipt
+          ? "Data penerimaan batubara dari tabel normalized pada grain periode."
+          : "Periode belum memiliki baris normalized; memakai data coal_stock existing.",
       ),
     },
     biomassDaily: fixedUnitValues(

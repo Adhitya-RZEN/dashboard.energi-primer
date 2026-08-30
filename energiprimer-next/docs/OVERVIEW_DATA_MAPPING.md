@@ -34,7 +34,7 @@ Filter `day` memilih baris tanggal yang cocok. Bila tidak ada, Laravel memilih b
 | Total Pemakaian Solar        | `CJ` index 86 pada row 42                                      | Nilai sel; liter; bulanan                    | `metrics.solarConsumptionMonthly`, Google adapter                                | Formula sama                                                                                                |
 | Realisasi Biomassa Kumulatif | `CO` index 91 pada row 59                                      | Nilai sel; ton; kumulatif sampai periode     | `metrics.biomassCumulative`, Google adapter                                      | Formula sama                                                                                                |
 | Progress Target Biomassa     | target `CO` row 56 dan realisasi `CO` row 59                   | `min(100, realisasi / target * 100)`; persen | `metrics.biomassTargetProgress` dan `target`                                     | Formula sama                                                                                                |
-| Penerimaan Batubara          | `I` index 7 pada row 42                                        | Nilai sel; ton; bulanan                      | Google: nilai `I42`; PG: `SUM(coal_stock.received)` pada periode                 | Google sama; PG padanan                                                                                     |
+| Penerimaan Batubara          | `I` index 7 pada row 42                                        | Nilai sel; ton; bulanan                      | Google: nilai `I42`; PG: `SUM(coal_receipts.quantity_ton)` pada periode; fallback `coal_stock.received` hanya jika periode belum diimpor | Google sama; PG memprioritaskan tabel normalized `coal_receipts` pada grain periode |
 
 Target fallback Laravel `70020` ton jika nilai target kosong/invalid/<=0 dipertahankan oleh Google adapter. Format target seperti `70.020` atau `70,020` diperlakukan sebagai 70.020 ton sesuai helper Laravel `targetValue`.
 
@@ -51,6 +51,8 @@ Stock card juga menampilkan persentase kapasitas dengan formula `round(stock / 7
 
 Nilai harian kosong tetap `null` pada adapter Google. Jumlah konsumsi biomassa harian hanya dijumlahkan dari unit yang hadir; jika seluruh unit kosong, hasilnya `null`. Ini mengikuti `nullableVal` dan `sumNullableValues` Laravel.
 
+Pada jalur PostgreSQL, `coal_receipts.quantity_ton` adalah sumber utama penerimaan batubara setelah import normalized. Untuk periode historis yang belum mempunyai baris pada tabel tersebut, service mempertahankan fallback read-only ke `coal_stock.received`; fallback tidak dipakai ketika baris normalized sudah tersedia, termasuk ketika nilainya eksplisit nol.
+
 Status HOP dipetakan sama: `<10` = `Kritis`, `10.. <15` = `Perhatian`, `>=15` = `Aman`.
 
 ## Chart mapping
@@ -64,7 +66,7 @@ Chart `Konsumsi Energi Primer Harian` memakai `daily_series` Laravel:
 - aggregation: satu nilai per hari, tanpa rolling average atau interpolasi;
 - empty state: ditampilkan jika tidak ada nilai pada kedua dataset.
 
-Next.js merender chart sebagai SVG server component sehingga tidak menambahkan dependency Chart.js pada Phase 6. Skala dan path hanya visualisasi dari data service; tidak ada perubahan pada nilai.
+Next.js merender chart menggunakan Recharts pada client boundary khusus chart. Page dan data fetching tetap server-side; chart hanya menerima `OverviewDailyPoint` yang sudah disiapkan service. Skala, tooltip, dan interaksi hanya visualisasi/presentation layer; tidak ada perubahan pada nilai.
 
 ## Filter, fallback, dan state
 
@@ -98,12 +100,12 @@ Read verification tanpa migration/schema write:
 - `power_generation`: 1.095 rows;
 - Prisma read and relationship checks: PASS.
 
-Route verification pada query `month=12&year=2025&day=26`:
+Route verification historis pada query `month=12&year=2025&day=26` (snapshot sebelum tabel normalized `coal_receipts` menjadi sumber utama):
 
 | Nilai                         |           PostgreSQL query yang dipakai Next.js |                           Next.js rendered result |
 | ----------------------------- | ----------------------------------------------: | ------------------------------------------------: |
 | Pemakaian batubara bulanan    | `SUM(coal_consumption.coal_used)` = `91379` ton |                    `91379` ton (`91.379` display) |
-| Penerimaan batubara bulanan   |        `SUM(coal_stock.received)` = `41975` ton |                    `41975` ton (`41.975` display) |
+| Penerimaan batubara bulanan   | `SUM(coal_stock.received)` = `41975` ton (legacy) | `41975` ton (`41.975` display), snapshot legacy sebelum `coal_receipts` |
 | Stock tanggal fokus           |   `coal_stock.closing_stock` = `-360889.96` ton | `-360889.96` ton (display dibulatkan sesuai card) |
 | Batubara Unit 1 tanggal fokus |                                    `1047.7` ton |                                      `1047.7` ton |
 | Batubara Unit 2 tanggal fokus |                                   `1003.64` ton |                                     `1003.64` ton |

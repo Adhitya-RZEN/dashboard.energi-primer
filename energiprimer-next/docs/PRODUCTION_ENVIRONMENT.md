@@ -10,10 +10,13 @@ Nilai aktual tidak ditulis.
 | NEXT_PUBLIC_APP_URL            | No/fallback            | No               | Client-safe   | Recommended sesuai domain                                   |
 | AUTH_SECRET                    | Yes                    | Yes              | Server        | Required, random dan production-specific                    |
 | AUTH_TRUST_HOST                | Yes for deployment     | No               | Server        | Required sesuai Auth.js/Vercel config                       |
+| CRON_SECRET                    | Yes when cron enabled  | Yes              | Server        | Required untuk endpoint sync terjadwal                      |
 | AUTH_URL                       | Yes for reset links    | No               | Server        | Required canonical HTTPS URL                                |
 | AUTH_MAILER                    | Yes when reset active  | No               | Server        | Provider production required; log bukan production delivery |
 | MAIL_MAILER                    | Optional fallback      | No               | Server        | Legacy fallback only                                        |
-| GOOGLE_SHEETS_CREDENTIALS_PATH | Yes when Sheets active | Config-sensitive | Server        | Current file-path design needs manual Vercel solution       |
+| GOOGLE_SHEETS_CREDENTIALS_PATH | Alternative            | Config-sensitive | Server        | Local/file provisioning only                                |
+| GOOGLE_SERVICE_ACCOUNT_EMAIL   | Alternative pair       | Yes              | Server        | Recommended Vercel secret configuration                     |
+| GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY | Alternative pair   | Yes              | Server        | Recommended Vercel secret configuration                     |
 | GOOGLE_SHEETS_SPREADSHEET_ID   | Yes when Sheets active | Config-sensitive | Server        | Required                                                    |
 | GOOGLE_SHEETS_CACHE_TTL        | No                     | No               | Server        | Optional, default 120 seconds                               |
 | NODE_ENV                       | Framework              | No               | Server        | Managed by platform                                         |
@@ -30,7 +33,7 @@ Nilai aktual tidak ditulis.
 - .env.example hanya memuat placeholder; tidak memuat secret aktual.
 - credentials/ di-ignore dan tidak tracked.
 - AUTH_URL telah ditambahkan ke .env.example karena dipakai reset URL.
-- GOOGLE_SHEETS_WORKSHEET, GOOGLE_SHEETS_RANGE, GOOGLE_SERVICE_ACCOUNT_EMAIL, dan GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY tidak digunakan oleh implementasi saat ini; tidak ditambahkan sebagai variable palsu.
+- GOOGLE_SHEETS_WORKSHEET dan GOOGLE_SHEETS_RANGE tidak digunakan karena adapter menentukan worksheet/range. Pasangan GOOGLE_SERVICE_ACCOUNT_EMAIL dan GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY kini mendukung deployment tanpa file credential.
 
 ## Manual configuration
 

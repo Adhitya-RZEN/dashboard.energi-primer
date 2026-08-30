@@ -214,12 +214,13 @@ Tidak ada statement `DROP`, `DELETE`, atau destructive `ALTER`. Tabel existing `
 - run 4: `SUCCESS`, 352 validated rows;
 - normalized rows tidak bertambah saat run kedua;
 - staging: 1.158 row untuk empat run (dua run awal 227 row dan dua run current 352 row);
-- PostgreSQL Overview service: `PASS` untuk Juli 2026.
+- PostgreSQL Overview service: `PASS` untuk Juli 2026, termasuk pembacaan `coal_receipts`.
 
 | Metric | PostgreSQL result | Baseline |
 |---|---:|---:|
 | Biomassa receipt tujuh supplier | 3223.46 ton | 3223.46 ton |
 | Biomassa consumption | 3740.65 ton | 3740.65 ton |
+| Coal receipt | 30084.842 ton | 30084.842 ton |
 | Solar consumption | 24274 liter | 24274 liter |
 | Solar receipt | 25000 liter | 25000 liter |
 | Target Biomassa | 70020 ton | 70020 ton |

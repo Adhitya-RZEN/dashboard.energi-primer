@@ -3,6 +3,7 @@ import "server-only";
 import { readGoogleSheetsRange } from "../../../lib/google-sheets";
 import { parseDynamicWorksheet } from "./parser";
 import {
+  parseBBWorksheetName,
   previousValidBBWorksheets,
   resolveBBWorksheet,
 } from "./worksheet-resolver";
@@ -71,4 +72,33 @@ export async function readAndParseDynamicBBWorksheet(
   throw new Error(
     "No valid BB worksheet returned data within the fallback window.",
   );
+}
+
+/**
+ * Reads exactly one discovered worksheet. Unlike the dashboard reader, this
+ * function never falls back to another period; synchronization must associate
+ * the result with the worksheet ID that was discovered.
+ */
+export async function readAndParseDynamicWorksheet(
+  worksheet: string,
+  range = DYNAMIC_SCAN_RANGE,
+): Promise<DynamicWorksheetReadResult> {
+  const metadata = parseBBWorksheetName(worksheet);
+  const result = await readGoogleSheetsRange(worksheet, range);
+  const month = metadata?.month ?? 0;
+  const year = metadata?.year ?? 0;
+  return {
+    requested: { month, year, worksheet },
+    effective: { month, year, worksheet },
+    isFallback: false,
+    fallbackIndex: 0,
+    attemptedWorksheets: [worksheet],
+    parsed: parseDynamicWorksheet(result.rows, {
+      worksheetName: worksheet,
+      month: metadata?.month,
+      year: metadata?.year,
+      rowOffset: 1,
+      columnOffset: 1,
+    }),
+  };
 }

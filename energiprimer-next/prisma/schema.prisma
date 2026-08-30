@@ -210,6 +210,110 @@ model SpreadsheetImportLog {
   @@map("spreadsheet_import_logs")
 }
 
+model SyncSource {
+  id                BigInt          @id @default(autoincrement()) @db.BigInt
+  sourceKey         String          @unique @map("source_key") @db.VarChar(128)
+  provider          String          @db.VarChar(32)
+  externalId        String          @map("external_id") @db.VarChar(255)
+  status            String          @db.VarChar(32)
+  lastDiscoveredAt  DateTime?       @map("last_discovered_at") @db.Timestamp(0)
+  lockToken         String?         @map("lock_token") @db.VarChar(128)
+  lockExpiresAt     DateTime?       @map("lock_expires_at") @db.Timestamp(0)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheets        SyncWorksheet[]
+  runs              SyncRun[]
+
+  @@unique([provider, externalId])
+  @@map("sync_sources")
+}
+
+model SyncWorksheet {
+  id                BigInt        @id @default(autoincrement()) @db.BigInt
+  sourceId          BigInt        @map("source_id") @db.BigInt
+  worksheetKey      String        @map("worksheet_key") @db.VarChar(64)
+  worksheetTitle    String        @map("worksheet_title") @db.VarChar(255)
+  normalizedTitle   String        @map("normalized_title") @db.VarChar(255)
+  status            String        @db.VarChar(32)
+  firstSeenAt       DateTime      @default(now()) @map("first_seen_at") @db.Timestamp(0)
+  lastSeenAt        DateTime      @map("last_seen_at") @db.Timestamp(0)
+  lastSyncAt        DateTime?     @map("last_sync_at") @db.Timestamp(0)
+  schemaHash        String?       @map("schema_hash") @db.VarChar(128)
+  schemaSnapshot    String?       @map("schema_snapshot") @db.Text
+  contentHash       String?       @map("content_hash") @db.VarChar(128)
+  rowCount          Int           @default(0) @map("row_count")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  source            SyncSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  rowStates         SyncRowState[]
+  schemaChanges     SyncSchemaChange[]
+
+  @@unique([sourceId, worksheetKey])
+  @@index([sourceId, status])
+  @@map("sync_worksheets")
+}
+
+model SyncRun {
+  id                BigInt       @id @default(autoincrement()) @db.BigInt
+  sourceId          BigInt       @map("source_id") @db.BigInt
+  triggerType       String       @map("trigger_type") @db.VarChar(32)
+  status            String       @db.VarChar(32)
+  startedAt         DateTime     @default(now()) @map("started_at") @db.Timestamp(0)
+  finishedAt        DateTime?    @map("finished_at") @db.Timestamp(0)
+  worksheetsScanned Int          @default(0) @map("worksheets_scanned")
+  rowsScanned       Int          @default(0) @map("rows_scanned")
+  inserted          Int          @default(0)
+  updated           Int          @default(0)
+  skipped           Int          @default(0)
+  failed            Int          @default(0)
+  durationMs        Int?         @map("duration_ms")
+  errorSummary      String?      @map("error_summary") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamp(0)
+  source            SyncSource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([sourceId, startedAt])
+  @@index([status])
+  @@map("sync_runs")
+}
+
+model SyncRowState {
+  id             BigInt        @id @default(autoincrement()) @db.BigInt
+  worksheetId    BigInt        @map("worksheet_id") @db.BigInt
+  sourceKey      String        @map("source_key") @db.VarChar(512)
+  entityType     String        @map("entity_type") @db.VarChar(64)
+  contentHash    String        @map("content_hash") @db.VarChar(128)
+  lastSeenAt     DateTime      @map("last_seen_at") @db.Timestamp(0)
+  lastSyncedAt   DateTime?     @map("last_synced_at") @db.Timestamp(0)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheet      SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
+
+  @@unique([worksheetId, sourceKey])
+  @@index([worksheetId, lastSeenAt])
+  @@map("sync_row_states")
+}
+
+model SyncSchemaChange {
+  id                 BigInt        @id @default(autoincrement()) @db.BigInt
+  worksheetId        BigInt        @map("worksheet_id") @db.BigInt
+  detectedAt         DateTime      @default(now()) @map("detected_at") @db.Timestamp(0)
+  previousSchemaHash String?       @map("previous_schema_hash") @db.VarChar(128)
+  currentSchemaHash  String        @map("current_schema_hash") @db.VarChar(128)
+  changeType         String        @map("change_type") @db.VarChar(32)
+  previousSchema     String?       @map("previous_schema") @db.Text
+  currentSchema      String?       @map("current_schema") @db.Text
+  status             String        @db.VarChar(32)
+  resolution         String?       @db.Text
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheet          SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
+
+  @@index([worksheetId, detectedAt])
+  @@index([status])
+  @@map("sync_schema_changes")
+}
+
 model SpreadsheetImportRun {
   id                  BigInt                      @id @default(autoincrement()) @db.BigInt
   source              String                      @db.VarChar(255)

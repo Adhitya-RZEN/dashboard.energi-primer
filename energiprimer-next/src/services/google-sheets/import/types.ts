@@ -81,6 +81,8 @@ export type ImportStagingRecord = {
   supplierCode: string | null;
   rawValue: string | null;
   normalizedValue: ImportValue;
+  /** Optional canonical payload for sync change detection; never persisted as a secret. */
+  contentHashSeed?: string | null;
   valueUnit: string | null;
   validationStatus: "VALID" | "VALID_EMPTY" | "REJECTED";
   validationMessage: string | null;

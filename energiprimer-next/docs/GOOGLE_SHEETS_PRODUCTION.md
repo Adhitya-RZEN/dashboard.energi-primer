@@ -7,14 +7,14 @@ Scope: audit konfigurasi dan boundary server-side untuk deployment Vercel.
 
 Integrasi target menggunakan service account dan Google Sheets REST API melalui implementasi native di `src/lib/google-sheets.ts`. Dependency `googleapis` tidak digunakan; tidak ada alasan teknis untuk menambahkannya pada Phase 10.
 
-Status production: **BLOCKED** karena implementasi saat ini membaca credential dari file lokal yang diabaikan Git, sedangkan file tersebut tidak tersedia otomatis pada deployment Vercel.
+Status production: **READY WITH WARNINGS** untuk source code; deployment tetap memerlukan provisioning secret Vercel. File lokal yang diabaikan Git tidak tersedia otomatis pada deployment Vercel, sehingga gunakan pasangan environment service-account atau mekanisme file yang disetujui.
 
 ## Konfigurasi yang diverifikasi
 
 | Item              | Hasil                                                                                  |
 | ----------------- | -------------------------------------------------------------------------------------- |
 | Authentication    | Service account JWT dengan RSA-SHA256                                                  |
-| Credential source | Path server-side dari `GOOGLE_SHEETS_CREDENTIALS_PATH`                                 |
+| Credential source | File server-side dari `GOOGLE_SHEETS_CREDENTIALS_PATH` atau pasangan environment `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` |
 | Spreadsheet       | ID hanya dibaca dari `GOOGLE_SHEETS_SPREADSHEET_ID`; tidak dicetak                     |
 | Worksheet         | Dibentuk mengikuti periode: `[MonthIndonesia][2-digit year]-BB`                        |
 | Range             | `B11:CO59` untuk mapping legacy; `A1:ZZ500` untuk agregat semantic penerimaan Biomassa |
@@ -69,10 +69,10 @@ Live read pada environment lokal pernah dicatat pada dokumentasi Phase 8. Tidak 
 
 Credential JSON lokal berada di directory yang di-ignore dan tidak boleh di-commit. Vercel Functions tidak menyediakan file tersebut hanya karena file ada pada workstation. Menyimpan path lokal yang sama pada production akan menyebabkan authentication gagal.
 
-Production membutuhkan keputusan manual untuk salah satu pola berikut:
+Production membutuhkan konfigurasi manual untuk salah satu pola berikut:
 
-1. Refactor service agar membaca credential terpisah dari Vercel Environment Variables secara aman, dengan newline private key dinormalisasi saat runtime; atau
-2. Mekanisme secret/file provisioning deployment yang disetujui operator dan kompatibel dengan runtime Vercel.
+1. Isi `GOOGLE_SERVICE_ACCOUNT_EMAIL` dan `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` pada Vercel Environment Variables secara aman; newline private key dinormalisasi saat runtime; atau
+2. Gunakan mekanisme secret/file provisioning deployment yang disetujui operator dan kompatibel dengan runtime Vercel.
 
 Keduanya memerlukan konfigurasi secret production dan validasi permission service account terhadap spreadsheet. Credential baru, rotasi, atau perubahan deployment tidak dilakukan otomatis dan berstatus **REQUIRES MANUAL APPROVAL**.
 
@@ -81,6 +81,8 @@ Keduanya memerlukan konfigurasi secret production dan validasi permission servic
 Nama variable yang digunakan:
 
 - `GOOGLE_SHEETS_CREDENTIALS_PATH`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` (alternatif)
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (alternatif)
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SHEETS_CACHE_TTL`
 
@@ -100,4 +102,4 @@ Saat ini integration test production: **BLOCKED** karena konfigurasi deployment 
 
 ## Status
 
-**BLOCKED / NOT READY untuk Google Sheets production.** Kode server-side dan error boundary siap diaudit, tetapi credential provisioning dan permission production masih membutuhkan konfigurasi manual.
+**READY WITH WARNINGS untuk kode; BLOCKED untuk koneksi production** sampai credential provisioning dan permission production dikonfigurasi manual.

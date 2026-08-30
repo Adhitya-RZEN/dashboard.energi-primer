@@ -173,6 +173,7 @@ function stagingRecord(input: {
   unitCode?: string;
   supplierCode?: string;
   value: number | null;
+  contentHashSeed?: string | null;
   unit: string;
   validationStatus?: ImportStagingRecord["validationStatus"];
   validationMessage?: string | null;
@@ -186,6 +187,7 @@ function stagingRecord(input: {
     supplierCode: input.supplierCode ?? null,
     rawValue: rawValue(input.value),
     normalizedValue: input.value,
+    contentHashSeed: input.contentHashSeed ?? null,
     valueUnit: input.unit,
     validationStatus: input.validationStatus ??
       (input.value === null ? "VALID_EMPTY" : "VALID"),
@@ -410,6 +412,10 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
         periodStart: row.periodStart,
         supplierCode: row.supplierCode,
         value: row.quantityTon,
+        contentHashSeed: JSON.stringify({
+          supplierName: row.supplierName,
+          quantityTon: row.quantityTon,
+        }),
         unit: "ton",
       }),
     );
@@ -444,6 +450,10 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
         source: row.source,
         readingDate: row.readingDate,
         value: row.closingStock,
+        contentHashSeed: JSON.stringify({
+          closingStock: row.closingStock,
+          consumed: row.consumed,
+        }),
         unit: "ton",
       }),
     );
@@ -499,6 +509,7 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
       stagingRecord({
         entityType: "biomass_target",
         source: row.source,
+        periodStart: utcDate(row.targetYear, 1, 1),
         value: row.targetTon,
         unit: "ton",
       }),
@@ -518,11 +529,9 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
   return rows;
 }
 
-export async function buildGoogleSheetsImportPlan(query: {
-  month: number;
-  year: number;
-}): Promise<GoogleSheetsImportPlan> {
-  const result = await readAndParseDynamicBBWorksheet(query);
+export function buildGoogleSheetsImportPlanFromReadResult(
+  result: DynamicWorksheetReadResult,
+): GoogleSheetsImportPlan {
   const rows = buildRows(result);
   const blockingIssues = validatePlan(rows, result);
   const stagingRows = buildStagingRows(rows);
@@ -563,4 +572,12 @@ export async function buildGoogleSheetsImportPlan(query: {
     stagingRows,
     summary,
   };
+}
+
+export async function buildGoogleSheetsImportPlan(query: {
+  month: number;
+  year: number;
+}): Promise<GoogleSheetsImportPlan> {
+  const result = await readAndParseDynamicBBWorksheet(query);
+  return buildGoogleSheetsImportPlanFromReadResult(result);
 }

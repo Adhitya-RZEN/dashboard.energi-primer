@@ -50,7 +50,7 @@ async function resolveUnitIds() {
   return resolved;
 }
 
-function assertLocalDatabaseTarget() {
+function assertDatabaseTarget(allowNonLocalDatabase: boolean) {
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl) throw new Error("DATABASE_URL is not configured.");
   let parsed: URL;
@@ -59,6 +59,7 @@ function assertLocalDatabaseTarget() {
   } catch {
     throw new Error("DATABASE_URL is invalid.");
   }
+  if (allowNonLocalDatabase) return;
   const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
   const databaseName = parsed.pathname.replace(/^\//, "");
   if (!localHosts.has(parsed.hostname) || databaseName !== "dashboard_pln") {
@@ -308,14 +309,23 @@ async function upsertHop(
   }
 }
 
-export async function commitGoogleSheetsImportPlan(plan: GoogleSheetsImportPlan) {
+export type ImportCommitOptions = {
+  /** Manual CLI imports stay local-only; the authenticated sync orchestrator may opt in. */
+  allowNonLocalDatabase?: boolean;
+  source?: string;
+};
+
+export async function commitGoogleSheetsImportPlan(
+  plan: GoogleSheetsImportPlan,
+  options: ImportCommitOptions = {},
+) {
   if (plan.status !== "READY_FOR_IMPORT")
     throw new Error("Import plan has blocking validation issues.");
-  assertLocalDatabaseTarget();
+  assertDatabaseTarget(options.allowNonLocalDatabase === true);
   const unitIds = await resolveUnitIds();
   const importRun = await prisma.spreadsheetImportRun.create({
     data: {
-      source: "google_sheets_dynamic",
+      source: options.source ?? "google_sheets_dynamic",
       requestedWorksheet: plan.requested.worksheet,
       effectiveWorksheet: plan.effective.worksheet,
       sourceRange: plan.sourceRange,

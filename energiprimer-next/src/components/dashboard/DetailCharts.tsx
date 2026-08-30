@@ -11,7 +11,6 @@ import {
   Pie,
   PieChart,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -561,13 +560,7 @@ export function TargetProgressChart({ progress }: { progress: number }) {
       role="img"
       aria-label={`Progress target ${safeProgress.toLocaleString("id-ID", { maximumFractionDigits: 1 })} persen`}
     >
-      <ResponsiveContainer
-        width="100%"
-        height={256}
-        minWidth={1}
-        minHeight={256}
-        initialDimension={{ width: 320, height: 256 }}
-      >
+      <ChartFrame label="Progress target biomassa" height={256} initialWidth={320}>
         <PieChart width={320} height={256}>
           <Pie
             data={progressData}
@@ -592,7 +585,7 @@ export function TargetProgressChart({ progress }: { progress: number }) {
             isAnimationActive={false}
           />
         </PieChart>
-      </ResponsiveContainer>
+      </ChartFrame>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <strong className="text-2xl font-bold text-slate-900">
           {safeProgress.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%

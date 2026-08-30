@@ -16,9 +16,12 @@ tidak boleh di-commit.
 | `NEXT_PUBLIC_APP_URL`            | Optional                         | Client-safe   | No                      | `src/lib/env.ts`, reset URL fallback                               | Recommended                               |
 | `AUTH_SECRET`                    | Yes                              | Server        | Yes                     | Auth.js session/JWT signing                                        | Yes                                       |
 | `AUTH_TRUST_HOST`                | Yes for deployment configuration | Server        | No                      | Auth.js host trust                                                 | Yes                                       |
+| `CRON_SECRET`                    | Yes when scheduled sync is enabled | Server      | Yes                     | Vercel Cron synchronization endpoint                               | Yes when scheduled sync is enabled        |
 | `AUTH_MAILER`                    | Optional in development          | Server        | No                      | Password-reset delivery mode                                       | Yes, after a real provider is implemented |
 | `AUTH_URL`                       | Recommended                      | Server        | No                      | Canonical password-reset URL                                       | Yes for production reset links            |
 | `GOOGLE_SHEETS_CREDENTIALS_PATH` | Yes when Sheets is active        | Server        | Yes/config path         | Google Sheets service                                              | Yes when Sheets is active                 |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL`   | Alternative with private key    | Server        | Yes                     | Google Sheets service                                              | Recommended for Vercel when no file mount |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Alternative with email       | Server        | Yes                     | Google Sheets service                                              | Recommended for Vercel when no file mount |
 | `GOOGLE_SHEETS_SPREADSHEET_ID`   | Yes when Sheets is active        | Server        | Configuration-sensitive | Google Sheets service                                              | Yes when Sheets is active                 |
 | `GOOGLE_SHEETS_CACHE_TTL`        | Optional                         | Server        | No                      | Google Sheets in-memory range cache                                | Optional; defaults to `120`               |
 | `MAIL_MAILER`                    | Optional fallback                | Server        | No                      | Legacy-compatible fallback in password reset helper                | No; prefer `AUTH_MAILER`                  |
@@ -30,11 +33,11 @@ tidak boleh di-commit.
 
 ## Configuration decisions
 
-- `GOOGLE_SHEETS_WORKSHEET`, `GOOGLE_SHEETS_RANGE`,
-  `GOOGLE_SERVICE_ACCOUNT_EMAIL`, dan `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
-  tidak digunakan oleh implementasi saat ini. Service account dibaca dari
-  JSON melalui `GOOGLE_SHEETS_CREDENTIALS_PATH`, worksheet dibuat dinamis,
-  dan range ditetapkan oleh adapter.
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` dan `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` dapat
+  digunakan berpasangan sebagai alternatif serverless terhadap file JSON.
+  `GOOGLE_SHEETS_CREDENTIALS_PATH` tetap didukung untuk local development.
+  `GOOGLE_SHEETS_WORKSHEET` dan `GOOGLE_SHEETS_RANGE` tidak digunakan karena
+  worksheet/range ditentukan oleh adapter dan registry.
 - `AUTH_MAILER=log` hanya untuk development. Implementasi saat ini belum
   memiliki SMTP/transactional provider untuk production.
 - `AUTH_URL` dipakai agar reset link tidak bergantung pada URL preview atau
@@ -46,7 +49,7 @@ tidak boleh di-commit.
 ## Security checks
 
 - Tidak ada secret yang menggunakan prefix `NEXT_PUBLIC_`.
-- `DATABASE_URL`, `AUTH_SECRET`, Google configuration, password, dan token
+- `DATABASE_URL`, `AUTH_SECRET`, `CRON_SECRET`, Google configuration, password, dan token
   hanya direferensikan pada server atau script lokal.
 - `.env.local` tetap di-ignore.
 - `.env.example` sekarang di-unignore agar dapat dicatat di repository, tetapi

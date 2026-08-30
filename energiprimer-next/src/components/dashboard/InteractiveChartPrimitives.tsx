@@ -1,10 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
 import {
-  ResponsiveContainer,
-  type MouseHandlerDataParam,
-  type TooltipPayloadEntry,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import type {
+  MouseHandlerDataParam,
+  TooltipPayloadEntry,
 } from "recharts";
 
 export type ChartDataset = {
@@ -18,6 +25,11 @@ export type ChartDataset = {
 // take precedence after the container is ready.
 export const CHART_WIDTH_FALLBACK = 640;
 export const CHART_HEIGHT = 320;
+
+type SizedChartProps = {
+  width?: number;
+  height?: number;
+};
 
 type ChartTooltipProps = {
   active?: boolean;
@@ -71,28 +83,54 @@ export function chartDateFromState(
 export function ChartFrame({
   children,
   label,
+  height = CHART_HEIGHT,
+  initialWidth = CHART_WIDTH_FALLBACK,
 }: {
   children: ReactNode;
   label: string;
+  height?: number;
+  initialWidth?: number;
 }) {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(initialWidth);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+
+    const measure = () => {
+      const measuredWidth = Math.floor(frame.getBoundingClientRect().width);
+      if (measuredWidth > 0) {
+        setWidth((current) =>
+          current === measuredWidth ? current : measuredWidth,
+        );
+      }
+    };
+
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
+  const sizedChildren = isValidElement(children)
+    ? cloneElement(children as ReactElement<SizedChartProps>, {
+        width,
+        height,
+      })
+    : children;
+
   return (
     <div
+      ref={frameRef}
       role="group"
       aria-label={label}
-      className="h-[320px] min-h-[320px] w-full min-w-0"
+      className="w-full min-w-0"
+      style={{ height, minHeight: height }}
     >
-      <ResponsiveContainer
-        width="100%"
-        height={CHART_HEIGHT}
-        minWidth={1}
-        minHeight={CHART_HEIGHT}
-        initialDimension={{
-          width: CHART_WIDTH_FALLBACK,
-          height: CHART_HEIGHT,
-        }}
-      >
-        {children}
-      </ResponsiveContainer>
+      {sizedChildren}
     </div>
   );
 }
