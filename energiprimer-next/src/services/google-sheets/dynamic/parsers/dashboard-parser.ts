@@ -108,7 +108,7 @@ function resolveCoalCurrent(
   if (requestedUnit === 3 && !selected && current.length >= 3) {
     selected = current[2];
     warning =
-      "Label Unit 3 pada worksheet terdeteksi sebagai duplicate/typo Unit 2; dipetakan berdasarkan urutan blok Unit 1–3.";
+      "Label blok current ketiga pada worksheet terdeteksi sebagai duplicate/typo Unit 2; dinormalisasi sebagai Unit 3 berdasarkan urutan blok Unit 1-3.";
   }
   if (requestedUnit === 2 && explicit.length > 1) {
     selected = explicit[0];

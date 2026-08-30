@@ -31,6 +31,26 @@ type ReceiptSupplierColumn = {
   column: number;
 };
 
+const RECEIPT_SUPPLIER_CODES: Record<ReceiptSupplierName, string> = {
+  "Sawdust PT Syahroni": "sawdust-pt-syahroni",
+  "Sawdust PT Bintang": "sawdust-pt-bintang",
+  "Woodchip PT Syahroni": "woodchip-pt-syahroni",
+  "Woodchip PT RAP": "woodchip-pt-rap",
+  "Woodchip CV Multi Paketindo": "woodchip-cv-multi-paketindo",
+  LRUK: "lruk",
+  SRF: "srf",
+};
+
+export type BiomassReceiptImportRow = {
+  supplierCode: string;
+  supplierName: ReceiptSupplierName;
+  value: number | null;
+  status: "numeric" | "empty" | "malformed";
+  sourceRow: number | null;
+  sourceColumn: number;
+  sourceAddress: string | null;
+};
+
 function cellAt(cells: readonly ScannedCell[], row: number, column: number) {
   return (
     cells.find((cell) => cell.row === row && cell.column === column) ?? null
@@ -301,6 +321,70 @@ function unitColumns(columns: {
     columns.biomassUnit2,
     columns.biomassUnit3,
   ].filter((column): column is number => column !== null);
+}
+
+function supplierImportValue(
+  cells: readonly ScannedCell[],
+  rows: readonly number[],
+  column: number,
+): Omit<BiomassReceiptImportRow, "supplierCode" | "supplierName" | "sourceColumn"> {
+  const matching = rows
+    .map((row) => cellAt(cells, row, column))
+    .filter((cell): cell is ScannedCell => cell !== null);
+  const malformed = matching.filter(
+    (cell) => parseNumericValue(cell.rawValue).status === "malformed",
+  );
+  if (malformed.length) {
+    return {
+      value: null,
+      status: "malformed",
+      sourceRow: malformed[0].row,
+      sourceAddress: malformed[0].address,
+    };
+  }
+  const numeric = matching.filter(
+    (cell) => parseNumericValue(cell.rawValue).status === "numeric",
+  );
+  if (!numeric.length) {
+    return {
+      value: null,
+      status: "empty",
+      sourceRow: rows[0] ?? null,
+      sourceAddress: null,
+    };
+  }
+  return {
+    value: numeric.reduce(
+      (sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0),
+      0,
+    ),
+    status: "numeric",
+    sourceRow: numeric[0].row,
+    sourceAddress: numeric[0].address,
+  };
+}
+
+/**
+ * Exposes row-level supplier values for the importer while keeping the
+ * aggregate calculation and seven-supplier validation in one parser module.
+ */
+export function extractBiomassReceiptImportRows(
+  cells: readonly ScannedCell[],
+  structure: StructureAnalysis,
+): BiomassReceiptImportRow[] {
+  const suppliers = supplierColumns(structure);
+  const marker = chooseSummaryMarker(
+    cells,
+    structure,
+    suppliers.map(({ column }) => column),
+  );
+  const rows = marker ? [marker.row] : structure.dataRows;
+  return suppliers.map(({ name, column }) => ({
+    supplierCode: RECEIPT_SUPPLIER_CODES[name],
+    supplierName: name,
+    sourceColumn: column,
+    ...supplierImportValue(cells, rows, column),
+  }));
 }
 
 export function parseMonthlyBiomassAggregates(

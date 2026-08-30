@@ -1,16 +1,18 @@
 # Feature Validation — Phase 7
 
+> **Current implementation update 2026-08-30:** setelah import lokal dan dashboard cutover, source PostgreSQL normalized dipakai untuk Overview/detail ketika `DASHBOARD_DATA_SOURCE` tidak diset atau bernilai `postgres`. Google Sheets tetap dipakai oleh importer dan dapat dipilih eksplisit sebagai jalur rollback. Coverage aktif yang tervalidasi adalah Juli 2026; Unit 1, Unit 2, dan Unit 3 dipertahankan.
+
 ## Scope dan prinsip
 
 Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang tercantum pada `FEATURE_MAPPING.md`. Laravel tetap reference dan tidak diubah. Query data dipusatkan di service; component hanya menerima typed data.
 
 | Feature                | Route                 | Source                                                     | Status                        |
 | ---------------------- | --------------------- | ---------------------------------------------------------- | ----------------------------- |
-| Biomassa               | `/dashboard/biomassa` | Google Sheets `B11:CO59`, atau PostgreSQL fallback         | PASS                          |
-| Batubara               | `/dashboard/batubara` | Google Sheets `B11:CO59`, atau PostgreSQL fallback         | PASS                          |
-| Stok dan HOP           | `/dashboard/stok`     | Google Sheets `AD/AJ/AK/AL`, atau PostgreSQL stock partial | PASS                          |
-| Solar                  | `/dashboard/solar`    | Google Sheets `CC/CJ`, PostgreSQL unavailable              | PASS dengan limitation source |
-| Target dan Kinerja     | `/dashboard/target`   | Google Sheets `CO56/CO59`, PostgreSQL unavailable          | PASS dengan limitation source |
+| Biomassa               | `/dashboard/biomassa` | PostgreSQL `biomass_receipts` + `biomass_consumptions`     | PASS                          |
+| Batubara               | `/dashboard/batubara` | PostgreSQL `coal_receipts` + existing coal tables          | PASS dengan precision note    |
+| Stok dan HOP           | `/dashboard/stok`     | PostgreSQL `coal_stock` + `hop_readings`                   | PASS                          |
+| Solar                  | `/dashboard/solar`    | PostgreSQL `solar_receipts` + `solar_consumptions`         | PASS                          |
+| Target dan Kinerja     | `/dashboard/target`   | PostgreSQL `biomass_targets` + cumulative snapshots        | PASS                          |
 | Data kualitas batubara | `/data-batu-bara`     | PostgreSQL `coal_quality` + `units`                        | PASS                          |
 | Laporan efisiensi      | `/laporan`            | PostgreSQL `coal_consumption`                              | PASS read-only                |
 | Pengaturan profil      | `/pengaturan`         | Auth.js session dari `users`                               | PASS read-only                |

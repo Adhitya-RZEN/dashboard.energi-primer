@@ -1,0 +1,6 @@
+-- Baseline marker for the existing Laravel-managed PostgreSQL schema.
+--
+-- This migration is intentionally a no-op. The database already contains the
+-- existing Laravel tables and data. It is marked as applied with
+-- `prisma migrate resolve` so later additive Next.js migrations can be tracked
+-- without recreating or altering the existing schema.

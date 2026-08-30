@@ -10,8 +10,13 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:verify": "node scripts/verify-db.mjs",
+    "db:verify-import-schema": "node scripts/verify-import-schema.mjs",
+    "db:verify-import-data": "node scripts/verify-import-data.mjs",
+    "db:verify-overview": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-postgres-overview.ts",
+    "sheets:import": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/import-google-sheets.ts",
     "auth:verify": "node scripts/verify-auth.mjs",
-    "dynamic:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-dynamic-parser.ts"
+    "dynamic:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-dynamic-parser.ts",
+    "sheets:dry-run": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/dry-run-google-sheets-import.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

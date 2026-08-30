@@ -86,7 +86,10 @@ export function ChartFrame({
         height={CHART_HEIGHT}
         minWidth={1}
         minHeight={CHART_HEIGHT}
-        initialDimension={{ width: CHART_WIDTH_FALLBACK, height: CHART_HEIGHT }}
+        initialDimension={{
+          width: CHART_WIDTH_FALLBACK,
+          height: CHART_HEIGHT,
+        }}
       >
         {children}
       </ResponsiveContainer>

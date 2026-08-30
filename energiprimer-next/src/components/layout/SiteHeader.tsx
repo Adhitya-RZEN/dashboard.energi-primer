@@ -40,7 +40,7 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
         <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
           <span aria-hidden="true" className="h-8 w-px bg-slate-200" />
           <span className="truncate text-sm font-semibold text-slate-700 lg:text-[15px]">
-            Monitoring Efisiensi Batu Bara
+            Monitoring Batu Bara
           </span>
         </div>
 

@@ -2,6 +2,8 @@
 
 Sumber: `backend/database/migrations`, `backend/app/Models`, `backend/database/seeders`, `backend/database/factories`, dan `backend/config/database.php`.
 
+> **Update 2026-08-30:** audit awal di bawah tetap dipertahankan sebagai reference Laravel. Tahap migrasi lokal kemudian menambahkan tabel additive `spreadsheet_import_runs`, `spreadsheet_import_staging`, `biomass_receipts`, `biomass_consumptions`, `solar_receipts`, `solar_consumptions`, `hop_readings`, `biomass_targets`, `biomass_cumulative_snapshots`, dan `coal_receipts`. Dashboard PostgreSQL sekarang membaca tabel normalized tersebut melalui service server-side. Unit operasional dinormalisasi sebagai Unit 1, Unit 2, dan Unit 3.
+
 ## Database engine
 
 - Default runtime pada `.env.example`: PostgreSQL (`DB_CONNECTION=pgsql`).
@@ -66,16 +68,16 @@ Tidak ditemukan observer, repository, custom cast, policy, atau soft-delete impl
 
 | Area                      | Source aktif                                      | Tabel terkait               | Catatan                                              |
 | ------------------------- | ------------------------------------------------- | --------------------------- | ---------------------------------------------------- |
-| Dashboard overview/detail | Google Sheets API                                 | Tidak membaca tabel domain  | `DatabaseDataSource` masih melempar RuntimeException |
+| Dashboard overview/detail | PostgreSQL normalized (default); Google Sheets hanya importer/rollback | `biomass_*`, `coal_*`, `solar_*`, `hop_readings`, target/cumulative | `DASHBOARD_DATA_SOURCE=google` hanya jika rollback eksplisit |
 | Data kualitas             | PostgreSQL query builder + `coal_quality`/`units` | Ya                          | Filter dan pagination aktif                          |
 | Laporan                   | PostgreSQL aggregate `coal_consumption`           | Ya                          | Hanya laporan bulanan/summary                        |
 | Monitoring                | Tidak ada query aktual                            | Seharusnya `coal_*`         | Placeholder kosong                                   |
-| Target dashboard          | Google Sheets row 56/59                           | Tidak memakai `kpi_targets` | Target fallback hard-coded 70.020 ton                |
+| Target dashboard          | `biomass_targets` + `biomass_cumulative_snapshots` | Ya                       | Target 2026 terimport sebagai 70020 ton               |
 
 ## Risiko dan NEEDS REVIEW
 
-1. Dashboard akan membandingkan data Google Sheets dengan data PostgreSQL yang dapat berbeda periode/freshness.
-2. Tidak ada unique constraint gabungan untuk sumber Google Sheets; strategi deduplikasi/sinkronisasi ke PostgreSQL belum diimplementasikan. **NEEDS REVIEW**.
+1. Dashboard dapat membandingkan data Google Sheets dengan data PostgreSQL yang berbeda periode/freshness; importer perlu dijalankan untuk periode baru.
+2. Natural key dan idempotent upsert sudah diterapkan untuk domain normalized yang diimport. Kebijakan lock/concurrency scheduler dan sinkronisasi production tetap **NEEDS REVIEW**.
 3. `coal_stock` hanya satu record per tanggal, sedangkan tabel lain per unit; granularitas harus dipertahankan atau diubah secara sadar.
 4. Tidak ada supplier, nomor pengiriman, volume, lab PDF, shift, atau kolom biomassa/solar pada schema PostgreSQL. UI yang menampilkan informasi tersebut saat ini bukan data database aktual. **NEEDS REVIEW**.
 5. `kpi_targets` menyimpan target per unit/tanggal, tetapi target aktif dashboard adalah target biomassa tahunan dari spreadsheet. Hubungan keduanya belum ditentukan. **NEEDS REVIEW**.

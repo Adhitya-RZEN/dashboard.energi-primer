@@ -107,6 +107,8 @@ Anchor metric yang didukung meliputi:
 
 Exact/alias match selalu diprioritaskan. Fuzzy global terhadap angka tidak digunakan.
 
+Koreksi data owner: identitas unit operasional adalah Unit 1, Unit 2, dan Unit 3. Jika label blok ketiga pada worksheet terbaca sebagai duplicate/typo `UNIT 2 CURENT`, parser menormalisasikannya sebagai Unit 3 berdasarkan urutan blok dan tidak menyimpan identitas Unit 2 ganda.
+
 ## Table detection dan classification
 
 Boundary table diinfer dari:

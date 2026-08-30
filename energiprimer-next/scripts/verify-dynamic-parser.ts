@@ -246,6 +246,26 @@ function runStaticTests() {
     3740.65,
   );
 
+  const duplicateUnitLabel = regressionFixture();
+  put(
+    duplicateUnitLabel,
+    20,
+    20,
+    "PEMAKAIAN BATUBARA UNIT 2 CURENT",
+  );
+  const duplicateUnitResult = parseDynamicWorksheet(duplicateUnitLabel, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    duplicateUnitResult.normalized.metrics.coalUnit3Current.value,
+    375.487,
+  );
+  assert.ok(
+    duplicateUnitResult.diagnostics.warnings.some((warning) =>
+      warning.includes("dinormalisasi sebagai Unit 3"),
+    ),
+  );
+
   const receiptRowsOnly = regressionFixture();
   for (const column of [1, 6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22])
     put(receiptRowsOnly, 4, column, null);
