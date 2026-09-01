@@ -3,8 +3,8 @@
 ## Audit scope
 
 Audit dilakukan terhadap `package.json`, `package-lock.json`, installed tree,
-dan `npm audit --omit=dev` pada 2026-08-28. Tidak ada `npm audit fix`, force
-upgrade, atau perubahan versi dependency yang dilakukan.
+dan `npm audit --omit=dev` pada 2026-09-01. Resend ditambahkan secara sengaja
+untuk Phase 18; tidak ada `npm audit fix`, force upgrade, atau major upgrade.
 
 ## Runtime and development dependencies
 
@@ -14,12 +14,17 @@ upgrade, atau perubahan versi dependency yang dilakukan.
 | Authentication  | `next-auth@5.0.0-beta.32`, `bcryptjs@3.0.3`                                        | Functionally used; Auth.js beta requires pre-production regression review |
 | Database        | `@prisma/client@6.19.3`, `prisma@6.19.3`                                           | Schema/read verification passes; vulnerability review remains open        |
 | Charts          | `recharts@3.10.1`, `react-is@19.2.8`                                               | Used by client-only chart components; no duplicate chart library          |
+| Mail            | `resend@6.25.0`                                                                   | Server-only password-reset delivery; no client import                    |
 | Server boundary | `server-only@0.0.1`                                                                | Used to protect Node-only Google Sheets/throttle modules                  |
 | Build and lint  | TypeScript `5.9.3`, ESLint `9.39.5`, `eslint-config-next@16.3.3`, Tailwind `4.3.3` | Lint, typecheck, and build pass                                           |
 
+Resend membawa transitive packages `postal-mime@2.7.5` dan
+`standardwebhooks@1.0.0`; keduanya tidak memiliki advisory pada audit ini.
+
 `googleapis` tidak terpasang karena implementasi Google Sheets menggunakan
 Node `crypto`, filesystem, dan `fetch` untuk protokol service-account JWT yang
-sama. Tidak ada dependency UI atau animation baru pada Phase 10.
+sama. Tidak ada dependency UI atau animation baru pada Phase 18; Resend hanya
+menambah mail SDK dan transitive packages yang tercatat di atas.
 
 ## `npm audit` result
 
@@ -41,7 +46,8 @@ Result: exit code `1`, dengan **3 HIGH**, **0 CRITICAL**, **0 MODERATE**, dan
 Audit tree yang terpasang menunjukkan jalur `@prisma/client` → `prisma` →
 `@prisma/config` → `deepmerge-ts`. Temuan ini tidak membuktikan adanya exploit
 di route aplikasi, tetapi tetap harus ditutup atau diterima secara formal
-sebelum production.
+sebelum production. Penambahan Resend tidak menambah finding audit yang
+teridentifikasi.
 
 ## Required decision
 
@@ -57,10 +63,12 @@ role, dan reset password.
 ## Validation
 
 - `npm.cmd ls --depth=0`: PASS, tidak ada package invalid pada installed tree.
+- `npm.cmd ls resend`: PASS, `resend@6.25.0` terpasang.
 - `npm.cmd run lint`: PASS.
 - `npx.cmd tsc --noEmit`: PASS.
 - `npm.cmd run build`: PASS.
-- Tidak ada dependency version change pada audit ini.
+- `npm audit --omit=dev`: exit code `1`, tetap 3 HIGH dari rantai Prisma; tidak
+  ada finding baru yang teridentifikasi dari Resend.
 
 ## Status
 

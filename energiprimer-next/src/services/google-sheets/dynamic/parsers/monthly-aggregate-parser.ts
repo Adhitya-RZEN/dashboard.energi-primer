@@ -1,5 +1,6 @@
 import { unavailableValue } from "../confidence";
 import { parseNumericValue } from "../validators";
+import { normalizeSupplierIdentity } from "../../legacy-mapping/profiles";
 import type {
   DynamicSemanticAggregates,
   HeaderPath,
@@ -14,36 +15,17 @@ type MonthlyAggregateSpec = {
   emptyNote: string;
 };
 
-const RECEIPT_SUPPLIER_ALIASES = [
-  ["Sawdust PT Syahroni", ["SAWDUST PT SYAHRONI"]],
-  ["Sawdust PT Bintang", ["SAWDUST PT BINTANG"]],
-  ["Woodchip PT Syahroni", ["WOODCHIP PT SYAHRONI"]],
-  ["Woodchip PT RAP", ["WOODCHIP PT RAP"]],
-  ["Woodchip CV Multi Paketindo", ["WOODCHIP CV MULTI PAKETINDO"]],
-  ["LRUK", ["LRUK"]],
-  ["SRF", ["SRF"]],
-] as const;
-
-type ReceiptSupplierName = (typeof RECEIPT_SUPPLIER_ALIASES)[number][0];
-
 type ReceiptSupplierColumn = {
-  name: ReceiptSupplierName;
+  code: string;
+  name: string;
+  kind: "CANONICAL" | "PATTERN";
+  confidence: "HIGH" | "MEDIUM";
   column: number;
-};
-
-const RECEIPT_SUPPLIER_CODES: Record<ReceiptSupplierName, string> = {
-  "Sawdust PT Syahroni": "sawdust-pt-syahroni",
-  "Sawdust PT Bintang": "sawdust-pt-bintang",
-  "Woodchip PT Syahroni": "woodchip-pt-syahroni",
-  "Woodchip PT RAP": "woodchip-pt-rap",
-  "Woodchip CV Multi Paketindo": "woodchip-cv-multi-paketindo",
-  LRUK: "lruk",
-  SRF: "srf",
 };
 
 export type BiomassReceiptImportRow = {
   supplierCode: string;
-  supplierName: ReceiptSupplierName;
+  supplierName: string;
   value: number | null;
   status: "numeric" | "empty" | "malformed";
   sourceRow: number | null;
@@ -87,6 +69,17 @@ function numericCoverage(
       count +
       (cell && parseNumericValue(cell.rawValue).status === "numeric" ? 1 : 0)
     );
+  }, 0);
+}
+
+function columnNumericCoverage(
+  cells: readonly ScannedCell[],
+  rows: readonly number[],
+  column: number,
+) {
+  return rows.reduce((count, row) => {
+    const cell = cellAt(cells, row, column);
+    return count + (cell && parseNumericValue(cell.rawValue).status === "numeric" ? 1 : 0);
   }, 0);
 }
 
@@ -134,7 +127,7 @@ function aggregateFromSummaryRow(
     (cell) => cell.address,
   );
   const source = numericCells[0] ?? malformedCells[0] ?? null;
-  if (malformedCells.length) {
+  if (!numericCells.length && malformedCells.length) {
     return {
       value: null,
       available: false,
@@ -167,7 +160,11 @@ function aggregateFromSummaryRow(
     (sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0),
     0,
   );
-  const emptyCount = spec.columns.length - numericCells.length;
+  const emptyCount =
+    spec.columns.length - numericCells.length - malformedCells.length;
+  const malformedNote = malformedCells.length
+    ? ` ${malformedCells.length} cell malformed diabaikan.`
+    : "";
   return {
     value,
     available: true,
@@ -182,9 +179,11 @@ function aggregateFromSummaryRow(
     candidates: [],
     sourceAddresses,
     note:
-      emptyCount > 0
-        ? `${spec.label} dijumlahkan dari ${numericCells.length} kolom numerik; ${emptyCount} kolom kosong diperlakukan sebagai tidak tersedia.`
-        : `${spec.label} dijumlahkan dari ${numericCells.length} kolom semantic pada baris ${marker.address}.`,
+      `${spec.label} dijumlahkan dari ${numericCells.length} kolom semantic pada baris ${marker.address}.` +
+      (emptyCount > 0
+        ? ` ${emptyCount} kolom kosong diperlakukan sebagai tidak tersedia.`
+        : "") +
+      malformedNote,
   };
 }
 
@@ -210,7 +209,7 @@ function aggregateFromDataRows(
   }
 
   const sourceCells = [...numericCells, ...malformedCells];
-  if (malformedCells.length) {
+  if (!numericCells.length && malformedCells.length) {
     return {
       value: null,
       available: false,
@@ -242,6 +241,9 @@ function aggregateFromDataRows(
   );
   const first = numericCells[0];
   const last = numericCells[numericCells.length - 1];
+  const malformedNote = malformedCells.length
+    ? ` ${malformedCells.length} cell malformed diabaikan.`
+    : "";
   return {
     value,
     available: true,
@@ -255,7 +257,7 @@ function aggregateFromDataRows(
     status: "resolved",
     candidates: [],
     sourceAddresses: sourceCells.map((cell) => cell.address),
-    note: `${spec.label} dihitung dengan menjumlahkan ${numericCells.length} cell numerik dari baris data tabel.`,
+    note: `${spec.label} dihitung dengan menjumlahkan ${numericCells.length} cell numerik dari baris data tabel.${malformedNote}`,
   };
 }
 
@@ -278,37 +280,82 @@ function isSupplierBiomassPath(path: HeaderPath) {
   );
 }
 
-function supplierName(path: HeaderPath) {
-  const labels = path.labels;
-  const joined = labels.join(" ");
-  for (const [name, aliases] of RECEIPT_SUPPLIER_ALIASES) {
-    if (
-      aliases.some(
-        (alias) =>
-          labels.some(
-            (label) => label === alias || label.endsWith(` ${alias}`),
-          ) || joined.endsWith(alias),
-      )
-    )
-      return name;
+function supplierIdentity(path: HeaderPath) {
+  for (const label of [...path.labels].reverse()) {
+    const identity = normalizeSupplierIdentity(label);
+    if (identity) return identity;
   }
-  return null;
+  return normalizeSupplierIdentity(path.labels.join(" "));
 }
 
 function supplierColumns(
   structure: StructureAnalysis,
+  cells: readonly ScannedCell[],
 ): ReceiptSupplierColumn[] {
-  return structure.headerPaths
+  const candidates = structure.headerPaths
     .flatMap((path) => {
       if (!isSupplierBiomassPath(path)) return [];
-      const name = supplierName(path);
-      return name ? [{ name, column: path.cell.column }] : [];
-    })
-    .filter(
-      (supplier, index, suppliers) =>
-        suppliers.findIndex((candidate) => candidate.name === supplier.name) ===
-        index,
+      const identity = supplierIdentity(path);
+      return identity
+        ? [{
+            code: identity.code,
+            name: identity.name,
+            kind: identity.kind,
+            confidence: identity.confidence,
+            column: path.cell.column,
+          }]
+        : [];
+    });
+
+  const grouped = new Map<string, ReceiptSupplierColumn[]>();
+  for (const candidate of candidates) {
+    const values = grouped.get(candidate.code) ?? [];
+    values.push(candidate);
+    grouped.set(candidate.code, values);
+  }
+
+  // A worksheet can repeat the same supplier in a detail and a summary
+  // block. Pick one physical column deterministically instead of double
+  // counting it: canonical names win, then numeric coverage, then leftmost.
+  const deduplicated = [...grouped.values()].map((group) =>
+    [...group].sort(
+      (a, b) =>
+        Number(b.kind === "CANONICAL") - Number(a.kind === "CANONICAL") ||
+        columnNumericCoverage(cells, structure.dataRows, b.column) -
+          columnNumericCoverage(cells, structure.dataRows, a.column) ||
+        a.column - b.column,
+    )[0],
+  );
+
+  // Some workbook versions contain a second summary block with abbreviated
+  // supplier labels and the same values as the detailed receipt block. Keep
+  // the most complete physical supplier block so those values are not summed
+  // twice. If no canonical block exists, pattern-based supplier columns are
+  // still retained for legacy worksheets.
+  const blocks: ReceiptSupplierColumn[][] = [];
+  for (const candidate of deduplicated.sort((a, b) => a.column - b.column)) {
+    const current = blocks.at(-1);
+    if (!current || candidate.column - current.at(-1)!.column > 4)
+      blocks.push([candidate]);
+    else current.push(candidate);
+  }
+  const selectedBlock = blocks.sort((a, b) => {
+    const canonicalA = a.filter((candidate) => candidate.kind === "CANONICAL").length;
+    const canonicalB = b.filter((candidate) => candidate.kind === "CANONICAL").length;
+    const coverageA = a.reduce(
+      (total, candidate) =>
+        total + columnNumericCoverage(cells, structure.dataRows, candidate.column),
+      0,
     );
+    const coverageB = b.reduce(
+      (total, candidate) =>
+        total + columnNumericCoverage(cells, structure.dataRows, candidate.column),
+      0,
+    );
+    return canonicalB - canonicalA || b.length - a.length || coverageB - coverageA ||
+      a[0].column - b[0].column;
+  })[0];
+  return selectedBlock ?? [];
 }
 
 function unitColumns(columns: {
@@ -334,7 +381,10 @@ function supplierImportValue(
   const malformed = matching.filter(
     (cell) => parseNumericValue(cell.rawValue).status === "malformed",
   );
-  if (malformed.length) {
+  const numeric = matching.filter(
+    (cell) => parseNumericValue(cell.rawValue).status === "numeric",
+  );
+  if (!numeric.length && malformed.length) {
     return {
       value: null,
       status: "malformed",
@@ -342,9 +392,6 @@ function supplierImportValue(
       sourceAddress: malformed[0].address,
     };
   }
-  const numeric = matching.filter(
-    (cell) => parseNumericValue(cell.rawValue).status === "numeric",
-  );
   if (!numeric.length) {
     return {
       value: null,
@@ -372,15 +419,15 @@ export function extractBiomassReceiptImportRows(
   cells: readonly ScannedCell[],
   structure: StructureAnalysis,
 ): BiomassReceiptImportRow[] {
-  const suppliers = supplierColumns(structure);
+  const suppliers = supplierColumns(structure, cells);
   const marker = chooseSummaryMarker(
     cells,
     structure,
     suppliers.map(({ column }) => column),
   );
   const rows = marker ? [marker.row] : structure.dataRows;
-  return suppliers.map(({ name, column }) => ({
-    supplierCode: RECEIPT_SUPPLIER_CODES[name],
+  return suppliers.map(({ code, name, column }) => ({
+    supplierCode: code,
     supplierName: name,
     sourceColumn: column,
     ...supplierImportValue(cells, rows, column),
@@ -397,13 +444,21 @@ export function parseMonthlyBiomassAggregates(
     biomassUnit3: number | null;
   },
 ): DynamicSemanticAggregates {
-  const detectedSuppliers = supplierColumns(structure);
+  const detectedSuppliers = supplierColumns(structure, cells);
   const supplier = detectedSuppliers.map(({ column }) => column);
-  const expectedSupplierNames = RECEIPT_SUPPLIER_ALIASES.map(([name]) => name);
+  const expectedSupplierNames = [
+    "Sawdust PT Syahroni",
+    "Sawdust PT Bintang",
+    "Woodchip PT Syahroni",
+    "Woodchip PT RAP",
+    "Woodchip CV Multi Paketindo",
+    "LRUK",
+    "SRF",
+  ];
   const detectedSupplierNames = detectedSuppliers.map(({ name }) => name);
-  const missingSupplierNames = expectedSupplierNames.filter(
-    (name) => !detectedSupplierNames.includes(name),
-  );
+  const canonicalCount = detectedSuppliers.filter(
+    (supplier) => supplier.kind === "CANONICAL",
+  ).length;
   const unit = unitColumns(columns);
   const summaryColumns = [...new Set([...supplier, ...unit])];
   const marker = chooseSummaryMarker(cells, structure, summaryColumns);
@@ -429,16 +484,19 @@ export function parseMonthlyBiomassAggregates(
           supplierSpec,
         )
       : summarySupplier;
-  const supplierReceipt: ResolvedValue = missingSupplierNames.length
-    ? unavailableValue(
-        `${supplierSchemaNote} Kolom yang belum terdeteksi: ${missingSupplierNames.join(", ")}. Total penerimaan tidak dihitung dari skema parsial.`,
-      )
-    : {
+  // A partial legacy schema is still calculated from the supplier columns
+  // that are actually present. The import gate decides whether the result
+  // needs review; the parser must not erase a usable aggregate.
+  const supplierReceipt: ResolvedValue = calculatedSupplier.available
+    ? {
         ...calculatedSupplier,
         note: calculatedSupplier.note
-          ? `${calculatedSupplier.note} ${supplierSchemaNote}`
-          : supplierSchemaNote,
-      };
+          ? `${calculatedSupplier.note} ${supplierSchemaNote} (${canonicalCount}/7 canonical).`
+          : `${supplierSchemaNote} (${canonicalCount}/7 canonical).`,
+      }
+    : unavailableValue(
+        `${supplierSchemaNote} Tidak ada nilai numerik supplier yang dapat dihitung.`,
+      );
   return {
     biomassSupplierReceiptMonthly: supplierReceipt,
     biomassUnitConsumptionMonthly: aggregateFromSummaryRow(

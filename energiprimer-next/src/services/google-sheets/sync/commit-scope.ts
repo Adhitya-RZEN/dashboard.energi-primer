@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { GoogleSheetsImportPlan } from "@/services/google-sheets/import/types";
-import { sourceKeyForImportRecord } from "./identity";
+import { sourceKeyForImportRecord, sourceKeyForStagingRow } from "./identity";
 
 type ImportRecord = Parameters<typeof sourceKeyForImportRecord>[0];
 
@@ -16,23 +16,55 @@ export function filterImportPlanToSourceKeys(
       ),
     );
 
+  const receiptRows = keep(plan.receiptRows, "biomass_receipt");
+  const coalReceiptRows = keep(plan.coalReceiptRows, "coal_receipt");
+  const coalConsumptionRows = keep(
+    plan.coalConsumptionRows,
+    "coal_consumption",
+  );
+  const coalStockRows = keep(plan.coalStockRows, "coal_stock");
+  const biomassConsumptionRows = keep(
+    plan.biomassConsumptionRows,
+    "biomass_consumption",
+  );
+  const solarConsumptionRows = keep(
+    plan.solarConsumptionRows,
+    "solar_consumption",
+  );
+  const solarReceiptRows = keep(plan.solarReceiptRows, "solar_receipt");
+  const hopRows = keep(plan.hopRows, "hop_reading");
+  const targetRows = keep(plan.targetRows, "biomass_target");
+  const cumulativeRows = keep(plan.cumulativeRows, "biomass_cumulative");
+  const stagingRows = plan.stagingRows.filter((row) => {
+    return allowedSourceKeys.has(sourceKeyForStagingRow(row));
+  });
+
   return {
     ...plan,
-    receiptRows: keep(plan.receiptRows, "biomass_receipt"),
-    coalReceiptRows: keep(plan.coalReceiptRows, "coal_receipt"),
-    coalConsumptionRows: keep(plan.coalConsumptionRows, "coal_consumption"),
-    coalStockRows: keep(plan.coalStockRows, "coal_stock"),
-    biomassConsumptionRows: keep(
-      plan.biomassConsumptionRows,
-      "biomass_consumption",
-    ),
-    solarConsumptionRows: keep(
-      plan.solarConsumptionRows,
-      "solar_consumption",
-    ),
-    solarReceiptRows: keep(plan.solarReceiptRows, "solar_receipt"),
-    hopRows: keep(plan.hopRows, "hop_reading"),
-    targetRows: keep(plan.targetRows, "biomass_target"),
-    cumulativeRows: keep(plan.cumulativeRows, "biomass_cumulative"),
+    receiptRows,
+    coalReceiptRows,
+    coalConsumptionRows,
+    coalStockRows,
+    biomassConsumptionRows,
+    solarConsumptionRows,
+    solarReceiptRows,
+    hopRows,
+    targetRows,
+    cumulativeRows,
+    stagingRows,
+    summary: {
+      ...plan.summary,
+      receiptRows: receiptRows.length,
+      coalReceiptRows: coalReceiptRows.length,
+      coalConsumptionRows: coalConsumptionRows.length,
+      coalStockRows: coalStockRows.length,
+      biomassConsumptionRows: biomassConsumptionRows.length,
+      solarConsumptionRows: solarConsumptionRows.length,
+      solarReceiptRows: solarReceiptRows.length,
+      hopRows: hopRows.length,
+      targetRows: targetRows.length,
+      cumulativeRows: cumulativeRows.length,
+      totalRows: stagingRows.length,
+    },
   };
 }

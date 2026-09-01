@@ -33,8 +33,9 @@ together; partial configuration fails fast.
 ## Performance controls
 
 - Metadata and range reads use the existing bounded in-memory TTL cache.
-- Cron scope is the current period, avoiding a full historical workbook read on
-  every scheduled invocation.
+- Cron scope is the automatic future-BB policy: it admits only due worksheets
+  after `Juli26-BB` whose schema matches the canonical July snapshot. It does
+  not run a full historical backfill on every scheduled invocation.
 - The parser runs on the server before normalized data is passed to the existing
   transactional importer.
 - Google network calls are outside the database transaction.
@@ -52,6 +53,16 @@ together; partial configuration fails fast.
 - A failed importer transaction does not advance row state.
 - Source rows missing from a later read are retained until an explicit archive
   policy is approved.
+- New BB worksheet admission is gated by period, canonical schema fingerprint,
+  parser validation, and duplicate stable-key detection. A new tab is
+  registered automatically, but a schema-drifted or future-dated tab remains
+  in review/not-due state and is not imported.
+- Stable row identity excludes spreadsheet row number and cell address. The
+  normalized worksheet content hash is used for change detection; unchanged
+  rows are `SKIP` and are excluded from the import write plan.
+- Import plans carry a deterministic checksum. A completed successful sync
+  import with the same source, worksheet, range, periods, and checksum is
+  reused instead of creating another normalized import transaction.
 - Manual/verification sync remains local-only unless an authenticated scheduler
   explicitly opts into a non-local target.
 
@@ -59,12 +70,23 @@ together; partial configuration fails fast.
 
 1. The range cache is process-local and is not a durable distributed cache. The
    database row state remains the idempotency source of truth.
-2. Existing normalized importer upserts are sequential inside a transaction.
+2. The six historical worksheets January-June 2026 currently have imported
+   domain data but do not have persisted sync row states/schema approval in the
+   existing registry. They must not be presented as fully idempotent until a
+   separately approved registry reconciliation is completed.
+3. Existing normalized importer upserts are sequential inside a transaction.
    This is safe for the current workbook size but should be load-tested before
    expanding historical backfills.
-3. Production PostgreSQL pooler/connection limits must be selected for the
+4. The import-run table has no unique checksum constraint. The source lease
+   protects the normal sync orchestrator; direct concurrent importer calls
+   still require operational serialization or a future additive constraint
+   review.
+5. Mapping profile/version and a first-class `SYNCED`/`BLOCKED` worksheet state
+   are currently code/derived concepts, not separate persisted columns. Adding
+   them would require a reviewed schema change.
+6. Production PostgreSQL pooler/connection limits must be selected for the
    Vercel plan. Changing infrastructure requires manual approval.
-4. Alert delivery for failed/partial runs is not configured; monitoring state is
+7. Alert delivery for failed/partial runs is not configured; monitoring state is
    available in PostgreSQL and the protected monitoring page.
 
 ## Verification
@@ -72,6 +94,7 @@ together; partial configuration fails fast.
 ```bash
 npm run sync:verify-config
 npm run sync:verify-cron-auth
+npm run sync:verify-auto-admission
 npm run sync:verify-retry -- --live
 npm run sync:verify-schema -- --live
 npm run sync:verify-incremental -- --live
@@ -79,4 +102,3 @@ npm run sync:verify-incremental -- --live
 
 All live commands above use the local environment/database only. Production
 credential and database validation remain a deployment-stage manual check.
-

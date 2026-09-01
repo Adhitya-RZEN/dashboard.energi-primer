@@ -109,6 +109,22 @@ export function dateFromRaw(
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+export function isValidDateForPeriod(
+  date: string | null,
+  month: number,
+  year: number,
+) {
+  if (!date) return false;
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const actualYear = Number(match[1]);
+  const actualMonth = Number(match[2]);
+  const day = Number(match[3]);
+  if (actualYear !== year || actualMonth !== month) return false;
+  const maxDay = new Date(Date.UTC(actualYear, actualMonth, 0)).getUTCDate();
+  return day >= 1 && day <= maxDay;
+}
+
 export function normalizedUnit(raw: unknown): string | null {
   const value = normalizeCellText(raw);
   if (!value) return null;

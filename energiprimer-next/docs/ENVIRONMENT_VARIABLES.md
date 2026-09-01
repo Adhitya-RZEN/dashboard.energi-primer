@@ -17,7 +17,10 @@ tidak boleh di-commit.
 | `AUTH_SECRET`                    | Yes                              | Server        | Yes                     | Auth.js session/JWT signing                                        | Yes                                       |
 | `AUTH_TRUST_HOST`                | Yes for deployment configuration | Server        | No                      | Auth.js host trust                                                 | Yes                                       |
 | `CRON_SECRET`                    | Yes when scheduled sync is enabled | Server      | Yes                     | Vercel Cron synchronization endpoint                               | Yes when scheduled sync is enabled        |
-| `AUTH_MAILER`                    | Optional in development          | Server        | No                      | Password-reset delivery mode                                       | Yes, after a real provider is implemented |
+| `AUTH_MAILER`                    | Optional in development          | Server        | No                      | Password-reset delivery mode (`log` or explicit `resend`)          | Yes when reset delivery is enabled        |
+| `RESEND_API_KEY`                 | Required when `AUTH_MAILER=resend` | Server      | Yes                     | Resend password-reset delivery                                    | Yes when Resend is enabled                |
+| `RESEND_FROM_EMAIL`              | Required when `AUTH_MAILER=resend` | Server      | Config-sensitive        | Verified Resend sender                                             | Yes when Resend is enabled                |
+| `RESEND_TEST_RECIPIENT`          | Test-only                         | Server/script | No                    | One-recipient controlled smoke test                               | No                                        |
 | `AUTH_URL`                       | Recommended                      | Server        | No                      | Canonical password-reset URL                                       | Yes for production reset links            |
 | `GOOGLE_SHEETS_CREDENTIALS_PATH` | Yes when Sheets is active        | Server        | Yes/config path         | Google Sheets service                                              | Yes when Sheets is active                 |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL`   | Alternative with private key    | Server        | Yes                     | Google Sheets service                                              | Recommended for Vercel when no file mount |
@@ -38,8 +41,11 @@ tidak boleh di-commit.
   `GOOGLE_SHEETS_CREDENTIALS_PATH` tetap didukung untuk local development.
   `GOOGLE_SHEETS_WORKSHEET` dan `GOOGLE_SHEETS_RANGE` tidak digunakan karena
   worksheet/range ditentukan oleh adapter dan registry.
-- `AUTH_MAILER=log` hanya untuk development. Implementasi saat ini belum
-  memiliki SMTP/transactional provider untuk production.
+- `AUTH_MAILER=log` hanya untuk development. `AUTH_MAILER=resend` mengaktifkan
+  delivery Resend dan membutuhkan `RESEND_API_KEY` serta
+  `RESEND_FROM_EMAIL`; sender harus sudah diverifikasi di Resend.
+- `RESEND_TEST_RECIPIENT` hanya dipakai oleh controlled smoke test dengan flag
+  `--real`; test biasa selalu memakai mock dan tidak mengirim email.
 - `AUTH_URL` dipakai agar reset link tidak bergantung pada URL preview atau
   URL lokal. `NEXT_PUBLIC_APP_URL` hanya fallback non-secret.
 - `DATABASE_URL` pada environment lokal menunjuk ke host loopback. Nilai
@@ -62,12 +68,13 @@ tidak boleh di-commit.
 ## Deployment gaps
 
 Vercel masih membutuhkan konfigurasi manual untuk `DATABASE_URL`, `AUTH_SECRET`,
-`AUTH_TRUST_HOST`, `AUTH_URL`, dan konfigurasi Google Sheets. Credential file
-lokal tidak otomatis tersedia pada deployment. Detailnya ada di
+`AUTH_TRUST_HOST`, `AUTH_URL`, `AUTH_MAILER`, konfigurasi Resend, dan
+konfigurasi Google Sheets. Credential file lokal tidak otomatis tersedia pada
+deployment. Detailnya ada di
 [`GOOGLE_SHEETS_PRODUCTION.md`](./GOOGLE_SHEETS_PRODUCTION.md) dan
 [`VERCEL_DEPLOYMENT_READINESS.md`](./VERCEL_DEPLOYMENT_READINESS.md).
 
 ## Status
 
-**PASS untuk inventory dan source boundary; NEEDS REVIEW untuk nilai production
-dan delivery secret/provider.**
+**PASS untuk inventory dan source boundary; NEEDS REVIEW untuk provisioning
+sender/domain/API key production dan real-email smoke test.**

@@ -24,7 +24,7 @@ Daftar lengkap ada pada [`ENVIRONMENT_VARIABLES.md`](./ENVIRONMENT_VARIABLES.md)
 - `DATABASE_URL` untuk PostgreSQL existing yang dapat dijangkau dari Vercel;
 - `AUTH_SECRET`, `AUTH_TRUST_HOST`, dan `AUTH_URL`;
 - `NEXT_PUBLIC_APP_NAME` dan `NEXT_PUBLIC_APP_URL` sesuai domain;
-- `AUTH_MAILER` dan provider mail production yang benar-benar tersedia;
+- `AUTH_MAILER=resend`, `RESEND_API_KEY`, dan `RESEND_FROM_EMAIL` dari sender/domain yang diverifikasi;
 - Google Sheets credential configuration dan spreadsheet ID server-side.
 
 Nilai secret tidak dicantumkan pada dokumentasi.
@@ -43,12 +43,12 @@ Detail ada di [`GOOGLE_SHEETS_PRODUCTION.md`](./GOOGLE_SHEETS_PRODUCTION.md).
 
 ## 5. Authentication
 
-Auth.js Credentials berjalan server-side dengan bcrypt dan JWT. Protected layout melakukan pemeriksaan session/role di server. Reset password memerlukan mail delivery production; mode `log` hanya untuk development dan tidak mengirim email pada production.
+Auth.js Credentials berjalan server-side dengan bcrypt dan JWT. Protected layout melakukan pemeriksaan session/role di server. Reset password menggunakan mail service server-side; `AUTH_MAILER=log` hanya untuk development, sedangkan production harus memakai Resend dengan sender terverifikasi.
 
 Risiko yang belum selesai:
 
 - Auth.js masih berada pada beta release dan perlu regression test/keputusan upgrade manual.
-- Production mail provider belum dikonfigurasi.
+- Sender/domain Resend dan controlled real-email smoke test belum diverifikasi pada environment production.
 - Kebijakan role selain admin dan cutover session JWT versus tabel session legacy perlu konfirmasi.
 
 ## 6. Runtime, filesystem, dan background work
@@ -69,7 +69,7 @@ Sebelum deployment:
 2. Pilih/pin Node runtime yang kompatibel.
 3. Sediakan `DATABASE_URL` production yang reachable, pooling, TLS, dan firewall yang benar.
 4. Sediakan Google Sheets credential secara aman dan pastikan service account memiliki permission Viewer pada spreadsheet.
-5. Sediakan mail provider production dan konfigurasi `AUTH_MAILER`/secret-nya.
+5. Sediakan Resend sender/domain terverifikasi dan konfigurasi `AUTH_MAILER=resend`, `RESEND_API_KEY`, serta `RESEND_FROM_EMAIL`.
 6. Jalankan read-only smoke test pada preview environment.
 7. Review vulnerability Prisma sebelum production approval.
 
@@ -77,4 +77,4 @@ Item 3–5 adalah **REQUIRES MANUAL APPROVAL** dan tidak dilakukan pada Phase 10
 
 ## Status
 
-**NOT READY untuk deployment Vercel.** Build aplikasi lokal lulus, tetapi database loopback, credential file Google lokal, mail delivery, dan dependency findings masih harus diselesaikan/dikonfirmasi.
+**NOT READY untuk deployment Vercel.** Build aplikasi lokal lulus, tetapi database loopback, credential file Google lokal, sender/domain Resend, dan dependency findings masih harus diselesaikan/dikonfirmasi.

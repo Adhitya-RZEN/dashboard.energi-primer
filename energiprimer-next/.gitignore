@@ -45,3 +45,6 @@ next-env.d.ts
 #Google Sheets credentials
 credentials/
 
+# Local database backups must stay outside source control.
+excels/dump-*.sql
+

@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs";
 
+import { isValidAuthEmail, normalizeAuthEmail } from "@/lib/auth-security";
 import { prisma } from "@/lib/prisma";
 import {
   createPasswordResetToken,
@@ -23,11 +24,9 @@ export async function requestPasswordReset(
   _previousState: PasswordResetRequestState,
   formData: FormData,
 ): Promise<PasswordResetRequestState> {
-  const email = String(formData.get("email") ?? "")
-    .trim()
-    .toLowerCase();
+  const email = normalizeAuthEmail(formData.get("email"));
 
-  if (!email || !email.includes("@")) {
+  if (!isValidAuthEmail(email)) {
     return { error: "Masukkan alamat email yang valid." };
   }
 
@@ -83,15 +82,13 @@ export async function resetPassword(
   formData: FormData,
 ): Promise<ResetPasswordState> {
   const token = String(formData.get("token") ?? "");
-  const email = String(formData.get("email") ?? "")
-    .trim()
-    .toLowerCase();
+  const email = normalizeAuthEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
   const passwordConfirmation = String(
     formData.get("password_confirmation") ?? "",
   );
 
-  if (!token || !email || !email.includes("@")) {
+  if (!token || !isValidAuthEmail(email)) {
     return { error: "Link reset password tidak valid atau sudah kedaluwarsa." };
   }
 

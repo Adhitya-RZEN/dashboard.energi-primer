@@ -72,6 +72,7 @@ export function parseDynamicWorksheet(
     tables,
     options.worksheetName,
     structure,
+    worksheet.year || options.year || 0,
   );
   const historical = parseHistoricalTable(
     scannedCells,

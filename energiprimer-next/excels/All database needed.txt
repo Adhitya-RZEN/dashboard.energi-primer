@@ -1,0 +1,155 @@
+All database needed:
+
+TOTAL PENERIMAAN BIOMASSA BULANAN:
+Nama tabel yang digunakan
+==>
+Level 1=Penerimaan
+Level 2=Biomassa
+Level 3=Sawdust PT Syahroni	Sawdust PT Bintang	 Woodchip PT Syahroni 	 Woodchip PT RAP 	 Woodchip CV Multi Paketindo 	 LRUK 	 SRF 	 
+Note: Data SUM dari TOTAL
+
+TOTAL PEMAKAIAN BIOMASSA BULANAN
+Nama tabel yang digunakan
+==>
+Level 1=TOTAL (TON)
+Level 2=Biomassa
+Level 3=Ton
+Note: Terdapat pada kolom TOTAL
+
+PEMAKAIAN BIOMASSA UNIT 1 CURENT
+Nama tabel yang digunakan
+==>
+Level 1=Unit 1
+level 2=Biomassa
+level 3=Ton
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+PEMAKAIAN BIOMASSA UNIT 2 CURENT
+Nama tabel yang digunakan
+==>
+Level 1=Unit 2
+level 2=Biomassa
+level 3=Ton
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+PEMAKAIAN BIOMASSA UNIT 3 CURENT
+Nama tabel yang digunakan
+==>
+Level 1=Unit 3
+level 2=Biomassa
+level 3=Ton
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+TOTAL PEMAKAIAN BATUBARA BULANAN
+Nama tabel yang digunakan
+==>
+level 1=Total (TON)
+level 2=Batubara
+level 3=Ton
+Note: Terdapat pada kolom TOTAL
+
+TOTAL PENERIMAAN BATUBARA BULANAN
+Nama tabel yang digunakan
+==>
+level 1=Penerimaan
+level 2=Batubara
+level 3=kosong
+Note: Terdapat pada kolom TOTAL
+
+PEMAKAIAN BATUBARA UNIT 1 CURENT
+Nama tabel yang digunakan
+==>
+level 1=Unit 1
+level 2=Batubara
+level 3=Unit 1
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+PEMAKAIAN BATUBARA UNIT 2 CURENT
+Nama tabel yang digunakan
+==>
+level 1=Unit 2
+level 2=Batubara
+level 3=Unit 2
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+PEMAKAIAN BATUBARA UNIT 3 CURENT
+Nama tabel yang digunakan
+==>
+level 1=Unit 3
+level 2=Batubara
+level 3=Unit 3
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+TOTAL PEMAKAIAN BATUBARA HARIAN
+Nama tabel yang digunakan
+==>
+level 1=Total (TON)
+level 2=Batubara
+level 3=Ton
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+STOK BATUBARA
+Nama tabel yang digunakan
+==>
+level 1=Stok Akhir
+level 2=Batubara
+level 3=Ton
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+HOP BATUBARA
+Nama tabel yang digunakan
+==>
+level 1=HOP
+level 2=3 Unit, 2 Unit, 1 Unit
+level 3=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+PEMAKAIAN SOLAR CH HARIAN
+Nama tabel yang digunakan
+==>
+level 1=Coal Handling
+level 2=Total
+level 4=Data harian yg digunakan berdasarkan jumlah hari (28/29/30/31)
+
+
+TOTAL PEMAKAIAN SOLAR BULANAN
+Nama tabel yang digunakan
+==>
+level 1=Coal Handling
+level 2=Total
+Note: DAta terdapat pada kolom TOTAL
+
+TOTAL PENERIMAAN SOLAR BULANAN
+Nama tabel yang digunakan
+==>
+level 1=Coal Handlinf
+level 2=TOP UP
+Note: DAta terdapat pada kolom TOTAL
+
+TARGET PEMAKAIAN BIOMASSA
+Nama tabel yang digunakan
+==>
+level 1=Target 2026
+level 2=70020
+Note: Jika di worksheet lainnya tidak memiliki tabel ini maka gunakan data ini sebagai target
+
+KUMULATIF PEMAKAIAN BIOMASSA
+Nama tabel yang digunakan
+==>
+level 1= TONASE BIOMASSA
+level 2=Kumulatif, kosong, Unit 1
+Level 3=[Tahun sebelumnya dari Worksheet], kosong, data
+level 4=TOTAL [Tahun dari Worksheet]
+level 4-Right=Data yang dibutuhkan
+
+KUMULATIF PEMAKAIAN BIOMASSA
+Nama tabel yang digunakan
+==>
+sama dengan yg sudah dibuat

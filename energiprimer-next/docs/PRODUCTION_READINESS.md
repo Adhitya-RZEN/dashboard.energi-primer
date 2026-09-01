@@ -1,4 +1,24 @@
-# Production Readiness — Phase 10A
+# Production Readiness — Phase 10A / Phase 20 Index
+
+> **Current authoritative audit:** [Production Preparation Report — 2026-09-01](./PRODUCTION_PREPARATION_REPORT_2026-09-01.md). This file retains the historical Phase 10A evidence and is indexed here for continuity.
+
+## Phase 20 current gate
+
+Phase 20 preparation-only audit: **PASS WITH REVIEW**. Architecture and local
+build checks are ready for manual production configuration, but Supabase,
+Vercel, production Google credentials, Resend sender/domain, live Auth E2E,
+distributed rate limiting, and dependency remediation remain external/manual
+gates. No deployment, Supabase write, migration execution, import, or
+production sync was performed.
+
+See the current runbooks:
+
+- [Production Preparation Report](./PRODUCTION_PREPARATION_REPORT_2026-09-01.md)
+- [Production Environment Matrix](./PRODUCTION_ENVIRONMENT_MATRIX.md)
+- [Supabase Migration Runbook](./SUPABASE_PRODUCTION_MIGRATION_RUNBOOK.md)
+- [Vercel Deployment Runbook](./VERCEL_DEPLOYMENT_RUNBOOK.md)
+- [Rollback Runbook](./PRODUCTION_ROLLBACK_RUNBOOK.md)
+- [Production Smoke Test Plan](./PRODUCTION_SMOKE_TEST_PLAN.md)
 
 Tanggal audit: 2026-08-28  
 Target: `energiprimer-next` pada Vercel.  
@@ -8,7 +28,7 @@ Scope: audit dan safe hardening; tidak ada deployment, database migration, atau 
 
 **PASS WITH WARNINGS** untuk audit teknis dan safe fixes. Production deployment belum dilakukan dan belum dapat dianggap production-ready.
 
-Fondasi dan local build berhasil diverifikasi, tetapi production belum siap karena endpoint PostgreSQL lokal tidak reachable dari Vercel, credential Google Sheets masih berupa file lokal, mail provider production belum tersedia, dan audit dependency menemukan tiga advisory HIGH pada dependency Prisma.
+Fondasi dan local build berhasil diverifikasi, tetapi production belum siap karena endpoint PostgreSQL lokal tidak reachable dari Vercel, credential Google Sheets masih berupa file lokal, konfigurasi sender/domain Resend production belum diverifikasi, dan audit dependency menemukan tiga advisory HIGH pada dependency Prisma. Phase 18 sudah menyediakan code integration Resend dengan status PASS WITH REVIEW.
 
 ## Production Readiness
 
@@ -22,7 +42,7 @@ Fondasi dan local build berhasil diverifikasi, tetapi production belum siap kare
 | Build                | PASS                       |
 | Authentication       | PASS WITH WARNINGS         |
 | Authorization        | PASS WITH WARNINGS         |
-| Mail                 | BLOCKED                    |
+| Mail                 | PASS WITH REVIEW           |
 | PostgreSQL           | BLOCKED                    |
 | Prisma               | PASS WITH WARNINGS         |
 | Google Sheets        | BLOCKED                    |
@@ -40,7 +60,7 @@ Fondasi dan local build berhasil diverifikasi, tetapi production belum siap kare
 | PostgreSQL           | BLOCKED                        | HIGH     | Production endpoint/pooler/SSL not configured for Vercel.                                 |
 | Prisma               | PASS WITH WARNINGS             | HIGH     | Three HIGH npm audit findings require manual remediation decision.                        |
 | Google Sheets        | BLOCKED                        | HIGH     | Production credential provisioning is unresolved.                                         |
-| Mail                 | BLOCKED                        | HIGH     | MAIL_PROVIDER_REQUIRED for forgot/reset password.                                         |
+| Mail                 | PASS WITH REVIEW                | HIGH     | Resend adapter tersedia; sender/domain, secret provisioning, dan real smoke test masih manual. |
 | Environment          | BLOCKED                        | HIGH     | Production values are not provisioned in the audited environment.                         |
 | Secrets              | PASS WITH WARNINGS             | HIGH     | No tracked credential path or public bundle exposure found; local secrets remain ignored. |
 | API Security         | PASS WITH WARNINGS             | MEDIUM   | Public reset rate-limit policy and trusted forwarded IP need review.                      |
@@ -74,7 +94,7 @@ Auth end-to-end script tidak dijalankan pada Phase 10A karena script tersebut me
 | CRITICAL | Tidak ada credential exposure kritis yang terkonfirmasi melalui static scan                              | PASS                     |
 | HIGH     | `DATABASE_URL` local loopback tidak dapat dipakai oleh Vercel; production endpoint belum dikonfigurasi   | BLOCKER                  |
 | HIGH     | Google Sheets service masih bergantung pada credential file lokal yang tidak tersedia otomatis di Vercel | BLOCKER                  |
-| HIGH     | `AUTH_MAILER=log` hanya development; mail delivery/reset password production belum dikonfigurasi         | REQUIRED FIX             |
+| HIGH     | Resend sender/domain/API secret production belum diprovision dan real smoke test belum dijalankan        | NEEDS REVIEW             |
 | HIGH     | Audit npm menemukan advisory pada dependency chain Prisma                                                | REQUIRES MANUAL APPROVAL |
 | MEDIUM   | Auth.js beta, JWT cutover, operator role, dan session policy legacy perlu regression/keputusan manual    | NEEDS REVIEW             |
 | MEDIUM   | Security headers eksplisit belum dikonfigurasi pada next.config.ts                                       | NEEDS REVIEW             |
@@ -108,6 +128,7 @@ Safe changes yang dilakukan:
 - [`energiprimer-next/docs/PERFORMANCE_AUDIT.md`](./PERFORMANCE_AUDIT.md)
 - [`energiprimer-next/docs/VERCEL_DEPLOYMENT_READINESS.md`](./VERCEL_DEPLOYMENT_READINESS.md)
 - [`energiprimer-next/docs/PRODUCTION_READINESS.md`](./PRODUCTION_READINESS.md)
+- [`energiprimer-next/docs/RESEND_INTEGRATION.md`](./RESEND_INTEGRATION.md) dan [`energiprimer-next/docs/RESEND_INTEGRATION_REPORT_2026-09-01.md`](./RESEND_INTEGRATION_REPORT_2026-09-01.md)
 
 Tidak ada file Laravel, Prisma schema, database record, credential file, atau `.env.local` yang diubah.
 
@@ -145,7 +166,7 @@ Perubahan otomatis dibatasi pada hardening yang tidak mengubah schema, API contr
 - Menentukan patch/upgrade dependency Prisma yang aman terhadap advisory HIGH.
 - Memindahkan/provision credential Google Sheets ke konfigurasi secret Vercel atau mengubah credential-loading architecture.
 - Memberikan permission service account pada spreadsheet production.
-- Memilih dan mengonfigurasi mail provider production.
+- Memverifikasi sender/domain Resend, menyimpan API key sebagai secret, dan menjalankan satu real-email smoke test terkontrol.
 - Mengubah storage architecture bila kebutuhan upload/persistent file ditemukan kemudian.
 - Menetapkan Node runtime/root directory Vercel dan menjalankan preview deployment.
 - Menentukan kebijakan Auth.js beta/session cutover dan role selain admin.
@@ -154,7 +175,7 @@ Perubahan otomatis dibatasi pada hardening yang tidak mengubah schema, API contr
 
 1. PostgreSQL production belum reachable dari Vercel.
 2. Google Sheets production credential provisioning belum tersedia.
-3. Password reset production belum memiliki mail delivery.
+3. Password reset production belum diaktifkan sampai sender/domain Resend dan real-email smoke test selesai.
 4. Dependency audit HIGH belum mendapat keputusan remediation.
 
 ## Vercel Readiness
@@ -167,7 +188,7 @@ Perubahan otomatis dibatasi pada hardening yang tidak mengubah schema, API contr
 - [POSTGRESQL_VERCEL_READINESS.md](./POSTGRESQL_VERCEL_READINESS.md) — Prisma/serverless/database compatibility.
 - [PRISMA_DEPENDENCY_REVIEW.md](./PRISMA_DEPENDENCY_REVIEW.md) — investigasi 3 advisory HIGH.
 - [GOOGLE_SHEETS_VERCEL_READINESS.md](./GOOGLE_SHEETS_VERCEL_READINESS.md) — credential dan Vercel compatibility.
-- [MAIL_PROVIDER_READINESS.md](./MAIL_PROVIDER_READINESS.md) — MAIL_PROVIDER_REQUIRED.
+- [MAIL_PROVIDER_READINESS.md](./MAIL_PROVIDER_READINESS.md) — Resend provider status dan manual production setup.
 - [PRODUCTION_ENVIRONMENT.md](./PRODUCTION_ENVIRONMENT.md) — environment variable inventory.
 - [API_SECURITY_AUDIT.md](./API_SECURITY_AUDIT.md) — route handler dan Server Action review.
 - [PERFORMANCE_READINESS.md](./PERFORMANCE_READINESS.md) — HIGH/MEDIUM/LOW impact findings.

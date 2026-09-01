@@ -22,7 +22,7 @@ Namespace baru berada di `src/services/google-sheets/dynamic/` dan sengaja tidak
 
 ```text
 dynamic/
-├── worksheet-resolver.ts       valid naming dan fallback max 12 worksheet *-BB
+├── worksheet-resolver.ts       valid naming, alias case-insensitive, dan fallback max 12 worksheet *-BB
 ├── spreadsheet-scanner.ts      cell metadata, normalisasi label, address
 ├── anchor-detector.ts          exact/alias/pattern anchor detection
 ├── table-detector.ts           boundary dan grouping berdasarkan proximity/density
@@ -59,7 +59,11 @@ readAndParseDynamicBBWorksheet({ month: 7, year: 2026 });
 
 ## Worksheet resolver dan fallback
 
-`resolveBBWorksheet(month, year)` hanya membuat nama dari daftar bulan Indonesia yang eksplisit dan tahun dua digit valid. `parseBBWorksheetName` memakai regex exact; nama yang valid tetapi bukan `*-BB` tidak diterima.
+`resolveBBWorksheet(month, year)` memakai daftar bulan Indonesia dan tahun dua digit yang eksplisit. `parseBBWorksheetName` bersifat case-insensitive dan menerima nama bulan lengkap maupun alias yang disetujui, misalnya `Januari26-BB`, `Jan26-BB`, `JANUARI26-BB`, serta variasi spasi di sekitar tanda hubung. Nama yang tidak cocok dengan token bulan yang disetujui atau tidak berakhiran `-BB` tetap ditolak.
+
+Alias yang didukung mencakup varian yang ditemukan pada workbook legacy, antara lain `Jan`, `Feb`, `Mar`, `Apr`, `Jun`, `Jul`/`July`, `Agus`/`Agust`/`Agu`, `Sep`/`Sept`, `Okt`/`Oct`, `Nov`, dan `Des`. `Mei` tidak diganti dengan tebakan alias lain. Daftar ini sengaja eksplisit agar nama worksheet yang tidak dikenal tidak dipetakan secara spekulatif.
+
+Jika discovery metadata diberikan kepada resolver, semua judul yang merepresentasikan periode yang sama dikelompokkan. Pemilihan dilakukan deterministik: ejaan kanonik bulan lengkap (contoh `Januari26-BB`) diprioritaskan, kemudian ejaan bulan lengkap dengan kapitalisasi/spasi berbeda, lalu alias singkat (contoh `Jan26-BB`). Jika hanya alias yang tersedia, alias tersebut dipakai sebagai nama worksheet aktual saat read/import.
 
 `previousValidBBWorksheets(month, year, 12)` mengembalikan maksimal 12 periode sebelumnya. Adapter mengembalikan metadata:
 
@@ -70,6 +74,8 @@ readAndParseDynamicBBWorksheet({ month: 7, year: 2026 });
 - daftar worksheet yang dicoba.
 
 Tidak ada fallback ke `DTS`, `ALBES`, atau `FLYASH`, dan tidak ada asumsi worksheet name selain hasil resolver.
+
+Adapter `reader.ts` melakukan discovery metadata terlebih dahulu sehingga dapat menemukan worksheet alias tanpa mencoba nama yang tidak ada. Fallback tetap dibatasi maksimal 12 periode sebelumnya dan hanya satu worksheet dipilih untuk setiap periode.
 
 ## Scanner dan normalisasi
 
@@ -303,7 +309,7 @@ Parser pure tidak membaca credential. Adapter `reader.ts` hanya server-side dan 
 
 ## Keterbatasan v1
 
-1. Google Sheets API yang digunakan saat ini tidak melakukan discovery daftar semua worksheet; fallback mencoba nama valid yang dibangkitkan, lalu mengandalkan response API.
+1. Resolver bergantung pada akses metadata spreadsheet untuk memilih alias. Jika metadata tidak dapat dibaca, caller yang hanya memiliki periode tetap dapat membangkitkan nama kanonik, tetapi tidak dapat mengetahui alias yang hanya tersedia sampai konfigurasi/akses metadata dipulihkan.
 2. `A1:ZZ500` adalah scan envelope untuk adapter prototype. Jika table dipindah di luar envelope, envelope perlu diperluas secara konfigurasi/keputusan Phase 2; extraction field tetap tidak memakai fixed coordinate.
 3. Merged cell dan header hierarchy yang sangat tidak beraturan dapat menghasilkan `WARNING` atau `UNRESOLVED` dan harus direview.
 4. Label bisnis yang contradictory tetap dilaporkan. Untuk kasus kandidat dashboard dan agregat Unit 1–3 yang berbeda, v1 menggunakan agregat Unit 1–3 sebagai source konsumsi efektif; koreksi nilai dashboard di worksheet tetap membutuhkan keputusan/data-owner review.

@@ -27,7 +27,7 @@ function isResource(value: string): HeaderPath["resource"] {
 }
 
 function extractUnitNumber(labels: readonly string[]) {
-  for (const label of labels) {
+  for (const label of [...labels].reverse()) {
     const direct = label.match(/\bUNIT\s*([123])\b/);
     if (direct) return Number(direct[1]);
     const reversed = label.match(/\b([123])\s*UNIT\b/);
@@ -110,6 +110,23 @@ function chooseDateHeader(cells: readonly ScannedCell[]) {
   );
 }
 
+/**
+ * A sheet can contain both a short day-number helper column (`Tgl`) and a
+ * formatted date column (`Tanggal`).  Counting parseable day numbers alone
+ * makes the helper column win when the month has fewer days than the helper
+ * range (for example June has 30 dates while the helper still contains 1-31).
+ * Prefer an explicit formatted date value when it is available.
+ */
+function hasFormattedDateValue(raw: ScannedCell["rawValue"]) {
+  if (typeof raw !== "string") return false;
+  const value = raw.trim();
+  return (
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\b|T)/.test(value) ||
+    /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\b|$)/.test(value) ||
+    /^\d{1,2}\s+[A-Za-zÀ-ÿ]+(?:\s+\d{2,4})?$/.test(value)
+  );
+}
+
 function findHeaderRows(
   cells: readonly ScannedCell[],
   dateHeader: ScannedCell | null,
@@ -149,6 +166,14 @@ function findDateColumn(
   const dataRows = [...new Set(cells.map((cell) => cell.row))].filter(
     (row) => !headerRows.includes(row),
   );
+  const explicitDateValues = dataRows.filter((row) => {
+    const cell = cells.find(
+      (candidate) =>
+        candidate.row === row && candidate.column === dateHeader.column,
+    );
+    return cell ? hasFormattedDateValue(cell.rawValue) : false;
+  }).length;
+  if (explicitDateValues > 0) return dateHeader.column;
   const scored = [...candidateColumns].map((column) => ({
     column,
     count: dataRows.filter((row) => {
@@ -211,6 +236,35 @@ export function resourceColumns(
       path.resource === resource &&
       (unitNumber === undefined || path.unitNumber === unitNumber),
   );
+}
+
+/**
+ * Returns unit columns in their physical worksheet order. Legacy sheets
+ * occasionally repeat a Unit 2 label for the third block; callers can use
+ * the ordered fallback to keep the canonical Unit 1 -> Unit 2 -> Unit 3
+ * identity without changing the source value or header.
+ */
+export function orderedUnitPaths(
+  structure: StructureAnalysis,
+  resource: HeaderPath["resource"],
+  options: { hop?: boolean } = {},
+) {
+  const seen = new Set<number>();
+  return structure.headerPaths
+    .filter(
+      (path) =>
+        path.resource === resource &&
+        path.unitNumber !== null &&
+        (options.hop
+          ? path.isHop
+          : !path.isTotal && !path.isStock && !path.isHop),
+    )
+    .sort((a, b) => a.cell.column - b.cell.column)
+    .filter((path) => {
+      if (seen.has(path.cell.column)) return false;
+      seen.add(path.cell.column);
+      return true;
+    });
 }
 
 export function describeStructure(structure: StructureAnalysis) {

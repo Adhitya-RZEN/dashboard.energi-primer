@@ -4,6 +4,11 @@ import Credentials from "next-auth/providers/credentials";
 import { headers } from "next/headers";
 import "server-only";
 
+import {
+  isValidAuthEmail,
+  normalizeAuthEmail,
+  resolveSafeRedirect,
+} from "@/lib/auth-security";
 import { consumeLoginAttempt, getRequestIp } from "@/lib/login-throttle";
 import { prisma } from "@/lib/prisma";
 
@@ -27,14 +32,11 @@ export const {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email =
-          typeof credentials?.email === "string"
-            ? credentials.email.trim().toLowerCase()
-            : "";
+        const email = normalizeAuthEmail(credentials?.email);
         const password =
           typeof credentials?.password === "string" ? credentials.password : "";
 
-        if (!email || !password) {
+        if (!isValidAuthEmail(email) || !password) {
           return null;
         }
 
@@ -90,6 +92,9 @@ export const {
 
       return true;
     },
+    redirect({ url, baseUrl }) {
+      return resolveSafeRedirect(url, baseUrl);
+    },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -100,25 +105,32 @@ export const {
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
+      const subject = typeof token.sub === "string" ? token.sub : "";
+
+      if (session.user && subject) {
+        session.user.id = subject;
         session.user.role = typeof token.role === "string" ? token.role : "";
       }
 
-      if (
-        session.user &&
-        token.sub &&
-        token.sessionVersion &&
-        /^\d+$/.test(token.sub)
-      ) {
+      if (session.user && /^\d+$/.test(subject)) {
         const currentUser = await prisma.user.findUnique({
-          where: { id: BigInt(token.sub) },
-          select: { updatedAt: true },
+          where: { id: BigInt(subject) },
+          select: { role: true, updatedAt: true },
         });
+
+        const currentVersion = currentUser?.updatedAt?.toISOString() ?? "";
+        const tokenVersion =
+          typeof token.sessionVersion === "string" ? token.sessionVersion : null;
+
         if (
-          (currentUser?.updatedAt?.toISOString() ?? "") !== token.sessionVersion
+          !currentUser ||
+          currentUser.role !== "admin" ||
+          tokenVersion === null ||
+          currentVersion !== tokenVersion
         ) {
           session.user.role = "";
+        } else {
+          session.user.role = currentUser.role;
         }
       }
 

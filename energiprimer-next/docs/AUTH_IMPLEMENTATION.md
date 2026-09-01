@@ -45,7 +45,8 @@ atau disimpan plaintext.
 - `src/app/forgot-password/*` — request reset flow.
 - `src/app/reset-password/[token]/*` — reset form dan token validation.
 - `src/app/password/change/*` — authenticated change-password page, form, dan server action.
-- `src/lib/password-reset.ts` — token generation, expiry, throttle, dan development mail behavior.
+- `src/lib/password-reset.ts` — token generation, expiry, throttle, reset URL, dan mail behavior.
+- `src/lib/auth-security.ts` — validasi email, origin-safe redirect, dan security helper.
 - `src/lib/login-throttle.ts` — persistent `6/1 menit` login throttle menggunakan tabel `cache` existing.
 - `scripts/verify-auth.mjs` — HTTP auth verification tanpa perubahan user/password.
 
@@ -89,15 +90,16 @@ that environment in development:
 3. Enforce a 60-second request throttle.
 4. Generate a 32-byte random token.
 5. Store only a bcrypt hash in `password_reset_tokens`.
-6. Log the reset URL server-side in development mode.
+6. Development mail mode logs only a generic event; reset URL/token tidak pernah
+   ditulis ke log.
 7. Accept reset tokens for up to 60 minutes.
 8. Hash the new password with bcrypt and update the existing user row only when
    the submitted token/password are valid.
 
-Production refuses `log` mail delivery. An SMTP or transactional mail provider
-must be configured and implemented before enabling production reset emails.
-No reset request was submitted during verification, so no reset token was
-written to the database.
+Production refuses `log` mail delivery. Resend is now available through the
+server-only mail service when `AUTH_MAILER=resend`, with a verified
+`RESEND_FROM_EMAIL` and `RESEND_API_KEY`. No reset request was submitted during
+verification, so no reset token was written to the database.
 
 ## Environment variables
 
@@ -109,9 +111,12 @@ Required:
 
 Optional:
 
-- `AUTH_URL` or `NEXT_PUBLIC_APP_URL` — base URL for reset links.
-- `AUTH_MAILER` — `log` only for development in the current implementation.
+- `AUTH_URL` — canonical HTTPS base URL for production reset links; development
+  may fall back to `NEXT_PUBLIC_APP_URL`.
+- `AUTH_MAILER` — `log` for development or explicit `resend` for production delivery.
 - Existing `MAIL_MAILER` is used as a fallback for local compatibility.
+- `RESEND_API_KEY` — server-only Resend credential when `AUTH_MAILER=resend`.
+- `RESEND_FROM_EMAIL` — verified Resend sender when `AUTH_MAILER=resend`.
 
 `.env*` files are gitignored. No real credentials or password values were
 added to the repository.
@@ -130,6 +135,10 @@ added to the repository.
   monitored in production.
 - Password change and reset update `users.updated_at`; the Auth.js session
   callback rejects JWTs with an older session version.
+- Auth.js redirects are restricted to the application origin, and production
+  reset URLs require server-side `AUTH_URL` over HTTPS.
+- Baseline security headers are configured in `next.config.ts`; CSP remains a
+  separate review item because it requires testing all inline/script assets.
 - A copied JWT remains incompatible with Laravel sessions and remains a
   separate cutover concern until its expiry/revocation policy is approved.
 
@@ -164,8 +173,8 @@ was changed by the test harness.
 2. Auth.js JWT sessions are not compatible with existing Laravel session
    cookies. A cutover requires users to sign in again, or a separately approved
    shared-session strategy.
-3. SMTP/transactional email provider is not available in the inspected
-   environment; production forgot-password delivery remains **NEEDS REVIEW**.
+3. Resend code integration is available, but production sender/domain
+   verification and one controlled real-email smoke test remain **NEEDS REVIEW**.
 4. The existing Laravel `sessions` table remains untouched and is not used by
    the Next.js JWT session strategy.
 5. Only the `admin` role is authorized, matching current Laravel behavior;

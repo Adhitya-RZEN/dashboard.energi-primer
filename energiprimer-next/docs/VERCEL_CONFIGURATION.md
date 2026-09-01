@@ -43,7 +43,7 @@ Current code reads a local credential path. The ignored local JSON must not be c
 
 ### Authentication/mail
 
-Auth.js and bcrypt run server-side. Forgot/reset production requires a real mail provider; AUTH_MAILER=log is development-only. See MAIL_PROVIDER_READINESS.md.
+Auth.js and bcrypt run server-side. Forgot/reset production uses the server-only Resend service with `AUTH_MAILER=resend`; `AUTH_MAILER=log` is development-only. See RESEND_INTEGRATION.md.
 
 ### Filesystem and jobs
 
@@ -54,7 +54,7 @@ No persistent upload/storage, queue worker, scheduler, or background job require
 1. Root Directory misconfiguration could select the Laravel project instead of the target.
 2. Local loopback database cannot serve a Vercel Function.
 3. Local Google credential file is absent from deployment.
-4. Missing mail provider makes password reset incomplete.
+4. Missing Resend sender/API configuration makes password reset incomplete.
 5. Prisma advisory remediation is unresolved.
 6. Auth.js beta and unmeasured preview performance need manual review.
 

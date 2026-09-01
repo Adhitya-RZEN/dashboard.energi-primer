@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  name            String
+  email           String    @unique
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamp(0)
+  password        String
+  rememberToken   String?   @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime? @map("updated_at") @db.Timestamp(0)
+  role            String    @default("admin")
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamp(0)
+
+  @@index([role])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  email     String    @id
+  token     String
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+
+  @@map("password_reset_tokens")
+}
+
+model Session {
+  id           String  @id
+  userId       BigInt? @map("user_id") @db.BigInt
+  ipAddress    String? @map("ip_address") @db.VarChar(45)
+  userAgent    String? @map("user_agent") @db.Text
+  payload      String  @db.Text
+  lastActivity Int     @map("last_activity")
+
+  @@index([userId])
+  @@index([lastActivity])
+  @@map("sessions")
+}
+
+model Cache {
+  key        String @id
+  value      String @db.Text
+  expiration BigInt @db.BigInt
+
+  @@index([expiration])
+  @@map("cache")
+}
+
+model CacheLock {
+  key        String @id
+  owner      String
+  expiration BigInt @db.BigInt
+
+  @@index([expiration])
+  @@map("cache_locks")
+}
+
+model Job {
+  id          BigInt @id @default(autoincrement()) @db.BigInt
+  queue       String
+  payload     String @db.Text
+  attempts    Int    @db.SmallInt
+  reservedAt  Int?   @map("reserved_at")
+  availableAt Int    @map("available_at")
+  createdAt   Int    @map("created_at")
+
+  @@index([queue])
+  @@map("jobs")
+}
+
+model JobBatch {
+  id           String  @id
+  name         String
+  totalJobs    Int     @map("total_jobs")
+  pendingJobs  Int     @map("pending_jobs")
+  failedJobs   Int     @map("failed_jobs")
+  failedJobIds String  @map("failed_job_ids") @db.Text
+  options      String? @db.Text
+  cancelledAt  Int?    @map("cancelled_at")
+  createdAt    Int     @map("created_at")
+  finishedAt   Int?    @map("finished_at")
+
+  @@map("job_batches")
+}
+
+model FailedJob {
+  id         BigInt   @id @default(autoincrement()) @db.BigInt
+  uuid       String   @unique
+  connection String
+  queue      String
+  payload    String   @db.Text
+  exception  String   @db.Text
+  failedAt   DateTime @default(now()) @map("failed_at") @db.Timestamp(0)
+
+  @@index([connection, queue, failedAt])
+  @@map("failed_jobs")
+}
+
+model Unit {
+  id                  BigInt               @id @default(autoincrement()) @db.BigInt
+  code                String               @unique @db.VarChar(20)
+  name                String               @db.VarChar(100)
+  status              Boolean              @default(true)
+  createdAt           DateTime?            @map("created_at") @db.Timestamp(0)
+  updatedAt           DateTime?            @map("updated_at") @db.Timestamp(0)
+  coalQuality         CoalQuality[]
+  coalConsumption     CoalConsumption[]
+  powerGeneration     PowerGeneration[]
+  kpiTargets          KpiTarget[]
+  biomassConsumptions BiomassConsumption[]
+  hopReadings         HopReading[]
+
+  @@map("units")
+}
+
+model CoalStock {
+  id           BigInt    @id @default(autoincrement()) @db.BigInt
+  date         DateTime  @db.Date
+  openingStock Decimal   @default(0) @map("opening_stock") @db.Decimal(12, 2)
+  received     Decimal   @default(0) @db.Decimal(12, 2)
+  consumed     Decimal   @default(0) @db.Decimal(12, 2)
+  closingStock Decimal   @default(0) @map("closing_stock") @db.Decimal(12, 2)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+
+  @@unique([date])
+  @@map("coal_stock")
+}
+
+model CoalQuality {
+  id        BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId    BigInt    @map("unit_id") @db.BigInt
+  date      DateTime  @db.Date
+  gar       Decimal?  @db.Decimal(8, 2)
+  moisture  Decimal?  @db.Decimal(5, 2)
+  ash       Decimal?  @db.Decimal(5, 2)
+  sulfur    Decimal?  @db.Decimal(5, 3)
+  hgi       Decimal?  @db.Decimal(5, 2)
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime? @map("updated_at") @db.Timestamp(0)
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("coal_quality")
+}
+
+model CoalConsumption {
+  id               BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId           BigInt    @map("unit_id") @db.BigInt
+  date             DateTime  @db.Date
+  coalUsed         Decimal?  @map("coal_used") @db.Decimal(12, 2)
+  sfc              Decimal?  @db.Decimal(8, 2)
+  heatRate         Decimal?  @map("heat_rate") @db.Decimal(8, 2)
+  boilerEfficiency Decimal?  @map("boiler_efficiency") @db.Decimal(5, 2)
+  createdAt        DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt        DateTime? @map("updated_at") @db.Timestamp(0)
+  unit             Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("coal_consumption")
+}
+
+model PowerGeneration {
+  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId          BigInt    @map("unit_id") @db.BigInt
+  date            DateTime  @db.Date
+  averageLoad     Decimal?  @map("average_load") @db.Decimal(8, 2)
+  powerGeneration Decimal?  @map("power_generation") @db.Decimal(12, 2)
+  createdAt       DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime? @map("updated_at") @db.Timestamp(0)
+  unit            Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("power_generation")
+}
+
+model KpiTarget {
+  id             BigInt    @id @default(autoincrement()) @db.BigInt
+  unitId         BigInt    @map("unit_id") @db.BigInt
+  date           DateTime  @db.Date
+  targetSfc      Decimal?  @map("target_sfc") @db.Decimal(8, 2)
+  actualSfc      Decimal?  @map("actual_sfc") @db.Decimal(8, 2)
+  targetHeatRate Decimal?  @map("target_heat_rate") @db.Decimal(8, 2)
+  actualHeatRate Decimal?  @map("actual_heat_rate") @db.Decimal(8, 2)
+  createdAt      DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime? @map("updated_at") @db.Timestamp(0)
+  unit           Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, date])
+  @@map("kpi_targets")
+}
+
+model SpreadsheetImportLog {
+  id           BigInt    @id @default(autoincrement()) @db.BigInt
+  source       String
+  importedRows Int       @default(0) @map("imported_rows")
+  status       String
+  message      String?   @db.Text
+  importedAt   DateTime? @map("imported_at") @db.Timestamp(0)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+
+  @@map("spreadsheet_import_logs")
+}
+
+model SyncSource {
+  id                BigInt          @id @default(autoincrement()) @db.BigInt
+  sourceKey         String          @unique @map("source_key") @db.VarChar(128)
+  provider          String          @db.VarChar(32)
+  externalId        String          @map("external_id") @db.VarChar(255)
+  status            String          @db.VarChar(32)
+  lastDiscoveredAt  DateTime?       @map("last_discovered_at") @db.Timestamp(0)
+  lockToken         String?         @map("lock_token") @db.VarChar(128)
+  lockExpiresAt     DateTime?       @map("lock_expires_at") @db.Timestamp(0)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheets        SyncWorksheet[]
+  runs              SyncRun[]
+
+  @@unique([provider, externalId])
+  @@map("sync_sources")
+}
+
+model SyncWorksheet {
+  id                BigInt        @id @default(autoincrement()) @db.BigInt
+  sourceId          BigInt        @map("source_id") @db.BigInt
+  worksheetKey      String        @map("worksheet_key") @db.VarChar(64)
+  worksheetTitle    String        @map("worksheet_title") @db.VarChar(255)
+  normalizedTitle   String        @map("normalized_title") @db.VarChar(255)
+  status            String        @db.VarChar(32)
+  firstSeenAt       DateTime      @default(now()) @map("first_seen_at") @db.Timestamp(0)
+  lastSeenAt        DateTime      @map("last_seen_at") @db.Timestamp(0)
+  lastSyncAt        DateTime?     @map("last_sync_at") @db.Timestamp(0)
+  schemaHash        String?       @map("schema_hash") @db.VarChar(128)
+  schemaSnapshot    String?       @map("schema_snapshot") @db.Text
+  contentHash       String?       @map("content_hash") @db.VarChar(128)
+  rowCount          Int           @default(0) @map("row_count")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  source            SyncSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  rowStates         SyncRowState[]
+  schemaChanges     SyncSchemaChange[]
+
+  @@unique([sourceId, worksheetKey])
+  @@index([sourceId, status])
+  @@map("sync_worksheets")
+}
+
+model SyncRun {
+  id                BigInt       @id @default(autoincrement()) @db.BigInt
+  sourceId          BigInt       @map("source_id") @db.BigInt
+  triggerType       String       @map("trigger_type") @db.VarChar(32)
+  status            String       @db.VarChar(32)
+  startedAt         DateTime     @default(now()) @map("started_at") @db.Timestamp(0)
+  finishedAt        DateTime?    @map("finished_at") @db.Timestamp(0)
+  worksheetsScanned Int          @default(0) @map("worksheets_scanned")
+  rowsScanned       Int          @default(0) @map("rows_scanned")
+  inserted          Int          @default(0)
+  updated           Int          @default(0)
+  skipped           Int          @default(0)
+  failed            Int          @default(0)
+  durationMs        Int?         @map("duration_ms")
+  errorSummary      String?      @map("error_summary") @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamp(0)
+  source            SyncSource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([sourceId, startedAt])
+  @@index([status])
+  @@map("sync_runs")
+}
+
+model SyncRowState {
+  id             BigInt        @id @default(autoincrement()) @db.BigInt
+  worksheetId    BigInt        @map("worksheet_id") @db.BigInt
+  sourceKey      String        @map("source_key") @db.VarChar(512)
+  entityType     String        @map("entity_type") @db.VarChar(64)
+  contentHash    String        @map("content_hash") @db.VarChar(128)
+  lastSeenAt     DateTime      @map("last_seen_at") @db.Timestamp(0)
+  lastSyncedAt   DateTime?     @map("last_synced_at") @db.Timestamp(0)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheet      SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
+
+  @@unique([worksheetId, sourceKey])
+  @@index([worksheetId, lastSeenAt])
+  @@map("sync_row_states")
+}
+
+model SyncSchemaChange {
+  id                 BigInt        @id @default(autoincrement()) @db.BigInt
+  worksheetId        BigInt        @map("worksheet_id") @db.BigInt
+  detectedAt         DateTime      @default(now()) @map("detected_at") @db.Timestamp(0)
+  previousSchemaHash String?       @map("previous_schema_hash") @db.VarChar(128)
+  currentSchemaHash  String        @map("current_schema_hash") @db.VarChar(128)
+  changeType         String        @map("change_type") @db.VarChar(32)
+  previousSchema     String?       @map("previous_schema") @db.Text
+  currentSchema      String?       @map("current_schema") @db.Text
+  status             String        @db.VarChar(32)
+  resolution         String?       @db.Text
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheet          SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
+
+  @@index([worksheetId, detectedAt])
+  @@index([status])
+  @@map("sync_schema_changes")
+}
+
+model SpreadsheetImportRun {
+  id                  BigInt                      @id @default(autoincrement()) @db.BigInt
+  source              String                      @db.VarChar(255)
+  requestedWorksheet  String                      @map("requested_worksheet") @db.VarChar(255)
+  effectiveWorksheet  String?                     @map("effective_worksheet") @db.VarChar(255)
+  sourceRange         String                      @map("source_range") @db.VarChar(255)
+  requestedPeriod     DateTime                    @map("requested_period") @db.Date
+  effectivePeriod     DateTime?                   @map("effective_period") @db.Date
+  status              String                      @db.VarChar(32)
+  importedRows        Int                         @default(0) @map("imported_rows")
+  rejectedRows        Int                         @default(0) @map("rejected_rows")
+  checksum            String?                     @db.VarChar(128)
+  message             String?                     @db.Text
+  startedAt           DateTime                    @default(now()) @map("started_at") @db.Timestamp(0)
+  completedAt         DateTime?                   @map("completed_at") @db.Timestamp(0)
+  createdAt           DateTime                    @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt           DateTime                    @updatedAt @map("updated_at") @db.Timestamp(0)
+  stagingRows         SpreadsheetImportStaging[]
+  biomassReceipts     BiomassReceipt[]
+  biomassConsumptions BiomassConsumption[]
+  solarReceipts       SolarReceipt[]
+  solarConsumptions   SolarConsumption[]
+  hopReadings         HopReading[]
+  coalReceipts        CoalReceipt[]
+  biomassTargets      BiomassTarget[]
+  cumulativeSnapshots BiomassCumulativeSnapshot[]
+
+  @@index([status])
+  @@index([requestedPeriod])
+  @@map("spreadsheet_import_runs")
+}
+
+model SpreadsheetImportStaging {
+  id                BigInt               @id @default(autoincrement()) @db.BigInt
+  importRunId       BigInt               @map("import_run_id") @db.BigInt
+  entityType        String               @map("entity_type") @db.VarChar(64)
+  sourceWorksheet   String               @map("source_worksheet") @db.VarChar(255)
+  sourceRow         Int?                 @map("source_row")
+  sourceColumn      Int?                 @map("source_column")
+  sourceAddress     String?              @map("source_address") @db.VarChar(32)
+  periodStart       DateTime?            @map("period_start") @db.Date
+  readingDate       DateTime?            @map("reading_date") @db.Date
+  unitCode          String?              @map("unit_code") @db.VarChar(20)
+  supplierCode      String?              @map("supplier_code") @db.VarChar(100)
+  rawValue          String?              @map("raw_value") @db.Text
+  normalizedValue   Decimal?             @map("normalized_value") @db.Decimal(18, 3)
+  valueUnit         String?              @map("value_unit") @db.VarChar(20)
+  validationStatus  String               @map("validation_status") @db.VarChar(32)
+  validationMessage String?              @map("validation_message") @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamp(0)
+  importRun         SpreadsheetImportRun @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@index([importRunId])
+  @@index([entityType, validationStatus])
+  @@map("spreadsheet_import_staging")
+}
+
+model BiomassReceipt {
+  id           BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId  BigInt?               @map("import_run_id") @db.BigInt
+  periodStart  DateTime              @map("period_start") @db.Date
+  supplierCode String                @map("supplier_code") @db.VarChar(100)
+  supplierName String                @map("supplier_name") @db.VarChar(255)
+  quantityTon  Decimal?              @map("quantity_ton") @db.Decimal(18, 3)
+  sourceSheet  String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell   String?               @map("source_cell") @db.VarChar(32)
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun    SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([periodStart, supplierCode])
+  @@index([periodStart])
+  @@map("biomass_receipts")
+}
+
+model CoalReceipt {
+  id           BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId  BigInt?               @map("import_run_id") @db.BigInt
+  periodStart  DateTime              @map("period_start") @db.Date
+  quantityTon  Decimal?              @map("quantity_ton") @db.Decimal(18, 3)
+  sourceSheet  String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell   String?               @map("source_cell") @db.VarChar(32)
+  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun    SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([periodStart])
+  @@map("coal_receipts")
+}
+
+model BiomassConsumption {
+  id          BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId BigInt?               @map("import_run_id") @db.BigInt
+  unitId      BigInt                @map("unit_id") @db.BigInt
+  readingDate DateTime              @map("reading_date") @db.Date
+  quantityTon Decimal?              @map("quantity_ton") @db.Decimal(18, 3)
+  sourceSheet String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell  String?               @map("source_cell") @db.VarChar(32)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  unit        Unit                  @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  importRun   SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([unitId, readingDate])
+  @@index([readingDate])
+  @@map("biomass_consumptions")
+}
+
+model SolarReceipt {
+  id            BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId   BigInt?               @map("import_run_id") @db.BigInt
+  periodStart   DateTime              @map("period_start") @db.Date
+  quantityLiter Decimal?              @map("quantity_liter") @db.Decimal(18, 3)
+  sourceSheet   String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell    String?               @map("source_cell") @db.VarChar(32)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun     SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([periodStart])
+  @@map("solar_receipts")
+}
+
+model SolarConsumption {
+  id            BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId   BigInt?               @map("import_run_id") @db.BigInt
+  readingDate   DateTime              @map("reading_date") @db.Date
+  quantityLiter Decimal?              @map("quantity_liter") @db.Decimal(18, 3)
+  sourceSheet   String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell    String?               @map("source_cell") @db.VarChar(32)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun     SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([readingDate])
+  @@map("solar_consumptions")
+}
+
+model HopReading {
+  id          BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId BigInt?               @map("import_run_id") @db.BigInt
+  unitId      BigInt                @map("unit_id") @db.BigInt
+  readingDate DateTime              @map("reading_date") @db.Date
+  hopDays     Decimal?              @map("hop_days") @db.Decimal(8, 2)
+  sourceSheet String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell  String?               @map("source_cell") @db.VarChar(32)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  unit        Unit                  @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  importRun   SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([unitId, readingDate])
+  @@index([readingDate])
+  @@map("hop_readings")
+}
+
+model BiomassTarget {
+  id          BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId BigInt?               @map("import_run_id") @db.BigInt
+  targetYear  Int                   @unique @map("target_year")
+  targetTon   Decimal               @map("target_ton") @db.Decimal(18, 3)
+  unit        String                @default("ton") @db.VarChar(20)
+  source      String                @db.VarChar(255)
+  status      String                @default("approved") @db.VarChar(32)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun   SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@map("biomass_targets")
+}
+
+model BiomassCumulativeSnapshot {
+  id            BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId   BigInt?               @map("import_run_id") @db.BigInt
+  periodStart   DateTime              @map("period_start") @db.Date
+  cumulativeTon Decimal?              @map("cumulative_ton") @db.Decimal(18, 3)
+  source        String                @db.VarChar(255)
+  sourceCell    String?               @map("source_cell") @db.VarChar(32)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun     SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+
+  @@unique([periodStart])
+  @@map("biomass_cumulative_snapshots")
+}

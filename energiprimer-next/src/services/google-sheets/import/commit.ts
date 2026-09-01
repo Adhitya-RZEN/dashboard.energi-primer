@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
+import { contentHashForStagingRows } from "../sync/identity";
 import type {
   BiomassConsumptionImportRecord,
   BiomassReceiptImportRecord,
@@ -23,6 +24,11 @@ const UNIT_CODES = {
 
 function decimal(value: number | null) {
   return value === null ? null : new Prisma.Decimal(String(value));
+}
+
+function decimalAtScale(value: number | null, scale: number) {
+  const parsed = decimal(value);
+  return parsed?.toDecimalPlaces(scale) ?? null;
 }
 
 function unitNumber(unit: { code: string; name: string }) {
@@ -169,10 +175,10 @@ async function upsertCoalConsumption(
       create: {
         unitId,
         date: row.readingDate,
-        coalUsed: decimal(row.quantityTon),
+        coalUsed: decimalAtScale(row.quantityTon, 2),
       },
       update: {
-        coalUsed: decimal(row.quantityTon),
+        coalUsed: decimalAtScale(row.quantityTon, 2),
       },
     });
   }
@@ -183,17 +189,17 @@ async function upsertCoalStock(
   rows: readonly CoalStockImportRecord[],
 ) {
   for (const row of rows) {
-    if (row.closingStock === null) continue;
+    if (row.closingStock === null || row.consumed === null) continue;
     await tx.coalStock.upsert({
       where: { date: row.readingDate },
       create: {
         date: row.readingDate,
-        consumed: decimal(row.consumed) ?? new Prisma.Decimal(0),
-        closingStock: decimal(row.closingStock) as Prisma.Decimal,
+        consumed: decimalAtScale(row.consumed, 2) as Prisma.Decimal,
+        closingStock: decimalAtScale(row.closingStock, 2) as Prisma.Decimal,
       },
       update: {
-        consumed: decimal(row.consumed) ?? new Prisma.Decimal(0),
-        closingStock: decimal(row.closingStock) as Prisma.Decimal,
+        consumed: decimalAtScale(row.consumed, 2) as Prisma.Decimal,
+        closingStock: decimalAtScale(row.closingStock, 2) as Prisma.Decimal,
       },
     });
   }
@@ -295,13 +301,13 @@ async function upsertHop(
         importRunId,
         unitId,
         readingDate: row.readingDate,
-        hopDays: decimal(row.hopDays),
+        hopDays: decimalAtScale(row.hopDays, 2),
         sourceSheet: row.source.worksheet,
         sourceCell: row.source.cell,
       },
       update: {
         importRunId,
-        hopDays: decimal(row.hopDays),
+        hopDays: decimalAtScale(row.hopDays, 2),
         sourceSheet: row.source.worksheet,
         sourceCell: row.source.cell,
       },
@@ -322,16 +328,39 @@ export async function commitGoogleSheetsImportPlan(
   if (plan.status !== "READY_FOR_IMPORT")
     throw new Error("Import plan has blocking validation issues.");
   assertDatabaseTarget(options.allowNonLocalDatabase === true);
+  const source = options.source ?? "google_sheets_dynamic";
+  const checksum = contentHashForStagingRows(plan.stagingRows);
+  const existingSuccessfulRun = await prisma.spreadsheetImportRun.findFirst({
+    where: {
+      source,
+      requestedWorksheet: plan.requested.worksheet,
+      effectiveWorksheet: plan.effective.worksheet,
+      sourceRange: plan.sourceRange,
+      requestedPeriod: plan.requestedPeriod,
+      effectivePeriod: plan.effectivePeriod,
+      checksum,
+      status: "SUCCESS",
+    },
+    orderBy: { completedAt: "desc" },
+    select: { id: true, importedRows: true },
+  });
+  if (existingSuccessfulRun)
+    return {
+      status: "SUCCESS" as const,
+      importRunId: existingSuccessfulRun.id.toString(),
+      importedRows: existingSuccessfulRun.importedRows,
+    };
   const unitIds = await resolveUnitIds();
   const importRun = await prisma.spreadsheetImportRun.create({
     data: {
-      source: options.source ?? "google_sheets_dynamic",
+      source,
       requestedWorksheet: plan.requested.worksheet,
       effectiveWorksheet: plan.effective.worksheet,
       sourceRange: plan.sourceRange,
       requestedPeriod: plan.requestedPeriod,
       effectivePeriod: plan.effectivePeriod,
       status: "PROCESSING",
+      checksum,
     },
     select: { id: true },
   });

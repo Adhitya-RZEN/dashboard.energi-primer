@@ -1,6 +1,9 @@
 import "server-only";
 
-import { readGoogleSheetsRange } from "../../../lib/google-sheets";
+import {
+  listGoogleSheetsWorksheets,
+  readGoogleSheetsRange,
+} from "../../../lib/google-sheets";
 import { parseDynamicWorksheet } from "./parser";
 import {
   parseBBWorksheetName,
@@ -29,11 +32,22 @@ export async function readAndParseDynamicBBWorksheet(
   query: DynamicWorksheetQuery,
   range = DYNAMIC_SCAN_RANGE,
 ): Promise<DynamicWorksheetReadResult> {
-  const requested = resolveBBWorksheet(query.month, query.year);
+  const availableWorksheets = await listGoogleSheetsWorksheets();
+  const availableNames = availableWorksheets.map((worksheet) => worksheet.title);
+  const requested = resolveBBWorksheet(
+    query.month,
+    query.year,
+    availableNames,
+  );
   if (!requested) throw new Error("Requested BB worksheet period is invalid.");
   const candidates = [
     requested,
-    ...previousValidBBWorksheets(query.month, query.year, 12),
+    ...previousValidBBWorksheets(
+      query.month,
+      query.year,
+      12,
+      availableNames,
+    ),
   ];
   const attemptedWorksheets: string[] = [];
   let lastError: unknown = null;

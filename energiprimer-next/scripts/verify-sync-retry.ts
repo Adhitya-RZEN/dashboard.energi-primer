@@ -5,6 +5,7 @@ import {
   withDatabaseRetry,
   withSyncRetry,
 } from "../src/services/google-sheets/sync/retry";
+import { classifySyncError } from "../src/services/google-sheets/sync/error-classification";
 
 const transient = new GoogleSheetsIntegrationError("rate_limit", "safe");
 const permission = new GoogleSheetsIntegrationError("permission", "safe", {
@@ -48,12 +49,32 @@ const databaseResult = await withDatabaseRetry(
 if (databaseResult !== "recovered" || databaseAttempts !== 2)
   throw new Error("Database recovery retry did not complete as expected.");
 
+const classifiedErrors = [
+  [new GoogleSheetsIntegrationError("authentication", "safe"), "AUTHENTICATION"],
+  [new GoogleSheetsIntegrationError("permission", "safe"), "PERMISSION"],
+  [new GoogleSheetsIntegrationError("rate_limit", "safe"), "RATE_LIMIT"],
+  [new GoogleSheetsIntegrationError("timeout", "safe"), "TIMEOUT"],
+  [new GoogleSheetsIntegrationError("api", "safe"), "NETWORK"],
+  [new GoogleSheetsIntegrationError("api", "safe", { status: 500 }), "API"],
+  [new Error("schema column changed"), "SCHEMA"],
+  [new Error("duplicate stable source key"), "DUPLICATE"],
+  [new Error("identity source key invalid"), "IDENTITY"],
+  [new Error("validation blocked"), "VALIDATION"],
+  [new Error("approved target differs"), "BUSINESS_RULE"],
+  [new Error("lease was lost"), "CONCURRENCY"],
+] as const;
+for (const [error, expected] of classifiedErrors) {
+  if (classifySyncError(error) !== expected)
+    throw new Error(`Expected ${expected} error classification.`);
+}
+
 const checks = [
   "rate limit is retryable",
   "permission error fails fast",
   "bounded retry sequence uses exponential backoff hook",
   "transient database error retries while constraint error fails fast",
   "database retry recovers on a subsequent attempt",
+  "operational errors are classified without exposing exception details",
 ];
 
 if (process.argv.includes("--live")) {

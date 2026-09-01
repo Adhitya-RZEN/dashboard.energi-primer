@@ -135,12 +135,17 @@ export function sourceKeyForImportRecord(
   if ("readingDate" in record) input.readingDate = record.readingDate;
   if ("unitNumber" in record) input.unitNumber = record.unitNumber;
   if ("supplierCode" in record) input.supplierCode = record.supplierCode;
-  if ("targetYear" in record) input.targetYear = record.targetYear;
+  if ("targetYear" in record) {
+    input.targetYear = record.targetYear;
+    input.periodStart = new Date(Date.UTC(record.targetYear, 0, 1));
+  }
   if ("quantityTon" in record) input.valueUnit = "ton";
   if ("quantityLiter" in record) input.valueUnit = "liter";
   if ("closingStock" in record) input.valueUnit = "ton";
   if ("consumed" in record) input.valueUnit = "ton";
   if ("hopDays" in record) input.valueUnit = "hari";
+  if ("targetTon" in record || "cumulativeTon" in record)
+    input.valueUnit = "ton";
   return sourceKeyForIdentity(input);
 }
 
@@ -172,7 +177,10 @@ export function contentHashForImportRecord(
   if ("readingDate" in record) identity.readingDate = record.readingDate;
   if ("unitNumber" in record) identity.unitNumber = record.unitNumber;
   if ("supplierCode" in record) identity.supplierCode = record.supplierCode;
-  if ("targetYear" in record) identity.targetYear = record.targetYear;
+  if ("targetYear" in record) {
+    identity.targetYear = record.targetYear;
+    identity.periodStart = new Date(Date.UTC(record.targetYear, 0, 1));
+  }
   if ("quantityTon" in record || "closingStock" in record || "consumed" in record)
     identity.valueUnit = "ton";
   if ("quantityLiter" in record) identity.valueUnit = "liter";

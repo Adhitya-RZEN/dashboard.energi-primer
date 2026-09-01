@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   compareLegacyDynamic,
   parseDynamicWorksheet,
+  preferBBWorksheetName,
   previousValidBBWorksheets,
   resolveBBWorksheet,
 } from "../src/services/google-sheets/dynamic/index";
@@ -181,12 +182,32 @@ function runStaticTests() {
   const worksheet = resolveBBWorksheet(7, 2026);
   assert.equal(worksheet?.name, "Juli26-BB");
   assert.equal(resolveBBWorksheet(7, 2026, ["Juli26-DTS"]), null);
+  assert.equal(
+    resolveBBWorksheet(1, 2026, ["Januari26-BB", "Jan26-BB"])?.name,
+    "Januari26-BB",
+  );
+  assert.equal(
+    resolveBBWorksheet(1, 2026, ["JAN26-bb"])?.name,
+    "JAN26-bb",
+  );
+  assert.equal(
+    resolveBBWorksheet(1, 2026, ["jAnUaRi26 - bB", "jan26-bb"])?.name,
+    "jAnUaRi26 - bB",
+  );
+  assert.equal(preferBBWorksheetName(["Jan26-BB", "JANUARI26-BB"]), "JANUARI26-BB");
   const fallbackNames = previousValidBBWorksheets(7, 2026, 12).map(
     (item) => item.name,
   );
   assert.equal(fallbackNames.length, 12);
   assert.ok(fallbackNames.every((name) => /-BB$/.test(name)));
   assert.ok(!fallbackNames.some((name) => /DTS|ALBES|FLYASH/.test(name)));
+  const discoveredFallbackNames = previousValidBBWorksheets(
+    3,
+    2026,
+    12,
+    ["Jan26-BB", "Feb26-BB", "Des25-BB"],
+  ).map((item) => item.name);
+  assert.deepEqual(discoveredFallbackNames, ["Feb26-BB", "Jan26-BB", "Des25-BB"]);
 
   for (const [row, column] of [
     [5, 3],
@@ -295,7 +316,7 @@ function runStaticTests() {
   );
   assert.equal(
     incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.available,
-    false,
+    true,
   );
   assert.match(
     incompleteReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "",
@@ -317,12 +338,89 @@ function runStaticTests() {
   });
   assert.equal(
     legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.available,
-    false,
+    true,
+  );
+  assert.equal(
+    legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.value,
+    3223.46,
   );
   assert.match(
     legacyReceiptResult.aggregates.biomassSupplierReceiptMonthly.note ?? "",
-    /1\/7/,
+    /pemasok terbaru/,
   );
+
+  const partialFormula = regressionFixture();
+  put(partialFormula, 4, 16, "#DIV/0!");
+  const partialFormulaResult = parseDynamicWorksheet(partialFormula, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    partialFormulaResult.aggregates.biomassSupplierReceiptMonthly.available,
+    true,
+  );
+  assert.equal(
+    partialFormulaResult.aggregates.biomassSupplierReceiptMonthly.value,
+    2923.46,
+  );
+  assert.match(
+    partialFormulaResult.aggregates.biomassSupplierReceiptMonthly.note ?? "",
+    /malformed.*diabaikan/,
+  );
+
+  const duplicateSupplier = regressionFixture();
+  put(duplicateSupplier, 1, 23, "PENERIMAAN BIOMASSA SAWDUST PT SYAHRONI");
+  put(duplicateSupplier, 4, 23, "999,000");
+  const duplicateSupplierResult = parseDynamicWorksheet(duplicateSupplier, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(
+    duplicateSupplierResult.aggregates.biomassSupplierReceiptMonthly.value,
+    3223.46,
+  );
+
+  const fallbackTarget = parseDynamicWorksheet(sheet(8, 8), {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(fallbackTarget.normalized.metrics.biomassTarget.value, 70020);
+  assert.equal(fallbackTarget.normalized.metrics.biomassTarget.status, "resolved");
+  assert.match(
+    fallbackTarget.normalized.metrics.biomassTarget.note ?? "",
+    /fallback target resmi/,
+  );
+
+  const shiftedDate = sheet(4, 4);
+  put(shiftedDate, 1, 1, "TANGGAL");
+  put(shiftedDate, 1, 2, "BATUBARA UNIT 1");
+  put(shiftedDate, 2, 1, "2026-08-01");
+  put(shiftedDate, 2, 2, 10);
+  const shiftedDateResult = parseDynamicWorksheet(shiftedDate, {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(shiftedDateResult.normalized.series.length, 0);
+
+  const formattedDatePreferred = sheet(6, 6);
+  put(formattedDatePreferred, 1, 1, "Tgl");
+  put(formattedDatePreferred, 1, 2, "Tanggal");
+  put(formattedDatePreferred, 1, 3, "BATUBARA UNIT 1");
+  put(formattedDatePreferred, 1, 4, "BATUBARA UNIT 2");
+  put(formattedDatePreferred, 1, 5, "BATUBARA UNIT 3");
+  put(formattedDatePreferred, 2, 1, 1);
+  put(formattedDatePreferred, 2, 2, "01 Juni 2026");
+  put(formattedDatePreferred, 2, 3, 10);
+  put(formattedDatePreferred, 2, 4, 20);
+  put(formattedDatePreferred, 2, 5, 30);
+  put(formattedDatePreferred, 3, 1, 2);
+  put(formattedDatePreferred, 3, 2, "02 Juni 2026");
+  put(formattedDatePreferred, 3, 3, 11);
+  put(formattedDatePreferred, 3, 4, 21);
+  put(formattedDatePreferred, 3, 5, 31);
+  put(formattedDatePreferred, 4, 1, 3);
+  const formattedDatePreferredResult = parseDynamicWorksheet(
+    formattedDatePreferred,
+    { worksheetName: "Juni26-BB" },
+  );
+  assert.equal(formattedDatePreferredResult.structures[0]?.dateColumn, 2);
+  assert.equal(formattedDatePreferredResult.normalized.series.length, 2);
 
   const missing = parseDynamicWorksheet(targetFixture(5, 3, null), {
     worksheetName: "Juli26-BB",

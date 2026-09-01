@@ -51,6 +51,10 @@ export type WorksheetMetadata = {
   monthLabel: string;
   year: number;
   isValid: boolean;
+  /** Canonical full Indonesian month spelling for this period. */
+  canonicalName?: string;
+  /** Whether the matched title used the full or abbreviated month token. */
+  nameVariant?: "FULL" | "ABBREVIATED";
 };
 
 export type WorksheetResolution = WorksheetMetadata & {

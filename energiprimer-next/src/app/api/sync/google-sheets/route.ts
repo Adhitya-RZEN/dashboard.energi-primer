@@ -25,7 +25,9 @@ async function handle(request: Request) {
   try {
     const result = await runGoogleSheetsIncrementalSync({
       triggerType: "cron",
-      scope: "current",
+      // Discovery is broad, but cron admits only valid BB worksheets after
+      // Juli26-BB whose period is due and whose schema matches Juli26-BB.
+      scope: "automatic",
       allowNonLocalDatabase: true,
     });
     return NextResponse.json({
@@ -52,4 +54,3 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return handle(request);
 }
-

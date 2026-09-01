@@ -12,7 +12,7 @@ try {
   delete process.env.GOOGLE_SHEETS_CREDENTIALS_PATH;
   process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = "service-account@example.test";
   process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY =
-    "-----BEGIN PRIVATE KEY-----\\nplaceholder\\n-----END PRIVATE KEY-----\\n";
+    "phase-19-fixture-private-key-placeholder";
   process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "spreadsheet-placeholder";
   const config = getGoogleSheetsConfig();
   if (!config.serviceAccountEmail || !config.serviceAccountPrivateKey)

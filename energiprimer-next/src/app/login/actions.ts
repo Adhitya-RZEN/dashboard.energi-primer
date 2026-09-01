@@ -3,6 +3,7 @@
 import { AuthError } from "next-auth";
 
 import { signIn } from "@/auth";
+import { isValidAuthEmail, normalizeAuthEmail } from "@/lib/auth-security";
 
 export type LoginState = {
   error?: string;
@@ -12,10 +13,10 @@ export async function authenticate(
   _previousState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = normalizeAuthEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !email.includes("@") || !password) {
+  if (!isValidAuthEmail(email) || !password) {
     return { error: "Email atau password tidak valid." };
   }
 

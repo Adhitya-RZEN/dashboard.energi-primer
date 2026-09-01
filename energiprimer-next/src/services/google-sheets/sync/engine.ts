@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   parseBBWorksheetName,
-  worksheetNameFor,
+  preferBBWorksheetName,
 } from "@/services/google-sheets/dynamic/worksheet-resolver";
 import {
   readAndParseDynamicWorksheet,
@@ -34,8 +34,15 @@ import {
   buildSchemaSnapshot,
   detectSchemaChange,
 } from "./schema-detection";
+import {
+  evaluateAutomaticWorksheet,
+  isAfterCanonicalBBWorksheet,
+  isAutomaticFutureBBWorksheet,
+} from "./bb-policy";
 import { GoogleSheetsIntegrationError } from "@/lib/google-sheets";
 import { withDatabaseRetry, withSyncRetry } from "./retry";
+import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/profiles";
+import { classifySyncError } from "./error-classification";
 
 export type SyncTriggerType = "manual" | "cron" | "verification";
 export type SyncRunStatus = "SUCCESS" | "PARTIAL" | "FAILED" | "LOCKED";
@@ -44,7 +51,7 @@ export type IncrementalSyncOptions = {
   triggerType?: SyncTriggerType;
   worksheetTitle?: string;
   worksheetKey?: string;
-  scope?: "current" | "all";
+  scope?: "current" | "all" | "automatic";
   allowNonLocalDatabase?: boolean;
 };
 
@@ -75,7 +82,7 @@ export type IncrementalSyncResult = {
 function safeErrorMessage(error: unknown) {
   if (error instanceof GoogleSheetsIntegrationError)
     return `google_sheets_${error.code}`;
-  return "synchronization_failed";
+  return `sync_${classifySyncError(error).toLocaleLowerCase("en-US")}`;
 }
 
 async function persistRowStates(input: {
@@ -161,24 +168,96 @@ function selectedWorksheets(
     );
   }
   if (options.worksheetTitle) {
+    const requestedPeriod = parseBBWorksheetName(options.worksheetTitle);
+    if (requestedPeriod) {
+      return preferredWorksheetsByPeriod(
+        withoutDisabledOrMissing.filter((worksheet) => {
+          const period = parseBBWorksheetName(worksheet.worksheetTitle);
+          return (
+            period?.month === requestedPeriod.month &&
+            period.year === requestedPeriod.year
+          );
+        }),
+      );
+    }
+    const requestedTitle = options.worksheetTitle
+      .trim()
+      .toLocaleLowerCase("en-US");
     return withoutDisabledOrMissing.filter(
-      (worksheet) => worksheet.worksheetTitle === options.worksheetTitle,
+      (worksheet) =>
+        worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
+        requestedTitle,
     );
   }
   const valid = withoutDisabledOrMissing.filter((worksheet) =>
     Boolean(parseBBWorksheetName(worksheet.worksheetTitle)),
   );
+  const preferred = preferredWorksheetsByPeriod(valid);
   const scope = options.scope ??
-    (options.triggerType === "cron" ? "current" : "all");
-  if (scope === "all") return valid;
+    (options.triggerType === "cron" ? "automatic" : "all");
+  if (scope === "all") return preferred;
+  if (scope === "automatic")
+    return preferred.filter((worksheet) =>
+      isAutomaticFutureBBWorksheet(worksheet.worksheetTitle),
+    );
   const now = new Date();
-  const currentTitle = worksheetNameFor(now.getUTCMonth() + 1, now.getUTCFullYear());
-  return valid.filter((worksheet) => worksheet.worksheetTitle === currentTitle);
+  return preferred.filter((worksheet) => {
+    const period = parseBBWorksheetName(worksheet.worksheetTitle);
+    return (
+      period?.month === now.getUTCMonth() + 1 &&
+      period.year === now.getUTCFullYear()
+    );
+  });
+}
+
+type RegisteredWorksheet = Awaited<
+  ReturnType<typeof prisma.syncWorksheet.findMany>
+>[number];
+
+/**
+ * The discovery registry can contain both a canonical and an abbreviated
+ * title for the same month. They are separate Google tabs, but represent one
+ * business period for import selection. Keep one deterministic winner.
+ */
+function preferredWorksheetsByPeriod(
+  worksheets: readonly RegisteredWorksheet[],
+) {
+  const groups = new Map<string, RegisteredWorksheet[]>();
+  for (const worksheet of worksheets) {
+    const period = parseBBWorksheetName(worksheet.worksheetTitle);
+    if (!period) continue;
+    const key = `${period.year}-${String(period.month).padStart(2, "0")}`;
+    const group = groups.get(key) ?? [];
+    group.push(worksheet);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()]
+    .map((group) => {
+      const preferredTitle = preferBBWorksheetName(
+        group.map((worksheet) => worksheet.worksheetTitle),
+      );
+      return (
+        group.find((worksheet) => worksheet.worksheetTitle === preferredTitle) ??
+        group[0]
+      );
+    })
+    .filter((worksheet): worksheet is RegisteredWorksheet => Boolean(worksheet))
+    .sort((left, right) => {
+      const leftPeriod = parseBBWorksheetName(left.worksheetTitle);
+      const rightPeriod = parseBBWorksheetName(right.worksheetTitle);
+      return (
+        (leftPeriod?.year ?? 0) - (rightPeriod?.year ?? 0) ||
+        (leftPeriod?.month ?? 0) - (rightPeriod?.month ?? 0) ||
+        left.worksheetTitle.localeCompare(right.worksheetTitle, "en-US")
+      );
+    });
 }
 
 async function syncWorksheet(
   worksheet: Awaited<ReturnType<typeof prisma.syncWorksheet.findMany>>[number],
   options: IncrementalSyncOptions,
+  canonicalSchema: string | null,
 ): Promise<WorksheetSyncResult> {
   const base = {
     worksheetKey: worksheet.worksheetKey,
@@ -219,10 +298,41 @@ async function syncWorksheet(
 
   const plan = buildGoogleSheetsImportPlanFromReadResult(readResult);
   const schemaSnapshot = buildSchemaSnapshot(readResult.parsed);
-  const schemaChange = detectSchemaChange(
-    worksheet.schemaSnapshot,
-    schemaSnapshot,
-  );
+  const automaticGate = isAfterCanonicalBBWorksheet(worksheet.worksheetTitle)
+    ? evaluateAutomaticWorksheet(worksheet.worksheetTitle, schemaSnapshot, {
+        canonicalSchema,
+      })
+    : null;
+  if (automaticGate && !automaticGate.allowed) {
+    if (automaticGate.schemaChange?.changed) {
+      await prisma.syncSchemaChange.create({
+        data: {
+          worksheetId: worksheet.id,
+          previousSchemaHash: worksheet.schemaHash,
+          currentSchemaHash: schemaSnapshot.hash,
+          changeType: automaticGate.schemaChange.type,
+          previousSchema: canonicalSchema,
+          currentSchema: JSON.stringify(schemaSnapshot),
+          status: "OPEN",
+          resolution: automaticGate.reason,
+        },
+      });
+    }
+    await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+    return {
+      ...base,
+      status: "SCHEMA_REVIEW",
+      rowsScanned: plan.stagingRows.length,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 1,
+      error: `schema_review_${automaticGate.gate.toLowerCase()}`,
+    };
+  }
+  const schemaChange =
+    automaticGate?.schemaChange ??
+    detectSchemaChange(worksheet.schemaSnapshot, schemaSnapshot);
   if (schemaChange.changed) {
     await prisma.syncSchemaChange.create({
       data: {
@@ -230,7 +340,9 @@ async function syncWorksheet(
         previousSchemaHash: worksheet.schemaHash,
         currentSchemaHash: schemaSnapshot.hash,
         changeType: schemaChange.type,
-        previousSchema: worksheet.schemaSnapshot,
+        previousSchema: isAfterCanonicalBBWorksheet(worksheet.worksheetTitle)
+          ? canonicalSchema
+          : worksheet.schemaSnapshot,
         currentSchema: JSON.stringify(schemaSnapshot),
         status: "OPEN",
         resolution: schemaChange.reason,
@@ -374,13 +486,27 @@ export async function runGoogleSheetsIncrementalSync(
       orderBy: { worksheetTitle: "asc" },
     });
     const selected = selectedWorksheets(worksheets, options);
+    const canonicalCandidates = preferredWorksheetsByPeriod(
+      worksheets.filter((worksheet) => {
+        const period = parseBBWorksheetName(worksheet.worksheetTitle);
+        return period?.month === 7 && period.year === 2026;
+      }),
+    );
+    const canonicalWorksheet =
+      canonicalCandidates.find(
+        (worksheet) =>
+          worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
+          BB_CANONICAL_WORKSHEET.toLocaleLowerCase("en-US"),
+      ) ?? canonicalCandidates[0] ?? null;
     if ((options.worksheetKey || options.worksheetTitle) && selected.length !== 1) {
       throw new Error("Requested worksheet is not uniquely registered.");
     }
     for (const worksheet of selected) {
       if (!(await renewSyncSourceLease(sourceId, lease.token)))
         throw new Error("Synchronization lease was lost.");
-      worksheetResults.push(await syncWorksheet(worksheet, options));
+      worksheetResults.push(
+        await syncWorksheet(worksheet, options, canonicalWorksheet?.schemaSnapshot ?? null),
+      );
     }
 
     const rowsScanned = worksheetResults.reduce(

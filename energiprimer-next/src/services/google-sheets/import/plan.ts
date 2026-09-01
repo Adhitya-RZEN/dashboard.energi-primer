@@ -1,7 +1,8 @@
 import "server-only";
 
-import { parseDayValue } from "../dynamic/validators";
+import { parseDayValue, parseNumericValue } from "../dynamic/validators";
 import { extractBiomassReceiptImportRows } from "../dynamic/parsers/monthly-aggregate-parser";
+import { orderedUnitPaths } from "../dynamic/structure-analyzer";
 import {
   DYNAMIC_SCAN_RANGE,
   readAndParseDynamicBBWorksheet,
@@ -31,6 +32,15 @@ import type {
 } from "./types";
 
 export const APPROVED_BIOMASS_TARGET = 70_020;
+
+const APPROVED_LEGACY_WORKSHEET_NAMES = new Set([
+  "juni26-bb",
+  "mei26-bb",
+  "januari26-bb",
+  "februari26-bb",
+  "maret26-bb",
+  "april26-bb",
+]);
 
 const REQUIRED_SUPPLIER_CODES = [
   "sawdust-pt-syahroni",
@@ -70,14 +80,7 @@ function directPath(
   resource: HeaderPath["resource"],
   unitNumber: UnitNumber,
 ) {
-  const candidates = structure.headerPaths.filter(
-    (path) =>
-      path.resource === resource &&
-      path.unitNumber === unitNumber &&
-      !path.isTotal &&
-      !path.isStock &&
-      !path.isHop,
-  );
+  const candidates = orderedUnitPaths(structure, resource);
   const direct = candidates.filter(
     (path) =>
       path.unit === "TON" &&
@@ -85,14 +88,41 @@ function directPath(
         /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label),
       ),
   );
-  return direct[0] ?? candidates[0] ?? null;
+  // Some workbook versions label only the last coal column with `TON`.
+  // Treating that single column as the complete direct set makes Unit 1 and
+  // Unit 2 read Unit 3's value. Prefer the TON subset only when it represents
+  // all three unit columns; otherwise keep the physical/header order.
+  const usable = direct.length >= 3
+    ? direct
+    : candidates.filter(
+        (path) =>
+          !path.labels.some((label) =>
+            /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label),
+          ),
+      );
+  const explicit = usable.filter((path) => path.unitNumber === unitNumber);
+  return (
+    (explicit.length > 1 ? usable[unitNumber - 1] : explicit[0]) ??
+    usable[unitNumber - 1] ??
+    null
+  );
 }
 
 function hopPath(structure: StructureAnalysis, unitNumber: UnitNumber) {
+  const orderedUnknownHops = orderedUnitPaths(structure, "unknown", {
+    hop: true,
+  });
+  const candidates = (orderedUnknownHops.length
+    ? orderedUnknownHops
+    : structure.headerPaths.filter(
+        (path) => path.isHop && path.unitNumber !== null,
+      )
+  ).sort((a, b) => a.cell.column - b.cell.column);
+  const explicit = candidates.filter((path) => path.unitNumber === unitNumber);
   return (
-    structure.headerPaths.find(
-      (path) => path.isHop && path.unitNumber === unitNumber,
-    ) ?? null
+    (explicit.length > 1 ? candidates[unitNumber - 1] : explicit[0]) ??
+    candidates[unitNumber - 1] ??
+    null
   );
 }
 
@@ -102,6 +132,98 @@ function solarPath(structure: StructureAnalysis) {
       (path) => path.resource === "solar" && path.isTotal,
     ) ?? null
   );
+}
+
+type LegacyResolvedCell = {
+  value: number;
+  source: ImportSource;
+};
+
+function scannedCellAt(parsed: DynamicParserResult, address: string) {
+  return parsed.scannedCells.find((cell) => cell.address === address) ?? null;
+}
+
+function numericLegacyCell(
+  parsed: DynamicParserResult,
+  address: string,
+): LegacyResolvedCell | null {
+  const cell = scannedCellAt(parsed, address);
+  if (!cell) return null;
+  const parsedValue = parseNumericValue(cell.rawValue);
+  if (parsedValue.status !== "numeric" || parsedValue.value === null)
+    return null;
+  return {
+    value: parsedValue.value,
+    source: {
+      worksheet: parsed.worksheet.name,
+      cell: cell.address,
+      row: cell.row,
+    },
+  };
+}
+
+function tonaseBiomassCumulativeCell(
+  result: DynamicWorksheetReadResult,
+): LegacyResolvedCell | null {
+  const parsed = result.parsed;
+  const section = parsed.scannedCells.find(
+    (cell) => cell.normalizedValue === "TONASE BIOMASSA",
+  );
+  if (!section) return null;
+  const totalLabel = parsed.scannedCells.find(
+    (cell) =>
+      cell.column === section.column &&
+      cell.row > section.row &&
+      cell.row <= section.row + 15 &&
+      cell.normalizedValue === `TOTAL ${result.effective.year}`,
+  );
+  if (!totalLabel) return null;
+
+  const candidates = parsed.scannedCells
+    .filter(
+      (cell) =>
+        cell.row === totalLabel.row && cell.column > totalLabel.column,
+    )
+    .sort((left, right) => left.column - right.column);
+  for (const candidate of candidates) {
+    const parsedValue = parseNumericValue(candidate.rawValue);
+    if (parsedValue.status !== "numeric" || parsedValue.value === null)
+      continue;
+    return {
+      value: parsedValue.value,
+      source: {
+        worksheet: parsed.worksheet.name,
+        cell: candidate.address,
+        row: candidate.row,
+      },
+    };
+  }
+  return null;
+}
+
+function isApprovedLegacyWorksheet(worksheet: string) {
+  return APPROVED_LEGACY_WORKSHEET_NAMES.has(
+    worksheet.trim().toLocaleLowerCase("en-US"),
+  );
+}
+
+function approvedLegacyFallbacks(
+  result: DynamicWorksheetReadResult,
+): {
+  coalReceipt: LegacyResolvedCell | null;
+  solarReceipt: LegacyResolvedCell | null;
+  cumulative: LegacyResolvedCell | null;
+} {
+  // These coordinates are approved only for the explicitly reviewed legacy
+  // layouts. Other worksheets must continue through semantic resolution or
+  // remain in NEEDS_REVIEW; physical coordinates are never generalized.
+  if (!isApprovedLegacyWorksheet(result.effective.worksheet))
+    return { coalReceipt: null, solarReceipt: null, cumulative: null };
+  return {
+    coalReceipt: numericLegacyCell(result.parsed, "I42"),
+    solarReceipt: numericLegacyCell(result.parsed, "CC42"),
+    cumulative: tonaseBiomassCumulativeCell(result),
+  };
 }
 
 function coalTotalPath(structure: StructureAnalysis) {
@@ -201,6 +323,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
   if (!structure) throw new Error("Semantic structure tidak tersedia.");
 
   const effectivePeriod = utcDate(result.effective.year, result.effective.month, 1);
+  const legacyFallbacks = approvedLegacyFallbacks(result);
   const series = parsed.normalized.series;
   const receiptRows: BiomassReceiptImportRecord[] = extractBiomassReceiptImportRows(
     parsed.scannedCells,
@@ -267,7 +390,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
         source: dailySource(parsed, record, coalPaths[index]),
       });
     }
-    if (record.stock !== null) {
+    if (record.stock !== null && record.coal !== null) {
       coalStockRows.push({
         readingDate,
         closingStock: record.stock,
@@ -304,6 +427,14 @@ function buildRows(result: DynamicWorksheetReadResult) {
             source: sourceFromResolved(parsed.worksheet.name, solarReceiptResolved),
           },
         ]
+      : legacyFallbacks.solarReceipt
+        ? [
+            {
+              periodStart: effectivePeriod,
+              quantityLiter: legacyFallbacks.solarReceipt.value,
+              source: legacyFallbacks.solarReceipt.source,
+            },
+          ]
         : [];
 
   const coalReceiptResolved = parsed.normalized.metrics.coalReceiptMonthly;
@@ -316,7 +447,15 @@ function buildRows(result: DynamicWorksheetReadResult) {
             source: sourceFromResolved(parsed.worksheet.name, coalReceiptResolved),
           },
         ]
-      : [];
+      : legacyFallbacks.coalReceipt
+        ? [
+            {
+              periodStart: effectivePeriod,
+              quantityTon: legacyFallbacks.coalReceipt.value,
+              source: legacyFallbacks.coalReceipt.source,
+            },
+          ]
+        : [];
 
   const targetResolved = parsed.normalized.metrics.biomassTarget;
   const targetRows: BiomassTargetImportRecord[] =
@@ -328,7 +467,19 @@ function buildRows(result: DynamicWorksheetReadResult) {
             source: sourceFromResolved(parsed.worksheet.name, targetResolved),
           },
         ]
-      : [];
+      : isApprovedLegacyWorksheet(result.effective.worksheet)
+        ? [
+            {
+              targetYear: result.effective.year,
+              targetTon: APPROVED_BIOMASS_TARGET,
+              source: {
+                worksheet: parsed.worksheet.name,
+                cell: null,
+                row: null,
+              },
+            },
+          ]
+        : [];
 
   const cumulativeResolved = parsed.normalized.metrics.biomassCumulative;
   const cumulativeRows: BiomassCumulativeImportRecord[] =
@@ -340,7 +491,15 @@ function buildRows(result: DynamicWorksheetReadResult) {
             source: sourceFromResolved(parsed.worksheet.name, cumulativeResolved),
           },
         ]
-      : [];
+      : legacyFallbacks.cumulative
+        ? [
+            {
+              periodStart: effectivePeriod,
+              cumulativeTon: legacyFallbacks.cumulative.value,
+              source: legacyFallbacks.cumulative.source,
+            },
+          ]
+        : [];
 
   return {
     parsed,
@@ -373,14 +532,15 @@ function validatePlan(input: ReturnType<typeof buildRows>, result: DynamicWorksh
 
   if (!input.parsed.worksheet.isValid) blockingIssues.push("worksheet_invalid");
   if (result.isFallback) blockingIssues.push("worksheet_fallback");
-  if (input.receiptRows.length !== REQUIRED_SUPPLIER_CODES.length)
+  if (!input.receiptRows.length)
     blockingIssues.push("biomass_supplier_schema_incomplete");
-  if (
+  else if (
+    input.receiptRows.length !== REQUIRED_SUPPLIER_CODES.length ||
     REQUIRED_SUPPLIER_CODES.some(
       (code) => !input.receiptRows.some((row) => row.supplierCode === code),
     )
   )
-    blockingIssues.push("biomass_supplier_identity_incomplete");
+    blockingIssues.push("biomass_supplier_schema_legacy");
   if (input.receiptRows.every((row) => row.quantityTon === null))
     blockingIssues.push("biomass_supplier_receipt_empty");
   if (!input.coalConsumptionRows.length) blockingIssues.push("coal_daily_empty");
@@ -396,7 +556,15 @@ function validatePlan(input: ReturnType<typeof buildRows>, result: DynamicWorksh
     blockingIssues.push("biomass_target_does_not_match_70020");
   if (!input.cumulativeRows.length) blockingIssues.push("biomass_cumulative_unresolved");
   if (input.parsed.diagnostics.errors.length) blockingIssues.push("parser_errors");
-  if (input.parsed.diagnostics.ambiguous.length) blockingIssues.push("ambiguous_fields");
+  const unresolvedAmbiguous = input.parsed.diagnostics.ambiguous.filter(
+    (field) =>
+      !(
+        field === "biomassCumulative" &&
+        input.cumulativeRows.length > 0 &&
+        isApprovedLegacyWorksheet(result.effective.worksheet)
+      ),
+  );
+  if (unresolvedAmbiguous.length) blockingIssues.push("ambiguous_fields");
   if (!input.parsed.normalized.series.length) blockingIssues.push("daily_series_empty");
 
   return [...new Set(blockingIssues)];
@@ -405,6 +573,7 @@ function validatePlan(input: ReturnType<typeof buildRows>, result: DynamicWorksh
 function buildStagingRows(input: ReturnType<typeof buildRows>) {
   const rows: ImportStagingRecord[] = [];
   for (const row of input.receiptRows) {
+    if (row.quantityTon === null) continue;
     rows.push(
       stagingRecord({
         entityType: "biomass_receipt",
@@ -421,6 +590,7 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
     );
   }
   for (const row of input.coalReceiptRows) {
+    if (row.quantityTon === null) continue;
     rows.push(
       stagingRecord({
         entityType: "coal_receipt",
@@ -444,6 +614,7 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
     );
   }
   for (const row of input.coalStockRows) {
+    if (row.closingStock === null || row.consumed === null) continue;
     rows.push(
       stagingRecord({
         entityType: "coal_stock",
@@ -482,6 +653,7 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
     );
   }
   for (const row of input.solarReceiptRows) {
+    if (row.quantityLiter === null) continue;
     rows.push(
       stagingRecord({
         entityType: "solar_receipt",

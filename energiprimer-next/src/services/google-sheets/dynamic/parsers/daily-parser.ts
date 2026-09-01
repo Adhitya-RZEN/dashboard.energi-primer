@@ -1,5 +1,9 @@
-import { dateFromRaw, parseNumericValue } from "../validators";
-import { resourceColumns } from "../structure-analyzer";
+import {
+  dateFromRaw,
+  isValidDateForPeriod,
+  parseNumericValue,
+} from "../validators";
+import { orderedUnitPaths } from "../structure-analyzer";
 import type {
   DynamicDailyRecord,
   HeaderPath,
@@ -90,9 +94,7 @@ function unitPath(
   unitNumber: number,
   cells: readonly ScannedCell[],
 ) {
-  const candidates = resourceColumns(structure, resource, unitNumber).filter(
-    (path) => !path.isTotal && !path.isStock && !path.isHop,
-  );
+  const candidates = orderedUnitPaths(structure, resource);
   const direct = candidates.filter(
     (path) =>
       path.unit === "TON" &&
@@ -100,12 +102,26 @@ function unitPath(
         /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label),
       ),
   );
-  return choosePath(
-    direct.length ? direct : candidates,
-    structure.dataRows,
-    cells,
-    () => true,
-  );
+  // Older/canonical sheets can expose `TON` on only one of the three
+  // columns. A partial TON subset is not a complete unit mapping, so use the
+  // ordered unit candidates in that case.
+  const usable = direct.length >= 3
+    ? direct
+    : candidates.filter(
+        (path) =>
+          !path.labels.some((label) =>
+            /BELT WEIGHER|BUCKET|KWH GREEN|COAL HANDLING/.test(label),
+          ),
+      );
+  const explicit = usable.filter((path) => path.unitNumber === unitNumber);
+  const selected =
+    (explicit.length > 1 ? usable[unitNumber - 1] : explicit[0]) ??
+    usable[unitNumber - 1] ??
+    usable[0] ??
+    null;
+  return selected
+    ? choosePath([selected], structure.dataRows, cells, () => true)
+    : null;
 }
 
 function hopPath(
@@ -113,12 +129,25 @@ function hopPath(
   unitNumber: number,
   cells: readonly ScannedCell[],
 ) {
-  return choosePath(
-    structure.headerPaths,
-    structure.dataRows,
-    cells,
-    (path) => path.isHop && path.unitNumber === unitNumber,
+  const orderedUnknownHops = orderedUnitPaths(structure, "unknown", {
+    hop: true,
+  });
+  const hopCandidates = (orderedUnknownHops.length
+    ? orderedUnknownHops
+    : structure.headerPaths.filter(
+        (path) => path.isHop && path.unitNumber !== null,
+      )
+  ).sort((a, b) => a.cell.column - b.cell.column);
+  const explicit = hopCandidates.filter(
+    (path) => path.unitNumber === unitNumber,
   );
+  const selected =
+    (explicit.length > 1 ? hopCandidates[unitNumber - 1] : explicit[0]) ??
+    hopCandidates[unitNumber - 1] ??
+    null;
+  return selected
+    ? choosePath([selected], structure.dataRows, cells, () => true)
+    : null;
 }
 
 function dailyRecord(
@@ -145,7 +174,15 @@ function dailyRecord(
               : null;
           return value !== null && value >= 1 && value <= 31 ? value : null;
         })();
-  if (date === null || parsedDay === null) return null;
+  // A rollover (for example 31 June becoming 1 July) is source evidence,
+  // not a date to silently move into this worksheet's period. Exclude it
+  // from canonical daily rows while preserving the source for audit output.
+  if (
+    date === null ||
+    parsedDay === null ||
+    !isValidDateForPeriod(date, month, year)
+  )
+    return null;
 
   const biomassUnit1 = numberAt(cells, row, columns.biomassUnit1);
   const biomassUnit2 = numberAt(cells, row, columns.biomassUnit2);

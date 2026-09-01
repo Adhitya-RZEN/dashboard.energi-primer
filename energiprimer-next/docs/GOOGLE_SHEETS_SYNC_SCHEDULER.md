@@ -1,6 +1,6 @@
 # Google Sheets Sync Scheduler
 
-Status checkpoint: **S6 PASS (code/configuration); deployment configuration pending**
+Status checkpoint: **Phase 17 code PASS WITH REVIEW; deployment configuration pending**
 
 ## Endpoint
 
@@ -35,14 +35,27 @@ generic `401`.
 */15 * * * *  → /api/sync/google-sheets
 ```
 
-The cron invocation uses scope `current`, meaning the currently named BB period
-worksheet only. This limits Google API calls and keeps the scheduled run focused
-on the operational period. Historical/backfill synchronization remains an
-explicit manual operation and is not triggered by arbitrary request parameters.
+The cron invocation uses scope `automatic`. Discovery first reads the workbook
+metadata and registers new tabs by their stable Google `sheetId`. The importer
+then admits only the preferred worksheet for each period when all of these
+conditions hold:
 
-The current-period worksheet is discovered before sync. A newly created sheet is
-therefore registered automatically; it is processed when it becomes the current
-period or through an explicitly controlled operational backfill.
+1. the title is a valid, case-insensitive BB period name such as
+   `Agustus26-BB` or `September26-BB`;
+2. the period is after the approved `Juli26-BB` boundary and is not later than
+   the current UTC operational period;
+3. its semantic schema fingerprint exactly matches the approved `Juli26-BB`
+   schema; and
+4. it passes the existing parser/import validation and duplicate stable-key
+   checks.
+
+Therefore a newly added `Agustus26-BB` tab is discovered and processed by the
+next authorized cron invocation once August is due. A future-dated tab,
+unrelated tab, duplicate period title, or schema-drifted tab is registered but
+not imported automatically. A schema-review state must be resolved explicitly
+before that worksheet can re-enter the automatic path. Historical/backfill
+synchronization remains a separately controlled operation and is not triggered
+by arbitrary request parameters.
 
 ## Response safety
 
@@ -86,10 +99,11 @@ npm run sheets:sync -- --worksheet=Juli26-BB
 CLI ini memakai `triggerType=manual` dan tetap menolak target database
 non-local. Opsi `--current` dapat dipakai untuk scope worksheet periode berjalan;
 tanpa opsi tersebut, worksheet registry yang valid diproses sebagai backfill
-manual.
+manual. Scope `automatic` adalah kebijakan scheduler yang digunakan route
+terproteksi; jangan menjalankan backfill penuh sebagai pengganti cron.
 
 The route itself must be tested in a local server with a test-only `CRON_SECRET`
-before deployment. No deployment was performed in Phase 11.
+before deployment. No deployment was performed in Phase 17.
 
 ## Vercel configuration still required
 
