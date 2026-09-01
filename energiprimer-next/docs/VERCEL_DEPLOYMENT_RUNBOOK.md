@@ -41,8 +41,8 @@ Finding: `NODE_RUNTIME_REVIEW_REQUIRED` — no automatic runtime change was made
   client boundaries.
 - The Google Sheets sync handler explicitly uses Node.js runtime,
   `force-dynamic`, and `maxDuration = 300`.
-- The cron declaration is in `vercel.json` at `*/15 * * * *` for
-  `/api/sync/google-sheets`.
+- The cron declaration is in `vercel.json` at `0 1 * * *` for
+  `/api/sync/google-sheets` (once daily).
 - Confirm the selected Vercel plan permits the declared function duration and
   cron frequency before activation.
 - The cron endpoint requires the server-only `CRON_SECRET`, uses a lease, and

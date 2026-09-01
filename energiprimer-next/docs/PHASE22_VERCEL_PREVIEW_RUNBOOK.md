@@ -45,8 +45,8 @@ Setelah configuration review selesai, operator dapat melakukan Preview deploy
 melalui Vercel Dashboard atau CLI resmi yang telah di-login. Simpan hanya
 deployment ID dan Preview URL yang sudah disanitasi sesuai kebijakan.
 
-`vercel.json` berisi deklarasi cron untuk `/api/sync/google-sheets` setiap 15
-menit. Jangan mengirim request cron yang terotorisasi pada Phase 22 karena
+`vercel.json` berisi deklarasi cron untuk `/api/sync/google-sheets` satu kali
+sehari pada `0 1 * * *`. Jangan mengirim request cron yang terotorisasi pada Phase 22 karena
 request tersebut dapat memulai sinkronisasi. Jangan mengaktifkan cron
 production.
 

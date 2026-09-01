@@ -22,6 +22,7 @@
     "sync:verify-config": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-google-config.ts",
     "sync:verify-state": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-sync-state.ts",
     "auth:security:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-auth-security.ts",
+    "dashboard:verify-cutoff": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-dashboard-cutoff.ts",
     "sync:verify-historical-registry": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/audit-historical-sync-registry-reconciliation.ts",
     "sync:backfill-historical-registry": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/backfill-historical-sync-registry.ts",
     "mail:verify": "node --env-file-if-exists=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-resend-mail.ts",
