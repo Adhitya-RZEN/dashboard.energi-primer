@@ -3,6 +3,13 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../lib/prisma";
+import {
+  addCalendarDays,
+  calendarDateToUtcStart,
+  constrainOverviewQuery,
+  defaultFocusDateForMonth,
+  getDashboardCutoffDate,
+} from "../lib/dashboard-date";
 import type {
   OverviewData,
   OverviewDailyPoint,
@@ -153,9 +160,12 @@ function hasRows(rows: {
   ].some((items) => items.length > 0);
 }
 
-async function loadOverviewRows(query: OverviewQuery) {
+async function loadOverviewRows(query: OverviewQuery, cutoffDate: string) {
   const periodStart = toUtcDate(query.year, query.month, 1);
   const periodEnd = toUtcDate(query.year, query.month + 1, 1);
+  const cutoffEnd = calendarDateToUtcStart(addCalendarDays(cutoffDate, 1));
+  const visiblePeriodEnd =
+    periodEnd.getTime() < cutoffEnd.getTime() ? periodEnd : cutoffEnd;
 
   const [
     coalConsumption,
@@ -170,7 +180,7 @@ async function loadOverviewRows(query: OverviewQuery) {
     target,
   ] = await Promise.all([
     prisma.coalConsumption.findMany({
-      where: { date: { gte: periodStart, lt: periodEnd } },
+      where: { date: { gte: periodStart, lt: visiblePeriodEnd } },
       orderBy: [{ date: "asc" }, { unit: { name: "asc" } }],
       select: {
         date: true,
@@ -179,7 +189,7 @@ async function loadOverviewRows(query: OverviewQuery) {
       },
     }),
     prisma.coalStock.findMany({
-      where: { date: { gte: periodStart, lt: periodEnd } },
+      where: { date: { gte: periodStart, lt: visiblePeriodEnd } },
       orderBy: { date: "asc" },
       select: { date: true, received: true, closingStock: true },
     }),
@@ -194,7 +204,7 @@ async function loadOverviewRows(query: OverviewQuery) {
       select: { periodStart: true, quantityTon: true },
     }),
     prisma.biomassConsumption.findMany({
-      where: { readingDate: { gte: periodStart, lt: periodEnd } },
+      where: { readingDate: { gte: periodStart, lt: visiblePeriodEnd } },
       orderBy: [{ readingDate: "asc" }, { unit: { name: "asc" } }],
       select: {
         readingDate: true,
@@ -207,12 +217,12 @@ async function loadOverviewRows(query: OverviewQuery) {
       select: { periodStart: true, quantityLiter: true },
     }),
     prisma.solarConsumption.findMany({
-      where: { readingDate: { gte: periodStart, lt: periodEnd } },
+      where: { readingDate: { gte: periodStart, lt: visiblePeriodEnd } },
       orderBy: { readingDate: "asc" },
       select: { readingDate: true, quantityLiter: true },
     }),
     prisma.hopReading.findMany({
-      where: { readingDate: { gte: periodStart, lt: periodEnd } },
+      where: { readingDate: { gte: periodStart, lt: visiblePeriodEnd } },
       orderBy: [{ readingDate: "asc" }, { unit: { name: "asc" } }],
       select: {
         readingDate: true,
@@ -246,9 +256,12 @@ async function loadOverviewRows(query: OverviewQuery) {
   };
 }
 
-async function findAvailableMonths(query: OverviewQuery) {
+async function findAvailableMonths(query: OverviewQuery, cutoffDate: string) {
   const start = toUtcDate(query.year, query.month - 12, 1);
   const end = toUtcDate(query.year, query.month + 1, 1);
+  const cutoffEnd = calendarDateToUtcStart(addCalendarDays(cutoffDate, 1));
+  const visibleEnd =
+    end.getTime() < cutoffEnd.getTime() ? end : cutoffEnd;
   const [
     coalConsumption,
     coalStock,
@@ -261,39 +274,39 @@ async function findAvailableMonths(query: OverviewQuery) {
     cumulativeSnapshots,
   ] = await Promise.all([
     prisma.coalConsumption.findMany({
-      where: { date: { gte: start, lt: end } },
+      where: { date: { gte: start, lt: visibleEnd } },
       select: { date: true },
     }),
     prisma.coalStock.findMany({
-      where: { date: { gte: start, lt: end } },
+      where: { date: { gte: start, lt: visibleEnd } },
       select: { date: true },
     }),
     prisma.coalReceipt.findMany({
-      where: { periodStart: { gte: start, lt: end } },
+      where: { periodStart: { gte: start, lt: visibleEnd } },
       select: { periodStart: true },
     }),
     prisma.biomassReceipt.findMany({
-      where: { periodStart: { gte: start, lt: end } },
+      where: { periodStart: { gte: start, lt: visibleEnd } },
       select: { periodStart: true },
     }),
     prisma.biomassConsumption.findMany({
-      where: { readingDate: { gte: start, lt: end } },
+      where: { readingDate: { gte: start, lt: visibleEnd } },
       select: { readingDate: true },
     }),
     prisma.solarReceipt.findMany({
-      where: { periodStart: { gte: start, lt: end } },
+      where: { periodStart: { gte: start, lt: visibleEnd } },
       select: { periodStart: true },
     }),
     prisma.solarConsumption.findMany({
-      where: { readingDate: { gte: start, lt: end } },
+      where: { readingDate: { gte: start, lt: visibleEnd } },
       select: { readingDate: true },
     }),
     prisma.hopReading.findMany({
-      where: { readingDate: { gte: start, lt: end } },
+      where: { readingDate: { gte: start, lt: visibleEnd } },
       select: { readingDate: true },
     }),
     prisma.biomassCumulativeSnapshot.findMany({
-      where: { periodStart: { gte: start, lt: end } },
+      where: { periodStart: { gte: start, lt: visibleEnd } },
       select: { periodStart: true },
     }),
   ]);
@@ -398,14 +411,15 @@ function buildSeries(
 function focusDateFor(
   effectiveQuery: OverviewQuery,
   series: OverviewDailyPoint[],
+  cutoffDate: string,
 ) {
-  const requestedFocusKey = dateKey(
-    toUtcDate(
-      effectiveQuery.year,
-      effectiveQuery.month,
-      effectiveQuery.day ?? new Date().getUTCDate(),
-    ),
+  const requestedFocusKey = defaultFocusDateForMonth(
+    effectiveQuery.year,
+    effectiveQuery.month,
+    effectiveQuery.day,
+    cutoffDate,
   );
+  if (!requestedFocusKey) return null;
   const availableDates = series.map((point) => point.date).sort();
   return availableDates.includes(requestedFocusKey)
     ? requestedFocusKey
@@ -441,26 +455,34 @@ function hopForDate(
 
 export async function getPostgresOverviewData(
   query: OverviewQuery,
+  dashboardCutoffDate = getDashboardCutoffDate(),
 ): Promise<OverviewData> {
-  let effectiveQuery = query;
-  let rows = await loadOverviewRows(effectiveQuery);
+  const constrainedQuery = constrainOverviewQuery(query, dashboardCutoffDate);
+  let effectiveQuery = constrainedQuery;
+  let rows = await loadOverviewRows(effectiveQuery, dashboardCutoffDate);
   let isFallback = false;
 
   if (!hasRows(rows)) {
-    const fallbackMonth = (await findAvailableMonths(query)).at(-1);
+    const fallbackMonth = (
+      await findAvailableMonths(constrainedQuery, dashboardCutoffDate)
+    ).at(-1);
     if (fallbackMonth) {
       effectiveQuery = {
         month: Number(fallbackMonth.slice(5)),
         year: Number(fallbackMonth.slice(0, 4)),
         day: null,
       };
-      rows = await loadOverviewRows(effectiveQuery);
+      rows = await loadOverviewRows(effectiveQuery, dashboardCutoffDate);
       isFallback = true;
     }
   }
 
   const series = buildSeries(rows, effectiveQuery);
-  const focusDate = focusDateFor(effectiveQuery, series);
+  const focusDate = focusDateFor(
+    effectiveQuery,
+    series,
+    dashboardCutoffDate,
+  );
   const focusPoint = series.find((point) => point.date === focusDate) ?? null;
   const focusConsumption = rows.biomassConsumption.filter(
     (row) => dateKey(row.readingDate) === focusDate,
@@ -511,13 +533,14 @@ export async function getPostgresOverviewData(
       : null;
 
   return {
-    query,
+    query: constrainedQuery,
     period: {
       monthLabel: `${MONTH_NAMES[effectiveQuery.month - 1]} ${effectiveQuery.year}`,
-      requestedMonthLabel: `${MONTH_NAMES[query.month - 1]} ${query.year}`,
+      requestedMonthLabel: `${MONTH_NAMES[constrainedQuery.month - 1]} ${constrainedQuery.year}`,
+      dashboardCutoffDate,
       isFallback,
       fallbackNotice: isFallback
-        ? `Data ${MONTH_NAMES[query.month - 1]} ${query.year} belum tersedia. Menampilkan data terakhir: ${MONTH_NAMES[effectiveQuery.month - 1]} ${effectiveQuery.year}.`
+        ? `Data ${MONTH_NAMES[constrainedQuery.month - 1]} ${constrainedQuery.year} belum tersedia. Menampilkan data terakhir: ${MONTH_NAMES[effectiveQuery.month - 1]} ${effectiveQuery.year}.`
         : null,
       focusDate,
       focusDateLabel: dateLabel(focusDate),

@@ -12,6 +12,12 @@ import {
   readGoogleSheetsRange,
   type GoogleSheetRow,
 } from "@/lib/google-sheets";
+import {
+  constrainOverviewQuery,
+  defaultFocusDateForMonth,
+  getDashboardCutoffDate,
+  isDateKeyOnOrBefore,
+} from "@/lib/dashboard-date";
 import { DYNAMIC_SCAN_RANGE } from "@/services/google-sheets/dynamic/reader";
 import { parseDynamicWorksheet } from "@/services/google-sheets/dynamic/parser";
 import type {
@@ -164,7 +170,8 @@ function unavailableMetric(
   return { value: null, unit, source, available: false, note };
 }
 
-function dateLabel(date: string) {
+function dateLabel(date: string | null) {
+  if (!date) return "Tanggal tidak tersedia";
   const [year, month, day] = date.split("-").map(Number);
   return `${String(day).padStart(2, "0")} ${MONTH_NAMES[month - 1]} ${year}`;
 }
@@ -241,10 +248,13 @@ function semanticBiomassReceiptMetric(
 
 function overviewSeries(
   semantic: DynamicParserResult | null,
+  cutoffDate: string,
 ): OverviewDailyPoint[] | null {
   const records = semantic?.normalized.series ?? [];
   const series = records.flatMap((record) =>
-    record.date !== null && record.day !== null
+    record.date !== null &&
+    record.day !== null &&
+    isDateKeyOnOrBefore(record.date, cutoffDate)
       ? [{ ...record, date: record.date, day: record.day }]
       : [],
   );
@@ -254,13 +264,22 @@ function overviewSeries(
 function dynamicFocusRecord(
   semantic: DynamicParserResult | null,
   query: OverviewQuery,
+  cutoffDate: string,
 ) {
-  const records = semantic?.normalized.series ?? [];
+  const records = (semantic?.normalized.series ?? []).filter(
+    (record) =>
+      record.date !== null && isDateKeyOnOrBefore(record.date, cutoffDate),
+  );
   if (!records.length) return null;
-  const targetDay = query.day ?? new Date().getUTCDate();
+  const targetDate = defaultFocusDateForMonth(
+    query.year,
+    query.month,
+    query.day,
+    cutoffDate,
+  );
   return (
-    records.find((record) => record.day === targetDay) ??
-    [...records].reverse().find((record) => record.day !== null) ??
+    records.find((record) => record.date === targetDate) ??
+    [...records].reverse().find((record) => record.date !== null) ??
     null
   );
 }
@@ -293,10 +312,13 @@ function buildSeries(
   rows: SheetRow[],
   month: number,
   year: number,
+  cutoffDate: string,
 ): OverviewDailyPoint[] {
   return rows.slice(0, ROW_TOTAL_INDEX).flatMap((row) => {
     const day = parseDay(row[0]);
     if (!day) return [];
+    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isDateKeyOnOrBefore(date, cutoffDate)) return [];
     const biomass = sumNullable([
       nullableValue(row, COL.biomassUnit1),
       nullableValue(row, COL.biomassUnit2),
@@ -304,7 +326,7 @@ function buildSeries(
     ]);
     return [
       {
-        date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        date,
         day,
         coal: nullableValue(row, COL.coalConsumption),
         biomass,
@@ -333,6 +355,7 @@ function buildGoogleData(
   requestedMonthLabel: string,
   requestedQuery = query,
   semantic: DynamicParserResult | null = null,
+  dashboardCutoffDate = getDashboardCutoffDate(),
 ): OverviewData {
   if (rows.length === 0) {
     const note = `Worksheet ${worksheet} tidak mengembalikan baris data.`;
@@ -341,6 +364,7 @@ function buildGoogleData(
       period: {
         monthLabel: `${MONTH_NAMES[query.month - 1]} ${query.year}`,
         requestedMonthLabel,
+        dashboardCutoffDate,
         isFallback,
         fallbackNotice: isFallback
           ? `Data ${requestedMonthLabel} belum tersedia. Worksheet ${worksheet} kosong.`
@@ -416,19 +440,39 @@ function buildGoogleData(
   const totalRow = rows[ROW_TOTAL_INDEX] ?? [];
   const targetRow = rows[ROW_TARGET_INDEX] ?? [];
   const cumulativeRow = rows[ROW_CUMULATIVE_INDEX] ?? [];
-  const targetDay = query.day ?? new Date().getUTCDate();
-  const dailyRows = rows.slice(0, ROW_TOTAL_INDEX);
-  const exactRow = dailyRows.find((row) => parseDay(row[0]) === targetDay);
+  const targetDate = defaultFocusDateForMonth(
+    query.year,
+    query.month,
+    query.day,
+    dashboardCutoffDate,
+  );
+  const targetDay = targetDate ? Number(targetDate.slice(-2)) : null;
+  const dailyRows = rows.slice(0, ROW_TOTAL_INDEX).filter((row) => {
+    const day = parseDay(row[0]);
+    if (day === null) return false;
+    const date = `${query.year}-${String(query.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return isDateKeyOnOrBefore(date, dashboardCutoffDate);
+  });
+  const exactRow =
+    targetDay === null
+      ? undefined
+      : dailyRows.find((row) => parseDay(row[0]) === targetDay);
   const dailyRow =
     exactRow ??
     [...dailyRows].reverse().find((row) => parseDay(row[0]) !== null) ??
     [];
-  const dynamicFocus = dynamicFocusRecord(semantic, query);
-  const dynamicSeries = overviewSeries(semantic);
+  const dynamicFocus = dynamicFocusRecord(
+    semantic,
+    query,
+    dashboardCutoffDate,
+  );
+  const dynamicSeries = overviewSeries(semantic, dashboardCutoffDate);
   const actualDay = dynamicFocus?.day ?? parseDay(dailyRow[0]) ?? targetDay;
   const actualDate =
     dynamicFocus?.date ??
-    `${query.year}-${String(query.month).padStart(2, "0")}-${String(actualDay).padStart(2, "0")}`;
+    (actualDay === null
+      ? targetDate
+      : `${query.year}-${String(query.month).padStart(2, "0")}-${String(actualDay).padStart(2, "0")}`);
   const legacyStockMetric = metric(
     numericValue(dailyRow, COL.stock),
     "ton",
@@ -493,7 +537,9 @@ function buildGoogleData(
     ...statusForHop(value as number),
   }));
   const hopRows = dynamicHop ?? legacyHopRows;
-  const series = dynamicSeries ?? buildSeries(rows, query.month, query.year);
+  const series =
+    dynamicSeries ??
+    buildSeries(rows, query.month, query.year, dashboardCutoffDate);
   const dynamicBiomassDaily =
     dynamicFocus &&
     [
@@ -640,6 +686,7 @@ function buildGoogleData(
     period: {
       monthLabel: `${MONTH_NAMES[query.month - 1]} ${query.year}`,
       requestedMonthLabel,
+      dashboardCutoffDate,
       isFallback,
       fallbackNotice: isFallback
         ? `Data ${requestedMonthLabel} belum tersedia. Menampilkan data terakhir dari worksheet ${worksheet}.`
@@ -688,22 +735,25 @@ export function isGoogleSheetsOverviewConfigured() {
 
 export async function getGoogleSheetsOverviewData(
   query: OverviewQuery,
+  dashboardCutoffDate = getDashboardCutoffDate(),
 ): Promise<OverviewData> {
-  const requestedMonthLabel = `${MONTH_NAMES[query.month - 1]} ${query.year}`;
+  const constrainedQuery = constrainOverviewQuery(query, dashboardCutoffDate);
+  const requestedMonthLabel = `${MONTH_NAMES[constrainedQuery.month - 1]} ${constrainedQuery.year}`;
   try {
-    const sheet = await readSheet(query.month, query.year);
+    const sheet = await readSheet(constrainedQuery.month, constrainedQuery.year);
     return buildGoogleData(
-      query,
+      constrainedQuery,
       sheet.worksheet,
       sheet.rows,
       false,
       requestedMonthLabel,
-      query,
+      constrainedQuery,
       sheet.semantic,
+      dashboardCutoffDate,
     );
   } catch (error) {
-    let month = query.month;
-    let year = query.year;
+    let month = constrainedQuery.month;
+    let year = constrainedQuery.year;
     for (let index = 0; index < 12; index += 1) {
       month -= 1;
       if (month < 1) {
@@ -718,8 +768,9 @@ export async function getGoogleSheetsOverviewData(
           sheet.rows,
           true,
           requestedMonthLabel,
-          query,
+          constrainedQuery,
           sheet.semantic,
+          dashboardCutoffDate,
         );
       } catch {
         continue;
