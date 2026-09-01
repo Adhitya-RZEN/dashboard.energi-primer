@@ -21,16 +21,16 @@ Nilai Spreadsheet ID, email, project ID, dan private key tidak ditulis di dokume
 
 ## Spreadsheet, worksheet, dan range
 
-| Item | Kontrak Laravel/Next.js |
-|---|---|
-| Spreadsheet | Spreadsheet operasional yang ID-nya dikonfigurasi server-side; nilai dirahasiakan di dokumen ini |
-| Worksheet | `${NamaBulanIndonesia}${2 digit tahun}-BB`, misalnya `Juli26-BB` |
-| Range | `B11:CO59` |
-| Baris harian | response index `0..30`, spreadsheet row `11..41` |
-| Total bulanan | response index `31`, spreadsheet row `42` |
-| Penerimaan biomassa | response index `41`, spreadsheet row `52` |
-| Target biomassa | response index `45`, spreadsheet row `56` |
-| Realisasi kumulatif | response index `48`, spreadsheet row `59` |
+| Item                | Kontrak Laravel/Next.js                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| Spreadsheet         | Spreadsheet operasional yang ID-nya dikonfigurasi server-side; nilai dirahasiakan di dokumen ini |
+| Worksheet           | `${NamaBulanIndonesia}${2 digit tahun}-BB`, misalnya `Juli26-BB`                                 |
+| Range               | `B11:CO59`                                                                                       |
+| Baris harian        | response index `0..30`, spreadsheet row `11..41`                                                 |
+| Total bulanan       | response index `31`, spreadsheet row `42`                                                        |
+| Penerimaan biomassa | response index `41`, spreadsheet row `52`                                                        |
+| Target biomassa     | response index `45`, spreadsheet row `56`                                                        |
+| Realisasi kumulatif | response index `48`, spreadsheet row `59`                                                        |
 
 ## Authentication
 
@@ -42,11 +42,11 @@ Laravel memakai `google/apiclient` dengan service-account JSON dan scope `spread
 
 Variabel berikut tersedia di `energiprimer-next/.env.example` dan tidak memiliki nilai rahasia:
 
-| Variable | Fungsi |
-|---|---|
-| `GOOGLE_SHEETS_CREDENTIALS_PATH` | path server-side ke service-account JSON; tidak boleh berada di `public/` |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | ID spreadsheet operasional |
-| `GOOGLE_SHEETS_CACHE_TTL` | cache in-memory per range dalam detik; default `120` agar sejalan dengan Laravel |
+| Variable                         | Fungsi                                                                           |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `GOOGLE_SHEETS_CREDENTIALS_PATH` | path server-side ke service-account JSON; tidak boleh berada di `public/`        |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`   | ID spreadsheet operasional                                                       |
+| `GOOGLE_SHEETS_CACHE_TTL`        | cache in-memory per range dalam detik; default `120` agar sejalan dengan Laravel |
 
 Laravel `.env.example` juga mendefinisikan ketiga nama tersebut. `GOOGLE_SHEETS_WORKSHEET` dan `GOOGLE_SHEETS_RANGE` tidak ditambahkan karena source memakai worksheet dinamis dan range tetap `B11:CO59`.
 
@@ -56,21 +56,35 @@ Laravel `.env.example` juga mendefinisikan ketiga nama tersebut. `GOOGLE_SHEETS_
 
 Semua indeks berikut relatif terhadap range yang dimulai dari kolom `B` (`B = 0`):
 
-| Data | Spreadsheet column | Relative index | Transformation |
-|---|---:|---:|---|
-| Biomassa receipt bulanan | `S52` | 17 | numeric parser |
-| Biomassa consumption bulanan | `AC42` | 27 | numeric parser |
-| Batubara receipt bulanan | `I42` | 7 | numeric parser |
-| Batubara consumption bulanan | `AB42` | 26 | numeric parser |
-| Biomassa Unit 1/2/3 | `T/W/Z` harian | 18/21/24 | nullable numeric |
-| Batubara Unit 1/2/3 | `S/V/Y` harian | 17/20/23 | nullable numeric |
-| Stock | `AD` harian | 28 | numeric parser |
-| HOP Unit 3/2/1 | `AJ/AK/AL` harian | 34/35/36 | nullable numeric; `<10` danger, `<15` warning, otherwise success |
-| Solar consumption | `CJ` | 86 | harian dari row fokus, bulanan dari row 42 |
-| Solar receipt | `CC42` | 79 | numeric parser |
-| Target/realisasi | `CO56/CO59` | 91 | target fallback `70020`; progress `min(100, cumulative / target * 100)` |
+| Data                         |                                        Spreadsheet column |         Relative index | Transformation                                                                     |
+| ---------------------------- | --------------------------------------------------------: | ---------------------: | ---------------------------------------------------------------------------------- |
+| Biomassa receipt bulanan     | tabel `Penerimaan → Biomassa` skema tujuh pemasok terbaru | tidak ada fallback KPI | semantic total tujuh pemasok; unavailable jika scan gagal atau skema tidak lengkap |
+| Biomassa consumption bulanan |       semantic dashboard/Unit 1–3; legacy `AC42` fallback |      27 untuk fallback | semantic numeric parser                                                            |
+| Batubara receipt bulanan     |                 semantic dashboard; legacy `I42` fallback |       7 untuk fallback | semantic numeric parser                                                            |
+| Batubara consumption bulanan |                semantic dashboard; legacy `AB42` fallback |      26 untuk fallback | semantic numeric parser                                                            |
+| Biomassa Unit 1/2/3          |                                            `T/W/Z` harian |               18/21/24 | nullable numeric                                                                   |
+| Batubara Unit 1/2/3          |                                            `S/V/Y` harian |               17/20/23 | nullable numeric                                                                   |
+| Stock                        |                                               `AD` harian |                     28 | numeric parser                                                                     |
+| HOP Unit 3/2/1               |                                         `AJ/AK/AL` harian |               34/35/36 | nullable numeric; `<10` danger, `<15` warning, otherwise success                   |
+| Solar consumption            |                                                      `CJ` |                     86 | harian dari row fokus, bulanan dari row 42                                         |
+| Solar receipt                |                semantic dashboard; legacy `CC42` fallback |      79 untuk fallback | semantic numeric parser                                                            |
+| Target/realisasi             |   semantic target/historical; legacy `CO56/CO59` fallback |      91 untuk fallback | target fallback `70020`; progress `min(100, cumulative / target * 100)`            |
 
 Parser mempertahankan perilaku Laravel untuk angka lokal titik/koma, tanggal angka atau string, tanda dash sebagai `null`, penjumlahan biomassa hanya dari unit yang hadir, dan fallback ke baris harian terakhir jika hari yang dipilih tidak tersedia. Query `month`, `year`, dan `day` tetap diproses oleh service overview; data fallback mundur maksimal 12 worksheet.
+
+### Agregat penerimaan Biomassa production
+
+`biomassSupplierReceiptMonthly` dihitung dari tabel `Penerimaan → Biomassa` melalui scan semantic `A1:ZZ500`, lalu dipetakan ke `metrics.biomassReceiptMonthly` pada adapter production Google Sheets. Hanya tujuh header pemasok berikut yang termasuk:
+
+- Sawdust PT Syahroni;
+- Sawdust PT Bintang;
+- Woodchip PT Syahroni;
+- Woodchip PT RAP;
+- Woodchip CV Multi Paketindo;
+- LRUK;
+- SRF.
+
+Parser menjumlahkan nilai pada baris `TOTAL` tabel tersebut. Jika baris `TOTAL` tidak tersedia, parser menjumlahkan baris data tabel sebagai fallback. Kolom kosong dan kolom pemasok lama/generic di luar daftar tujuh nama tidak ikut dihitung. Jika scan semantic gagal atau header tujuh pemasok belum lengkap, metric ditandai unavailable agar tidak terjadi undercount. KPI ini tidak lagi memakai fallback `S52`.
 
 ## Service architecture
 
@@ -84,7 +98,10 @@ Parser mempertahankan perilaku Laravel untuk angka lokal titik/koma, tanggal ang
   - mengembalikan `GoogleSheetsReadResult` atau error terklasifikasi.
 - `src/services/google-sheets-overview.ts`
   - membangun nama worksheet;
+  - membaca range legacy `B11:CO59` sebagai fallback per-field;
+  - membaca scan semantic `A1:ZZ500` untuk KPI dan agregat tujuh pemasok Biomassa;
   - memetakan raw rows ke `OverviewData` dan shared TypeScript types;
+  - memakai semantic field sebagai source utama KPI biasa, dengan fallback legacy per-field bila diperlukan;
   - menjalankan formula, nullable handling, daily series, HOP, target, serta fallback Laravel.
 - `src/services/overview.ts`
   - memilih Google Sheets jika konfigurasi lengkap;
@@ -113,7 +130,7 @@ Tidak ada logging raw exception yang dapat membawa URL, token, atau response Goo
 
 Static checks yang dijalankan mencakup validasi bentuk dua JSON service-account tanpa mencetak nilai, pencocokan metadata konfigurasi tanpa mencetak ID/email, lint, TypeScript, dan build.
 
-Live read verification sebelumnya berhasil pada worksheet `Juli26-BB`, hari ke-28, dan hasil Next.js sama dengan baseline Laravel untuk receipt/consumption biomassa, receipt/consumption batubara, stock, solar harian/bulanan, cumulative, target/progress, nilai unit, dan HOP. Request Google sempat mengembalikan `503` dan berhasil setelah retry; ini menunjukkan error/fallback eksternal tetap perlu dipantau.
+Read-only verification terbaru berhasil pada worksheet `Juli26-BB`, hari ke-28. KPI selain penerimaan Biomassa tetap sama dengan baseline Laravel: konsumsi Biomassa `3740.65`, konsumsi/penerimaan Batubara `34940.444`/`30084.842`, solar, cumulative, target/progress, unit, dan HOP. Skema penerimaan terbaru mendeteksi lengkap `7/7` header pemasok, sehingga `biomassReceiptMonthly` dihitung dari total tujuh kolom dan menghasilkan `3223.46` ton. Kolom kosong tidak ikut dihitung dan KPI ini tidak memakai fallback `S52`.
 
 Untuk verifikasi ulang:
 

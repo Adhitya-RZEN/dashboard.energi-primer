@@ -1,3 +1,5 @@
+import "server-only";
+
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -27,7 +29,9 @@ export type ConsumptionSummary = {
  * PostgreSQL aggregate equivalent of Laravel LaporanController@index.
  * `$queryRaw` is parameter-free here and the result shape is explicitly typed.
  */
-export async function listMonthlyConsumptionReports(): Promise<MonthlyConsumptionReport[]> {
+export async function listMonthlyConsumptionReports(): Promise<
+  MonthlyConsumptionReport[]
+> {
   const rows = await prisma.$queryRaw<MonthlyConsumptionReport[]>(Prisma.sql`
     SELECT
       TO_CHAR(date, 'YYYY-MM') AS "yearMonth",

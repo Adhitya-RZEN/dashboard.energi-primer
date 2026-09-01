@@ -1,0 +1,9 @@
+export const HISTORICAL_LABEL_ALIASES = [
+  "KUMULATIF PEMAKAIAN BIOMASSA",
+  "TOTAL 2026",
+  "PEMAKAIAN 2026",
+  "TOTAL 2025",
+  "PEMAKAIAN 2025",
+] as const;
+
+export const HISTORICAL_UNITS = ["TON", "TONASE", "%"] as const;

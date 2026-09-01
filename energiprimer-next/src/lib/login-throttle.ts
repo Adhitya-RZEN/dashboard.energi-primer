@@ -17,7 +17,9 @@ function requestCount(value: string | null) {
   if (!value) return 0;
   try {
     const parsed = JSON.parse(value) as { count?: unknown };
-    return typeof parsed.count === "number" && Number.isInteger(parsed.count) && parsed.count >= 0
+    return typeof parsed.count === "number" &&
+      Number.isInteger(parsed.count) &&
+      parsed.count >= 0
       ? parsed.count
       : 0;
   } catch {
@@ -25,7 +27,10 @@ function requestCount(value: string | null) {
   }
 }
 
-export function getRequestIp(forwardedFor: string | null, realIp: string | null) {
+export function getRequestIp(
+  forwardedFor: string | null,
+  realIp: string | null,
+) {
   const forwardedIp = forwardedFor?.split(",", 1)[0]?.trim();
   return forwardedIp || realIp?.trim() || "unknown";
 }

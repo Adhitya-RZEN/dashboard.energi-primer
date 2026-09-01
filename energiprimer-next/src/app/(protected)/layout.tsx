@@ -7,7 +7,11 @@ import { auth } from "@/auth";
 import { AppShell } from "@/components/layout/AppShell";
 import { getDashboardTheme } from "@/components/dashboard/dashboard-themes";
 
-export default async function ProtectedLayout({ children }: { children: ReactNode }) {
+export default async function ProtectedLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const session = await auth();
 
   if (!session) {
@@ -18,7 +22,12 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     redirect("/login?error=unauthorized" as Route);
   }
 
-  const pathname = (await headers()).get("x-dashboard-pathname") ?? "/dashboard";
+  const pathname =
+    (await headers()).get("x-dashboard-pathname") ?? "/dashboard";
 
-  return <AppShell user={session.user} theme={getDashboardTheme(pathname)}>{children}</AppShell>;
+  return (
+    <AppShell user={session.user} theme={getDashboardTheme(pathname)}>
+      {children}
+    </AppShell>
+  );
 }

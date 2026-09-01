@@ -3,9 +3,9 @@
 ## Kesimpulan
 
 Next.js telah memiliki parity fungsional yang kuat untuk dashboard read-only,
-data PostgreSQL, Google Sheets, dan authentication flow utama. Required fixes
-parity yang ditemukan pada audit awal sudah diterapkan; beberapa keputusan
-deployment dan cutover masih berstatus `NEEDS REVIEW`.
+data PostgreSQL, Google Sheets, dan authentication flow utama. Setelah mapping
+skema pemasok penerimaan Biomassa dikoreksi, worksheet live mendeteksi lengkap
+7/7 header terbaru dan parity KPI penerimaan terverifikasi `PASS`.
 
 Tidak ada deployment production, perubahan Laravel, migration, schema change,
 atau operasi tulis database yang dilakukan pada Phase 9.
@@ -18,69 +18,73 @@ Skor parity dihitung dari 25 area validasi berikut:
 - `PARTIAL`, `ACCEPTABLE DIFFERENCE`, atau `NEEDS REVIEW` = 0,5 poin;
 - `REQUIRED FIX` atau `NOT IMPLEMENTED` = 0 poin.
 
-Hasil: **20,5 / 25 = 82%**.
+Hasil snapshot sebelum perubahan skema pemasok adalah **20,5 / 25 = 82%**.
+Setelah mapping diperbarui dan worksheet live memuat 7/7 header terbaru,
+parity receipt meningkat menjadi `PASS`. Persentase final pada dokumen ini
+tetap merupakan snapshot scope Phase 9 dan tidak memasukkan keputusan manual
+lainnya sebagai selesai.
 
-Angka ini adalah coverage parity terhadap scope yang ditemukan pada source,
-bukan persentase kemiripan visual pixel-per-pixel.
+Angka parity adalah coverage terhadap scope yang ditemukan pada source, bukan
+persentase kemiripan visual pixel-per-pixel.
 
 ## Feature parity matrix
 
-| Feature | Laravel | Next.js | Functional | Data Parity | UI Parity | Status | Notes |
-|---|---|---|---|---|---|---|---|
-| Root `/` | Redirect ke `/dashboard` dengan `auth` + `admin` | Auth-aware redirect ke `/dashboard` atau `/login` | PASS | N/A | PASS | PASS | Non-admin diarahkan ke login unauthorized |
-| Login | Session login, admin-only, throttle `6/1 menit` | Auth.js Credentials + Prisma + bcrypt + cache throttle | PASS | PASS | PASS | PASS | Throttle persistent memakai tabel `cache` existing |
-| Logout | POST `/logout`, invalidate session dan CSRF | Auth.js `signOut` server action | PASS | N/A | PASS | ACCEPTABLE DIFFERENCE | URL/mekanisme berbeda, behavior browser ekuivalen |
-| Session/protected route/role | Session guard + `EnsureAdmin`, role `admin` | JWT cookie + Proxy + protected layout, role `admin` | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | JWT tidak kompatibel dengan cookie Laravel; cutover memerlukan login ulang |
-| Forgot password | Admin lookup, generic response, broker, throttle | Server Action, admin lookup, generic response, hashed token | PASS | PASS | PASS | NEEDS REVIEW | Mail production belum dikonfigurasi |
-| Reset password | Token broker, expiry, bcrypt password, admin-only | Hashed token, 60 menit, bcrypt, admin-only | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | Implementasi token berbeda tetapi kontrak keamanan utama sama |
-| Change password | GET/POST `/password/change`, current password, min 12, invalidate session | Page + Server Action, bcrypt, `updated_at` revocation, sign-out | PASS | PASS | PASS | PASS | Tidak membutuhkan migration |
-| Dashboard Overview | Google Sheets KPI, chart, filter, fallback/error | `/dashboard`, typed service, KPI, SVG chart, filter, fallback/error | PASS | PASS | PASS | PASS | Baseline Juli 2026 hari 28 cocok |
-| Dashboard Biomassa | KPI, unit harian, line/stacked chart | `/dashboard/biomassa`, shared typed service/components | PASS | PASS | PASS | PASS | Nilai receipt, consumption, unit, dan chart cocok |
-| Dashboard Batubara | KPI, unit harian, line/stacked chart | `/dashboard/batubara`, shared typed service/components | PASS | PASS | PASS | PASS | Nilai receipt, consumption, unit, dan chart cocok |
-| Dashboard Stok/HOP | Stock, HOP, status threshold, dua chart | `/dashboard/stok`, shared service/components | PASS | PASS | PASS | PASS | Stock/HOP dan status cocok |
-| Dashboard Solar | Solar harian/bulanan/receipt, dua chart | `/dashboard/solar`, Google mapping dan unavailable PG state | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | PostgreSQL memang tidak memiliki tabel solar |
-| Dashboard Target | Target, cumulative, progress, doughnut | `/dashboard/target`, typed target panel/SVG chart | PASS | PASS | PASS | NEEDS REVIEW | Target `70020` masih fallback/source Google; source of truth belum diputuskan |
-| Data kualitas batubara | Filter tanggal/unit/status, summary global, pagination 15, join Unit | `/data-batu-bara`, Prisma query, filter, pagination 15 | PASS | PASS | PASS | PASS | Threshold GAR dan query terverifikasi |
-| Laporan efisiensi | Aggregate bulanan dan summary `coal_consumption` | `/laporan`, PostgreSQL raw aggregate typed | PASS | PASS | Partial | ACCEPTABLE DIFFERENCE | UI Next read-only lebih ringkas; generate/preview/download juga disabled di source |
-| Monitoring | Route dan UI placeholder; controller mengembalikan empty/KPI 0 | `/monitoring` notice/filter/empty state | PASS | PASS | Partial | NEEDS REVIEW | Detail monitoring memang belum aktif pada Laravel; shift/supplier/export tidak dibuat |
-| Pengaturan profil | Nama/email readonly + link change password | Nama/email readonly + link `/password/change` | PASS | PASS | PASS | PASS | Link change password sudah tersedia |
-| Google Sheets | Service account, range `B11:CO59`, fallback maksimal 12 bulan | Server-only Node JWT/Sheets API, typed parser, fallback/cache/error | PASS | PASS | PASS | NEEDS REVIEW | Dua JSON terdeteksi memiliki private key berbeda; pilih key aktif di deployment |
-| PostgreSQL data layer | Eloquent/query builder + PostgreSQL aggregate | Prisma + typed services + PostgreSQL existing | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | Dashboard Laravel aktif tetap Google Sheets; target/HOP/solar tidak ada di PG |
-| Model/relationship | 7 domain model utama + `Unit` relationships | Prisma mappings dan relation `Unit` | PASS | PASS | N/A | PASS | Nama tabel/kolom dan FK dipertahankan |
-| Layout/navigation | Blade app layout, sidebar, navbar, breadcrumb, mobile behavior | AppShell, Sidebar, SiteHeader, NavigationMenu | PASS | N/A | PASS | ACCEPTABLE DIFFERENCE | React/Tailwind/SVG berbeda dari Blade/CSS tetapi hierarchy dipertahankan |
-| Loading/empty/error/not-found | Alert/error dan empty state per halaman | Route loading, empty, unavailable, error, not-found | PASS | PASS | PASS | PASS | Tidak mengganti data kosong dengan dummy |
-| API exposure | Tidak ada `routes/api.php` atau domain API | Internal Auth.js `/api/auth/[...nextauth]`; data tetap server-side | PASS | N/A | PASS | ACCEPTABLE DIFFERENCE | API Auth.js diperlukan untuk authentication, tidak ada public domain API |
-| Security boundary | Laravel auth/admin middleware, CSRF, bcrypt, throttle | Auth.js, bcrypt, server actions, protected layout, cache throttle, `server-only` | Partial | PASS | N/A | NEEDS REVIEW | JWT cutover/session compatibility, Auth.js beta, mail production, dan dependency audit perlu review |
-| Admin data/import | Import CSV dan CRUD UI Laravel disabled/tidak ada endpoint aktif | Tombol import/add/export tetap disabled; tidak ada fake mutation | PASS | PASS | PASS | ACCEPTABLE DIFFERENCE | Tidak ada fitur aktif yang hilang pada scope source |
+| Feature                       | Laravel                                                                   | Next.js                                                                          | Functional | Data Parity | UI Parity | Status                | Notes                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------- | ----------- | --------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Root `/`                      | Redirect ke `/dashboard` dengan `auth` + `admin`                          | Auth-aware redirect ke `/dashboard` atau `/login`                                | PASS       | N/A         | PASS      | PASS                  | Non-admin diarahkan ke login unauthorized                                                                                   |
+| Login                         | Session login, admin-only, throttle `6/1 menit`                           | Auth.js Credentials + Prisma + bcrypt + cache throttle                           | PASS       | PASS        | PASS      | PASS                  | Throttle persistent memakai tabel `cache` existing                                                                          |
+| Logout                        | POST `/logout`, invalidate session dan CSRF                               | Auth.js `signOut` server action                                                  | PASS       | N/A         | PASS      | ACCEPTABLE DIFFERENCE | URL/mekanisme berbeda, behavior browser ekuivalen                                                                           |
+| Session/protected route/role  | Session guard + `EnsureAdmin`, role `admin`                               | JWT cookie + Proxy + protected layout, role `admin`                              | PASS       | PASS        | PASS      | ACCEPTABLE DIFFERENCE | JWT tidak kompatibel dengan cookie Laravel; cutover memerlukan login ulang                                                  |
+| Forgot password               | Admin lookup, generic response, broker, throttle                          | Server Action, admin lookup, generic response, hashed token                      | PASS       | PASS        | PASS      | NEEDS REVIEW          | Mail production belum dikonfigurasi                                                                                         |
+| Reset password                | Token broker, expiry, bcrypt password, admin-only                         | Hashed token, 60 menit, bcrypt, admin-only                                       | PASS       | PASS        | PASS      | ACCEPTABLE DIFFERENCE | Implementasi token berbeda tetapi kontrak keamanan utama sama                                                               |
+| Change password               | GET/POST `/password/change`, current password, min 12, invalidate session | Page + Server Action, bcrypt, `updated_at` revocation, sign-out                  | PASS       | PASS        | PASS      | PASS                  | Tidak membutuhkan migration                                                                                                 |
+| Dashboard Overview            | Google Sheets KPI, chart, filter, fallback/error                          | `/dashboard`, typed service, KPI, SVG chart, filter, fallback/error              | PASS       | PASS        | PASS      | PASS                  | Receipt dihitung dari tujuh kolom pemasok terbaru dan cocok dengan baseline                                                 |
+| Dashboard Biomassa            | KPI, unit harian, line/stacked chart                                      | `/dashboard/biomassa`, shared typed service/components                           | PASS       | PASS        | PASS      | PASS                  | Receipt 7 pemasok, consumption, unit, dan chart cocok                                                                       |
+| Dashboard Batubara            | KPI, unit harian, line/stacked chart                                      | `/dashboard/batubara`, shared typed service/components                           | PASS       | PASS        | PASS      | PASS                  | Nilai receipt, consumption, unit, dan chart cocok                                                                           |
+| Dashboard Stok/HOP            | Stock, HOP, status threshold, dua chart                                   | `/dashboard/stok`, shared service/components                                     | PASS       | PASS        | PASS      | PASS                  | Stock/HOP dan status cocok                                                                                                  |
+| Dashboard Solar               | Solar harian/bulanan/receipt, dua chart                                   | `/dashboard/solar`, Google mapping dan unavailable PG state                      | PASS       | PASS        | PASS      | ACCEPTABLE DIFFERENCE | PostgreSQL memang tidak memiliki tabel solar                                                                                |
+| Dashboard Target              | Target, cumulative, progress, doughnut                                    | `/dashboard/target`, typed target panel/SVG chart                                | PASS       | PASS        | PASS      | NEEDS REVIEW          | Target `70020` masih fallback/source Google; source of truth belum diputuskan                                               |
+| Data kualitas batubara        | Filter tanggal/unit/status, summary global, pagination 15, join Unit      | `/data-batu-bara`, Prisma query, filter, pagination 15                           | PASS       | PASS        | PASS      | PASS                  | Threshold GAR dan query terverifikasi                                                                                       |
+| Laporan efisiensi             | Aggregate bulanan dan summary `coal_consumption`                          | `/laporan`, PostgreSQL raw aggregate typed                                       | PASS       | PASS        | Partial   | ACCEPTABLE DIFFERENCE | UI Next read-only lebih ringkas; generate/preview/download juga disabled di source                                          |
+| Monitoring                    | Route dan UI placeholder; controller mengembalikan empty/KPI 0            | `/monitoring` notice/filter/empty state                                          | PASS       | PASS        | Partial   | NEEDS REVIEW          | Detail monitoring memang belum aktif pada Laravel; shift/supplier/export tidak dibuat                                       |
+| Pengaturan profil             | Nama/email readonly + link change password                                | Nama/email readonly + link `/password/change`                                    | PASS       | PASS        | PASS      | PASS                  | Link change password sudah tersedia                                                                                         |
+| Google Sheets                 | Service account, range `B11:CO59`, fallback maksimal 12 bulan             | Server-only Node JWT/Sheets API, typed parser, fallback/cache/error              | Partial    | PASS        | PASS      | ACCEPTABLE DIFFERENCE | Worksheet live mendeteksi 7/7 pemasok terbaru; dua JSON memiliki private key berbeda dan key aktif deployment perlu dipilih |
+| PostgreSQL data layer         | Eloquent/query builder + PostgreSQL aggregate                             | Prisma + typed services + PostgreSQL existing                                    | PASS       | PASS        | PASS      | ACCEPTABLE DIFFERENCE | Dashboard Laravel aktif tetap Google Sheets; target/HOP/solar tidak ada di PG                                               |
+| Model/relationship            | 7 domain model utama + `Unit` relationships                               | Prisma mappings dan relation `Unit`                                              | PASS       | PASS        | N/A       | PASS                  | Nama tabel/kolom dan FK dipertahankan                                                                                       |
+| Layout/navigation             | Blade app layout, sidebar, navbar, breadcrumb, mobile behavior            | AppShell, Sidebar, SiteHeader, NavigationMenu                                    | PASS       | N/A         | PASS      | ACCEPTABLE DIFFERENCE | React/Tailwind/SVG berbeda dari Blade/CSS tetapi hierarchy dipertahankan                                                    |
+| Loading/empty/error/not-found | Alert/error dan empty state per halaman                                   | Route loading, empty, unavailable, error, not-found                              | PASS       | PASS        | PASS      | PASS                  | Tidak mengganti data kosong dengan dummy                                                                                    |
+| API exposure                  | Tidak ada `routes/api.php` atau domain API                                | Internal Auth.js `/api/auth/[...nextauth]`; data tetap server-side               | PASS       | N/A         | PASS      | ACCEPTABLE DIFFERENCE | API Auth.js diperlukan untuk authentication, tidak ada public domain API                                                    |
+| Security boundary             | Laravel auth/admin middleware, CSRF, bcrypt, throttle                     | Auth.js, bcrypt, server actions, protected layout, cache throttle, `server-only` | Partial    | PASS        | N/A       | NEEDS REVIEW          | JWT cutover/session compatibility, Auth.js beta, mail production, dan dependency audit perlu review                         |
+| Admin data/import             | Import CSV dan CRUD UI Laravel disabled/tidak ada endpoint aktif          | Tombol import/add/export tetap disabled; tidak ada fake mutation                 | PASS       | PASS        | PASS      | ACCEPTABLE DIFFERENCE | Tidak ada fitur aktif yang hilang pada scope source                                                                         |
 
 ## Route comparison
 
 Laravel memiliki **21 route** dari `php artisan route:list --except-vendor`.
 `routes/api.php` tidak ada.
 
-| Laravel route | Next.js route/implementation | Status |
-|---|---|---|
-| `GET /` | `src/app/page.tsx` | PASS: auth-aware redirect |
-| `GET /login` | `/login` page | PASS |
-| `POST /login` | Login Server Action/Auth.js Credentials endpoint + cache throttle | PASS |
-| `POST /logout` | `SignOutButton` Server Action/Auth.js | ACCEPTABLE DIFFERENCE |
-| `GET /forgot-password` | `/forgot-password` page | PASS |
-| `POST /forgot-password` | Forgot-password Server Action | ACCEPTABLE DIFFERENCE |
-| `GET /reset-password/{token}` | `/reset-password/[token]` | PASS |
-| `POST /reset-password` | Reset-password Server Action | ACCEPTABLE DIFFERENCE |
-| `GET /password/change` | `/password/change` page | PASS |
-| `POST /password/change` | Change-password Server Action | PASS |
-| `GET /dashboard` | `/dashboard` | PASS |
-| `GET /dashboard/biomassa` | `/dashboard/biomassa` | PASS |
-| `GET /dashboard/batubara` | `/dashboard/batubara` | PASS |
-| `GET /dashboard/stok` | `/dashboard/stok` | PASS |
-| `GET /dashboard/solar` | `/dashboard/solar` | PASS |
-| `GET /dashboard/target` | `/dashboard/target` | PASS |
-| `GET /dashboard/filter/reset` | `?reset=1` menghapus filter cookies tanpa route khusus | ACCEPTABLE DIFFERENCE |
-| `GET /monitoring` | `/monitoring` | PASS dengan placeholder source |
-| `GET /data-batu-bara` | `/data-batu-bara` | PASS |
-| `GET /laporan` | `/laporan` | PASS |
-| `GET /pengaturan` | `/pengaturan` | PARTIAL karena link change password hilang |
+| Laravel route                 | Next.js route/implementation                                      | Status                                     |
+| ----------------------------- | ----------------------------------------------------------------- | ------------------------------------------ |
+| `GET /`                       | `src/app/page.tsx`                                                | PASS: auth-aware redirect                  |
+| `GET /login`                  | `/login` page                                                     | PASS                                       |
+| `POST /login`                 | Login Server Action/Auth.js Credentials endpoint + cache throttle | PASS                                       |
+| `POST /logout`                | `SignOutButton` Server Action/Auth.js                             | ACCEPTABLE DIFFERENCE                      |
+| `GET /forgot-password`        | `/forgot-password` page                                           | PASS                                       |
+| `POST /forgot-password`       | Forgot-password Server Action                                     | ACCEPTABLE DIFFERENCE                      |
+| `GET /reset-password/{token}` | `/reset-password/[token]`                                         | PASS                                       |
+| `POST /reset-password`        | Reset-password Server Action                                      | ACCEPTABLE DIFFERENCE                      |
+| `GET /password/change`        | `/password/change` page                                           | PASS                                       |
+| `POST /password/change`       | Change-password Server Action                                     | PASS                                       |
+| `GET /dashboard`              | `/dashboard`                                                      | PASS                                       |
+| `GET /dashboard/biomassa`     | `/dashboard/biomassa`                                             | PASS                                       |
+| `GET /dashboard/batubara`     | `/dashboard/batubara`                                             | PASS                                       |
+| `GET /dashboard/stok`         | `/dashboard/stok`                                                 | PASS                                       |
+| `GET /dashboard/solar`        | `/dashboard/solar`                                                | PASS                                       |
+| `GET /dashboard/target`       | `/dashboard/target`                                               | PASS                                       |
+| `GET /dashboard/filter/reset` | `?reset=1` menghapus filter cookies tanpa route khusus            | ACCEPTABLE DIFFERENCE                      |
+| `GET /monitoring`             | `/monitoring`                                                     | PASS dengan placeholder source             |
+| `GET /data-batu-bara`         | `/data-batu-bara`                                                 | PASS                                       |
+| `GET /laporan`                | `/laporan`                                                        | PASS                                       |
+| `GET /pengaturan`             | `/pengaturan`                                                     | PARTIAL karena link change password hilang |
 
 Next juga memiliki internal `/api/auth/[...nextauth]`, yang tidak memiliki
 padanan Laravel karena Laravel memakai route/session web biasa.
@@ -139,16 +143,16 @@ yang tetap perlu diperhatikan:
 
 Validasi typed adapter Next terhadap Laravel pada `Juli26-BB`, tanggal 28:
 
-| Nilai | Laravel | Next.js | Result |
-|---|---:|---:|---|
-| Biomassa receipt bulanan | 3223.46 | 3223.46 | PASS |
-| Biomassa consumption bulanan | 3740.65 | 3740.65 | PASS |
-| Batubara consumption bulanan | 34940.444 | 34940.444 | PASS |
-| Stock | 19152.296 | 19152.296 | PASS |
-| Solar harian/bulanan | 854 / 24274 | 854 / 24274 | PASS |
-| Biomassa cumulative | 29103.77 | 29103.77 | PASS |
-| Target/progress | 70020 / 41.564938588974584% | sama | PASS |
-| HOP Unit 1/2/3 | 31.9 / 16 / 10.64 | sama | PASS |
+| Nilai                        |                     Laravel |                                           Next.js | Result |
+| ---------------------------- | --------------------------: | ------------------------------------------------: | ------ |
+| Biomassa receipt bulanan     |     3223.46 (baseline lama) | 3223.46; skema live mendeteksi 7/7 header terbaru | PASS   |
+| Biomassa consumption bulanan |                     3740.65 |                                           3740.65 | PASS   |
+| Batubara consumption bulanan |                   34940.444 |                                         34940.444 | PASS   |
+| Stock                        |                   19152.296 |                                         19152.296 | PASS   |
+| Solar harian/bulanan         |                 854 / 24274 |                                       854 / 24274 | PASS   |
+| Biomassa cumulative          |                    29103.77 |                                          29103.77 | PASS   |
+| Target/progress              | 70020 / 41.564938588974584% |                                              sama | PASS   |
+| HOP Unit 1/2/3               |           31.9 / 16 / 10.64 |                                              sama | PASS   |
 
 Mapping range, nullable values, numeric locale parsing, target fallback,
 threshold HOP, empty response, error classification, dan fallback 12 periode
@@ -188,17 +192,17 @@ loading, empty, unavailable, dan error state. Perbedaan yang dapat diterima:
 
 ## Build and validation gates
 
-| Check | Result |
-|---|---|
-| `php artisan route:list --except-vendor` | PASS, 21 Laravel routes |
-| `npm.cmd run lint` | PASS |
-| `npx.cmd tsc --noEmit` | PASS |
-| `npm.cmd run build` | PASS |
-| PostgreSQL read verification `npm.cmd run db:verify` | PASS |
-| Google Sheets live read-only typed adapter | PASS |
-| Google Sheets fallback/error/empty checks | PASS |
-| Client bundle credential scan | PASS |
-| Production deployment | NOT RUN |
+| Check                                                | Result                  |
+| ---------------------------------------------------- | ----------------------- |
+| `php artisan route:list --except-vendor`             | PASS, 21 Laravel routes |
+| `npm.cmd run lint`                                   | PASS                    |
+| `npx.cmd tsc --noEmit`                               | PASS                    |
+| `npm.cmd run build`                                  | PASS                    |
+| PostgreSQL read verification `npm.cmd run db:verify` | PASS                    |
+| Google Sheets live read-only typed adapter           | PASS                    |
+| Google Sheets fallback/error/empty checks            | PASS                    |
+| Client bundle credential scan                        | PASS                    |
+| Production deployment                                | NOT RUN                 |
 
 Authentication end-to-end test tidak dijalankan ulang pada Phase 9 karena valid
 login memperbarui `users.last_login_at`; hasil `npm run auth:verify` dari Phase

@@ -1,26 +1,28 @@
 # Feature Validation — Phase 7
 
+> **Current implementation update 2026-08-30:** setelah import lokal dan dashboard cutover, source PostgreSQL normalized dipakai untuk Overview/detail ketika `DASHBOARD_DATA_SOURCE` tidak diset atau bernilai `postgres`. Google Sheets tetap dipakai oleh importer dan dapat dipilih eksplisit sebagai jalur rollback. Coverage aktif yang tervalidasi adalah Juli 2026; Unit 1, Unit 2, dan Unit 3 dipertahankan.
+
 ## Scope dan prinsip
 
 Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang tercantum pada `FEATURE_MAPPING.md`. Laravel tetap reference dan tidak diubah. Query data dipusatkan di service; component hanya menerima typed data.
 
-| Feature | Route | Source | Status |
-|---|---|---|---|
-| Biomassa | `/dashboard/biomassa` | Google Sheets `B11:CO59`, atau PostgreSQL fallback | PASS |
-| Batubara | `/dashboard/batubara` | Google Sheets `B11:CO59`, atau PostgreSQL fallback | PASS |
-| Stok dan HOP | `/dashboard/stok` | Google Sheets `AD/AJ/AK/AL`, atau PostgreSQL stock partial | PASS |
-| Solar | `/dashboard/solar` | Google Sheets `CC/CJ`, PostgreSQL unavailable | PASS dengan limitation source |
-| Target dan Kinerja | `/dashboard/target` | Google Sheets `CO56/CO59`, PostgreSQL unavailable | PASS dengan limitation source |
-| Data kualitas batubara | `/data-batu-bara` | PostgreSQL `coal_quality` + `units` | PASS |
-| Laporan efisiensi | `/laporan` | PostgreSQL `coal_consumption` | PASS read-only |
-| Pengaturan profil | `/pengaturan` | Auth.js session dari `users` | PASS read-only |
-| Monitoring terperinci | `/monitoring` | Laravel source masih placeholder | NEEDS REVIEW |
+| Feature                | Route                 | Source                                                     | Status                        |
+| ---------------------- | --------------------- | ---------------------------------------------------------- | ----------------------------- |
+| Biomassa               | `/dashboard/biomassa` | PostgreSQL `biomass_receipts` + `biomass_consumptions`     | PASS                          |
+| Batubara               | `/dashboard/batubara` | PostgreSQL `coal_receipts` + existing coal tables          | PASS dengan precision note    |
+| Stok dan HOP           | `/dashboard/stok`     | PostgreSQL `coal_stock` + `hop_readings`                   | PASS                          |
+| Solar                  | `/dashboard/solar`    | PostgreSQL `solar_receipts` + `solar_consumptions`         | PASS                          |
+| Target dan Kinerja     | `/dashboard/target`   | PostgreSQL `biomass_targets` + cumulative snapshots        | PASS                          |
+| Data kualitas batubara | `/data-batu-bara`     | PostgreSQL `coal_quality` + `units`                        | PASS                          |
+| Laporan efisiensi      | `/laporan`            | PostgreSQL `coal_consumption`                              | PASS read-only                |
+| Pengaturan profil      | `/pengaturan`         | Auth.js session dari `users`                               | PASS read-only                |
+| Monitoring terperinci  | `/monitoring`         | Laravel source masih placeholder                           | NEEDS REVIEW                  |
 
 ## 1. Biomassa
 
 - Laravel: `DashboardController@biomassa` memakai `prepareDashboardData()` yang sama dengan Overview.
 - Next.js: `DetailDashboard` dengan feature `biomassa` memakai `getOverviewData()`.
-- KPI: penerimaan bulanan `S52`, pemakaian bulanan `AC42`, dan pemakaian harian Unit 1/2/3 dari `T/W/Z`.
+- KPI: penerimaan bulanan production dihitung hanya dari tujuh pemasok pada tabel `Penerimaan → Biomassa`; tidak ada fallback `S52`, pemakaian bulanan memakai field semantic/legacy fallback, dan pemakaian harian Unit 1/2/3 dari tabel data.
 - Chart: line `biomassa_pemakaian` dan stacked bar `T/W/Z` per hari.
 - Filter: `day`, `month`, `year` melalui GET.
 - State: loading, empty, unavailable, dan error.
@@ -29,12 +31,12 @@ Phase 7 memigrasikan lima detail dashboard yang aktif dan halaman read-only yang
 
 Validation Laravel vs Next, `Juli26-BB`, hari 28:
 
-| Nilai | Laravel | Next.js | Result |
-|---|---:|---:|---|
-| Penerimaan bulanan | 3223.46 ton | 3223.46 ton | PASS |
-| Pemakaian bulanan | 3740.65 ton | 3740.65 ton | PASS |
-| Unit 1/2/3 harian | 74.8 / 47.6 / 61.2 ton | sama | PASS |
-| Chart total harian | 183.6 ton | 183.6 ton | PASS |
+| Nilai              |                     Laravel |                                                Next.js | Result |
+| ------------------ | --------------------------: | -----------------------------------------------------: | ------ |
+| Penerimaan bulanan | 3223.46 ton (baseline lama) | 3223.46 ton; seluruh 7 header skema terbaru terdeteksi | PASS   |
+| Pemakaian bulanan  |                 3740.65 ton |                                            3740.65 ton | PASS   |
+| Unit 1/2/3 harian  |      74.8 / 47.6 / 61.2 ton |                                                   sama | PASS   |
+| Chart total harian |                   183.6 ton |                                              183.6 ton | PASS   |
 
 ## 2. Batubara
 
@@ -48,12 +50,12 @@ Validation Laravel vs Next, `Juli26-BB`, hari 28:
 
 Validation `Juli26-BB`, hari 28:
 
-| Nilai | Laravel | Next.js | Result |
-|---|---:|---:|---|
-| Penerimaan bulanan | 30084.842 ton | 30084.842 ton | PASS |
-| Pemakaian bulanan | 34940.444 ton | 34940.444 ton | PASS |
-| Unit 1/2/3 harian | 565.739 / 651.344 / 375.487 ton | sama | PASS |
-| Total harian | 1592.57 ton | 1592.57 ton | PASS |
+| Nilai              |                         Laravel |       Next.js | Result |
+| ------------------ | ------------------------------: | ------------: | ------ |
+| Penerimaan bulanan |                   30084.842 ton | 30084.842 ton | PASS   |
+| Pemakaian bulanan  |                   34940.444 ton | 34940.444 ton | PASS   |
+| Unit 1/2/3 harian  | 565.739 / 651.344 / 375.487 ton |          sama | PASS   |
+| Total harian       |                     1592.57 ton |   1592.57 ton | PASS   |
 
 ## 3. Stok dan HOP
 

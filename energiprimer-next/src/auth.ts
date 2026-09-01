@@ -2,11 +2,22 @@ import bcrypt from "bcryptjs";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { headers } from "next/headers";
+import "server-only";
 
+import {
+  isValidAuthEmail,
+  normalizeAuthEmail,
+  resolveSafeRedirect,
+} from "@/lib/auth-security";
 import { consumeLoginAttempt, getRequestIp } from "@/lib/login-throttle";
 import { prisma } from "@/lib/prisma";
 
-export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
+export const {
+  handlers: { GET, POST },
+  auth,
+  signIn,
+  signOut,
+} = NextAuth({
   pages: {
     signIn: "/login",
   },
@@ -21,21 +32,21 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = typeof credentials?.email === "string"
-          ? credentials.email.trim().toLowerCase()
-          : "";
-        const password = typeof credentials?.password === "string"
-          ? credentials.password
-          : "";
+        const email = normalizeAuthEmail(credentials?.email);
+        const password =
+          typeof credentials?.password === "string" ? credentials.password : "";
 
-        if (!email || !password) {
+        if (!isValidAuthEmail(email) || !password) {
           return null;
         }
 
         const requestHeaders = await headers();
         const throttle = await consumeLoginAttempt(
           email,
-          getRequestIp(requestHeaders.get("x-forwarded-for"), requestHeaders.get("x-real-ip")),
+          getRequestIp(
+            requestHeaders.get("x-forwarded-for"),
+            requestHeaders.get("x-real-ip"),
+          ),
         );
         if (!throttle.allowed) return null;
 
@@ -81,27 +92,45 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
+    redirect({ url, baseUrl }) {
+      return resolveSafeRedirect(url, baseUrl);
+    },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.sessionVersion = user.sessionVersion;
       }
 
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.sub) {
-        session.user.id = token.sub;
+      const subject = typeof token.sub === "string" ? token.sub : "";
+
+      if (session.user && subject) {
+        session.user.id = subject;
         session.user.role = typeof token.role === "string" ? token.role : "";
       }
 
-      if (session.user && token.sub && token.sessionVersion && /^\d+$/.test(token.sub)) {
+      if (session.user && /^\d+$/.test(subject)) {
         const currentUser = await prisma.user.findUnique({
-          where: { id: BigInt(token.sub) },
-          select: { updatedAt: true },
+          where: { id: BigInt(subject) },
+          select: { role: true, updatedAt: true },
         });
-        if ((currentUser?.updatedAt?.toISOString() ?? "") !== token.sessionVersion) {
+
+        const currentVersion = currentUser?.updatedAt?.toISOString() ?? "";
+        const tokenVersion =
+          typeof token.sessionVersion === "string" ? token.sessionVersion : null;
+
+        if (
+          !currentUser ||
+          currentUser.role !== "admin" ||
+          tokenVersion === null ||
+          currentVersion !== tokenVersion
+        ) {
           session.user.role = "";
+        } else {
+          session.user.role = currentUser.role;
         }
       }
 

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -72,7 +74,10 @@ export async function getCoalQualityPage(filters: CoalQualityFilters = {}) {
       prisma.coalQuality.count({ where: statusWhere("perhatian") }),
       prisma.coalQuality.count({ where: statusWhere("off_spec") }),
       prisma.coalQuality.aggregate({ _avg: { gar: true } }),
-      prisma.coalQuality.findFirst({ orderBy: { date: "desc" }, select: { date: true } }),
+      prisma.coalQuality.findFirst({
+        orderBy: { date: "desc" },
+        select: { date: true },
+      }),
     ]);
 
   return {

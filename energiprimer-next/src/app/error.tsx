@@ -5,7 +5,7 @@ type ErrorPageProps = {
   retry: () => void;
 };
 
-export default function ErrorPage({ error, retry }: ErrorPageProps) {
+export default function ErrorPage({ retry }: ErrorPageProps) {
   return (
     <section className="mx-auto flex min-h-96 w-full max-w-2xl items-center justify-center">
       <div className="w-full rounded-2xl border border-red-200 bg-red-50 p-6 text-center sm:p-8">
@@ -26,7 +26,6 @@ export default function ErrorPage({ error, retry }: ErrorPageProps) {
         >
           Coba lagi
         </button>
-        <span className="sr-only">{error.digest}</span>
       </div>
     </section>
   );

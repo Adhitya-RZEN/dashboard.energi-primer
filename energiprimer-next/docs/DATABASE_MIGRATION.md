@@ -1,12 +1,14 @@
 # Database Migration — Phase 3
 
+> **Current implementation update 2026-08-30:** schema additive dan importer sudah diterapkan pada database lokal `dashboard_pln`. Import Juli 2026 berhasil dan dashboard dapat diarahkan ke PostgreSQL melalui `DASHBOARD_DATA_SOURCE` (default code path `postgres`; set `google` hanya untuk rollback/dual-read). Tidak ada tabel Laravel existing yang dihapus. Detail command dan hasil ada di [`DATABASE_MIGRATION_EXECUTION_2026-08-30.md`](./DATABASE_MIGRATION_EXECUTION_2026-08-30.md).
+
 ## Status dan batasan
 
-- **Status:** selesai untuk read-only data access
+- **Status:** data access existing + normalized dashboard import lokal selesai; deployment production belum dijalankan
 - **Database target:** PostgreSQL existing, database `dashboard_pln`, schema `public`
-- **Schema operation:** tidak ada `prisma migrate`, `prisma db push`, `DROP`, `ALTER`, atau operasi tulis yang dijalankan
+- **Schema operation:** migration Prisma additive diterapkan; tidak ada `DROP`, destructive `ALTER`, atau penghapusan data
 - **Laravel:** hanya dibaca sebagai source/reference; tidak dimodifikasi
-- **Data:** tidak dihapus atau diubah
+- **Data:** data existing tidak dihapus; data Juli 2026 ditambahkan/upsert setelah dry-run dan parity lulus
 
 Phase 3 menambahkan Prisma sebagai data access layer di Next.js. Schema Prisma
 ditulis berdasarkan migration Laravel dan mempertahankan nama tabel/kolom
@@ -43,21 +45,23 @@ Instalasi npm melaporkan 3 high severity vulnerabilities pada dependency tree.
 `npm audit fix --force` tidak dijalankan karena dapat memicu perubahan versi
 breaking; perlu ditinjau terpisah sebelum deployment.
 
-Prisma CLI hanya dipakai untuk `generate` dan `validate`. Tidak ada folder
-`prisma/migrations/` karena Phase 3 tidak mengubah schema existing.
+Prisma CLI dipakai untuk `generate`, `validate`, dan `migrate deploy` terhadap
+migration additive yang sudah disetujui. Migration baseline hanya menandai
+schema Laravel existing sebagai baseline; migration berikutnya membuat tabel
+normalized baru tanpa mengubah tabel lama secara destruktif.
 
 ## Laravel Model → Prisma Model
 
-| Laravel model | Prisma model | PostgreSQL table | Relationship |
-|---|---|---|---|
-| `User` | `User` | `users` | Tidak ada domain relation pada Laravel |
-| `Unit` | `Unit` | `units` | `Unit` has many quality, consumption, generation, target |
-| `CoalStock` | `CoalStock` | `coal_stock` | Tidak ada relation; satu row per tanggal |
-| `CoalQuality` | `CoalQuality` | `coal_quality` | belongs to `Unit` melalui `unit_id` |
-| `CoalConsumption` | `CoalConsumption` | `coal_consumption` | belongs to `Unit` melalui `unit_id` |
-| `PowerGeneration` | `PowerGeneration` | `power_generation` | belongs to `Unit` melalui `unit_id` |
-| `KpiTarget` | `KpiTarget` | `kpi_targets` | belongs to `Unit` melalui `unit_id` |
-| `SpreadsheetImportLog` | `SpreadsheetImportLog` | `spreadsheet_import_logs` | Tidak ada relation |
+| Laravel model          | Prisma model           | PostgreSQL table          | Relationship                                             |
+| ---------------------- | ---------------------- | ------------------------- | -------------------------------------------------------- |
+| `User`                 | `User`                 | `users`                   | Tidak ada domain relation pada Laravel                   |
+| `Unit`                 | `Unit`                 | `units`                   | `Unit` has many quality, consumption, generation, target |
+| `CoalStock`            | `CoalStock`            | `coal_stock`              | Tidak ada relation; satu row per tanggal                 |
+| `CoalQuality`          | `CoalQuality`          | `coal_quality`            | belongs to `Unit` melalui `unit_id`                      |
+| `CoalConsumption`      | `CoalConsumption`      | `coal_consumption`        | belongs to `Unit` melalui `unit_id`                      |
+| `PowerGeneration`      | `PowerGeneration`      | `power_generation`        | belongs to `Unit` melalui `unit_id`                      |
+| `KpiTarget`            | `KpiTarget`            | `kpi_targets`             | belongs to `Unit` melalui `unit_id`                      |
+| `SpreadsheetImportLog` | `SpreadsheetImportLog` | `spreadsheet_import_logs` | Tidak ada relation                                       |
 
 Tabel framework Laravel juga dipetakan untuk menjaga kelengkapan schema:
 `PasswordResetToken`, `Session`, `Cache`, `CacheLock`, `Job`, `JobBatch`, dan
@@ -65,15 +69,17 @@ Tabel framework Laravel juga dipetakan untuk menjaga kelengkapan schema:
 
 ## Laravel table → PostgreSQL/Prisma mapping
 
-| Table | Key fields | Prisma type mapping | Constraint yang dipertahankan |
-|---|---|---|---|
-| `units` | `id`, `code`, `name`, `status` | `BigInt`, `String`, `Boolean` | PK `id`, unique `code` |
-| `coal_stock` | `date`, stock amounts | `Date`, `Decimal(12,2)` | unique `date` |
-| `coal_quality` | `unit_id`, `date`, GAR metrics | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `coal_consumption` | `unit_id`, `date`, consumption metrics | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `power_generation` | `unit_id`, `date`, load/generation | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `kpi_targets` | `unit_id`, `date`, SFC/heat rate | `BigInt`, `Date`, nullable Decimal | unique `(unit_id,date)`, FK ke `units` |
-| `spreadsheet_import_logs` | source/status/import metadata | `String`, `Int`, nullable `DateTime` | tidak ada unique tambahan |
+| Table                     | Key fields                             | Prisma type mapping                  | Constraint yang dipertahankan          |
+| ------------------------- | -------------------------------------- | ------------------------------------ | -------------------------------------- |
+| `units`                   | `id`, `code`, `name`, `status`         | `BigInt`, `String`, `Boolean`        | PK `id`, unique `code`                 |
+| `coal_stock`              | `date`, stock amounts                  | `Date`, `Decimal(12,2)`              | unique `date`                          |
+| `coal_quality`            | `unit_id`, `date`, GAR metrics         | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `coal_consumption`        | `unit_id`, `date`, consumption metrics | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `power_generation`        | `unit_id`, `date`, load/generation     | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `kpi_targets`             | `unit_id`, `date`, SFC/heat rate       | `BigInt`, `Date`, nullable Decimal   | unique `(unit_id,date)`, FK ke `units` |
+| `spreadsheet_import_logs` | source/status/import metadata          | `String`, `Int`, nullable `DateTime` | tidak ada unique tambahan              |
+
+Tabel normalized yang ditambahkan pada eksekusi lokal: `biomass_receipts`, `biomass_consumptions`, `coal_receipts`, `solar_receipts`, `solar_consumptions`, `hop_readings`, `biomass_targets`, `biomass_cumulative_snapshots`, serta `spreadsheet_import_runs` dan `spreadsheet_import_staging`. Tabel `coal_consumption` dan `coal_stock` existing dipakai untuk coverage Juli 2026.
 
 Semua kolom `created_at` dan `updated_at` dipetakan sebagai nullable
 `DateTime` karena migration Laravel memakai `$table->timestamps()`.
@@ -145,13 +151,11 @@ fungsi ini, sehingga tidak ada interpolasi SQL dinamis.
 
 ### Dashboard source of truth
 
-Dashboard Laravel aktif membaca Google Sheets, bukan tabel domain PostgreSQL;
-`DatabaseDataSource` Laravel masih stub. Phase 3 tidak memindahkan dashboard
-ke database dan tidak membuat Google Sheets client. Prisma service hanya
-menutup akses tabel yang memang dipakai oleh halaman kualitas/laporan dan
-query reusable yang terverifikasi.
+Dashboard Next.js aktif membaca PostgreSQL normalized melalui
+`src/services/overview-postgres.ts`. Google Sheets tetap menjadi input
+importer server-side dan rollback path eksplisit, bukan source default dashboard.
 
-## Read verification
+## Read verification (baseline sebelum import Juli 2026)
 
 Command:
 
@@ -183,8 +187,9 @@ merepresentasikan kondisi `CoalDataController`, serta memeriksa orphan
 relationship pada `coal_quality`, `coal_consumption`, `power_generation`, dan
 `kpi_targets`; seluruhnya lulus.
 
-Script hanya menjalankan `SELECT` dan Prisma read methods. Tidak ada insert,
-update, delete, migration, atau schema push.
+Script pada baseline ini hanya menjalankan `SELECT` dan Prisma read methods. Hasil
+eksekusi migrasi/import terbaru dicatat terpisah pada
+`DATABASE_MIGRATION_EXECUTION_2026-08-30.md`.
 
 ## Perbedaan dan keputusan belum pasti
 

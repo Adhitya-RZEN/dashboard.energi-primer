@@ -12,29 +12,29 @@ Sumber utama: `backend/routes/web.php`, `backend/bootstrap/app.php`, dan verifik
 
 ## Daftar route
 
-| Method | Path | Name | Handler | Middleware | Target Next.js | Kompleksitas |
-|---|---|---|---|---|---|---|
-| GET|HEAD | `/` | — | Redirect `/dashboard` | auth, admin | Redirect route/root protected | Rendah |
-| GET|HEAD | `/login` | `login` | `LoginController@create` | guest | `/login` page | Rendah |
-| POST | `/login` | `login.store` | `LoginController@store` | guest, throttle 6/1 menit | Auth action + persistent cache throttle | Sedang |
-| POST | `/logout` | `logout` | `LoginController@destroy` | auth, admin | Auth.js signOut Server Action | Rendah |
-| GET|HEAD | `/forgot-password` | `password.request` | `ForgotPasswordController@create` | guest | `/forgot-password` page | Rendah |
-| POST | `/forgot-password` | `password.email` | `ForgotPasswordController@store` | guest, throttle 6/1 menit | Forgot-password Server Action + hashed token | Sedang |
-| GET|HEAD | `/reset-password/{token}` | `password.reset` | `ResetPasswordController@create` | guest | `/reset-password/[token]` page | Sedang |
-| POST | `/reset-password` | `password.store` | `ResetPasswordController@store` | guest, throttle 6/1 menit | Reset-password Server Action + hashed token | Sedang |
-| GET|HEAD | `/password/change` | `password.edit` | `ChangePasswordController@edit` | auth, admin | `/password/change` page | Rendah |
-| POST | `/password/change` | `password.update` | `ChangePasswordController@update` | auth, admin | Change-password Server Action + bcrypt + signOut | Sedang |
-| GET|HEAD | `/dashboard` | `dashboard.overview` | `DashboardController@overview` | auth, admin | `/dashboard` page | Sedang |
-| GET|HEAD | `/dashboard/biomassa` | `dashboard.biomassa` | `DashboardController@biomassa` | auth, admin | `/dashboard/biomassa` page | Sedang |
-| GET|HEAD | `/dashboard/batubara` | `dashboard.batubara` | `DashboardController@batubara` | auth, admin | `/dashboard/batubara` page | Sedang |
-| GET|HEAD | `/dashboard/stok` | `dashboard.stok` | `DashboardController@stok` | auth, admin | `/dashboard/stok` page | Sedang |
-| GET|HEAD | `/dashboard/solar` | `dashboard.solar` | `DashboardController@solar` | auth, admin | `/dashboard/solar` page | Sedang |
-| GET|HEAD | `/dashboard/target` | `dashboard.target` | `DashboardController@target` | auth, admin | `/dashboard/target` page | Sedang |
-| GET|HEAD | `/dashboard/filter/reset` | `dashboard.filter.reset` | Closure in `routes/web.php` | auth, admin | `?reset=1` menghapus filter cookies; route khusus tidak diperlukan | Rendah |
-| GET|HEAD | `/monitoring` | `monitoring` | `MonitoringController@index` | auth, admin | `/monitoring` page | Sedang |
-| GET|HEAD | `/data-batu-bara` | `data-batu-bara` | `CoalDataController@index` | auth, admin | `/data-batu-bara` page | Sedang |
-| GET|HEAD | `/laporan` | `laporan` | `LaporanController@index` | auth, admin | `/laporan` page | Sedang |
-| GET|HEAD | `/pengaturan` | `pengaturan` | `PengaturanController@index` | auth, admin | `/pengaturan` page | Rendah |
+| Method | Path               | Name                      | Handler                           | Middleware                        | Target Next.js                                   | Kompleksitas                                                       |
+| ------ | ------------------ | ------------------------- | --------------------------------- | --------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
+| GET    | HEAD               | `/`                       | —                                 | Redirect `/dashboard`             | auth, admin                                      | Redirect route/root protected                                      | Rendah |
+| GET    | HEAD               | `/login`                  | `login`                           | `LoginController@create`          | guest                                            | `/login` page                                                      | Rendah |
+| POST   | `/login`           | `login.store`             | `LoginController@store`           | guest, throttle 6/1 menit         | Auth action + persistent cache throttle          | Sedang                                                             |
+| POST   | `/logout`          | `logout`                  | `LoginController@destroy`         | auth, admin                       | Auth.js signOut Server Action                    | Rendah                                                             |
+| GET    | HEAD               | `/forgot-password`        | `password.request`                | `ForgotPasswordController@create` | guest                                            | `/forgot-password` page                                            | Rendah |
+| POST   | `/forgot-password` | `password.email`          | `ForgotPasswordController@store`  | guest, throttle 6/1 menit         | Forgot-password Server Action + hashed token     | Sedang                                                             |
+| GET    | HEAD               | `/reset-password/{token}` | `password.reset`                  | `ResetPasswordController@create`  | guest                                            | `/reset-password/[token]` page                                     | Sedang |
+| POST   | `/reset-password`  | `password.store`          | `ResetPasswordController@store`   | guest, throttle 6/1 menit         | Reset-password Server Action + hashed token      | Sedang                                                             |
+| GET    | HEAD               | `/password/change`        | `password.edit`                   | `ChangePasswordController@edit`   | auth, admin                                      | `/password/change` page                                            | Rendah |
+| POST   | `/password/change` | `password.update`         | `ChangePasswordController@update` | auth, admin                       | Change-password Server Action + bcrypt + signOut | Sedang                                                             |
+| GET    | HEAD               | `/dashboard`              | `dashboard.overview`              | `DashboardController@overview`    | auth, admin                                      | `/dashboard` page                                                  | Sedang |
+| GET    | HEAD               | `/dashboard/biomassa`     | `dashboard.biomassa`              | `DashboardController@biomassa`    | auth, admin                                      | `/dashboard/biomassa` page                                         | Sedang |
+| GET    | HEAD               | `/dashboard/batubara`     | `dashboard.batubara`              | `DashboardController@batubara`    | auth, admin                                      | `/dashboard/batubara` page                                         | Sedang |
+| GET    | HEAD               | `/dashboard/stok`         | `dashboard.stok`                  | `DashboardController@stok`        | auth, admin                                      | `/dashboard/stok` page                                             | Sedang |
+| GET    | HEAD               | `/dashboard/solar`        | `dashboard.solar`                 | `DashboardController@solar`       | auth, admin                                      | `/dashboard/solar` page                                            | Sedang |
+| GET    | HEAD               | `/dashboard/target`       | `dashboard.target`                | `DashboardController@target`      | auth, admin                                      | `/dashboard/target` page                                           | Sedang |
+| GET    | HEAD               | `/dashboard/filter/reset` | `dashboard.filter.reset`          | Closure in `routes/web.php`       | auth, admin                                      | `?reset=1` menghapus filter cookies; route khusus tidak diperlukan | Rendah |
+| GET    | HEAD               | `/monitoring`             | `monitoring`                      | `MonitoringController@index`      | auth, admin                                      | `/monitoring` page                                                 | Sedang |
+| GET    | HEAD               | `/data-batu-bara`         | `data-batu-bara`                  | `CoalDataController@index`        | auth, admin                                      | `/data-batu-bara` page                                             | Sedang |
+| GET    | HEAD               | `/laporan`                | `laporan`                         | `LaporanController@index`         | auth, admin                                      | `/laporan` page                                                    | Sedang |
+| GET    | HEAD               | `/pengaturan`             | `pengaturan`                      | `PengaturanController@index`      | auth, admin                                      | `/pengaturan` page                                                 | Rendah |
 
 ## Route behavior details
 

@@ -7,12 +7,18 @@ import { authenticate, type LoginState } from "./actions";
 const initialState: LoginState = {};
 
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState(authenticate, initialState);
+  const [state, formAction, pending] = useActionState(
+    authenticate,
+    initialState,
+  );
 
   return (
     <form action={formAction} className="space-y-5">
       <div>
-        <label className="block text-sm font-semibold text-slate-700" htmlFor="email">
+        <label
+          className="block text-sm font-semibold text-slate-700"
+          htmlFor="email"
+        >
           Email admin
         </label>
         <input
@@ -27,7 +33,10 @@ export function LoginForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-semibold text-slate-700" htmlFor="password">
+        <label
+          className="block text-sm font-semibold text-slate-700"
+          htmlFor="password"
+        >
           Password
         </label>
         <input
@@ -41,7 +50,10 @@ export function LoginForm() {
       </div>
 
       {state.error ? (
-        <p aria-live="polite" className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
+        <p
+          aria-live="polite"
+          className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800"
+        >
           {state.error}
         </p>
       ) : null}
