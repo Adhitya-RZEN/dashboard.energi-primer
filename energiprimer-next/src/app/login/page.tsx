@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { AuthShell } from "@/components/layout/AuthShell";
 
 import { LoginForm } from "./LoginForm";
@@ -21,13 +19,6 @@ export default function LoginPage() {
         </div>
 
         <LoginForm />
-
-        <Link
-          className="mt-5 block text-center text-sm font-semibold text-sky-700 hover:text-sky-900"
-          href="/forgot-password"
-        >
-          Lupa password?
-        </Link>
       </section>
     </AuthShell>
   );

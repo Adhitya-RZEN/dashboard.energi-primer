@@ -168,7 +168,7 @@ export default async function CoalQualityPage({
             color: "text-red-700",
           },
           {
-            label: "Avg. Kalori",
+            label: "Avg. GAR",
             value: data.summary.averageGar,
             color: "text-slate-900",
           },
@@ -182,7 +182,7 @@ export default async function CoalQualityPage({
             </strong>
             <span className="mt-1 block text-xs text-slate-500">
               {label}
-              {label === "Avg. Kalori" ? " (kCal/kg)" : ""}
+              {label === "Avg. GAR" ? " (kCal/kg)" : ""}
             </span>
           </div>
         ))}
@@ -271,14 +271,14 @@ export default async function CoalQualityPage({
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
                 {[
-                  "Tanggal Terima",
+                  "Tanggal Pengujian",
                   "Unit",
                   "No. Pengiriman",
-                  "Kalori (kCal/kg)",
+                  "GAR (kCal/kg)",
                   "Moisture (%)",
                   "Ash (%)",
                   "Sulfur (%)",
-                  "Total Moisture (%)",
+                  "HGI",
                   "Volume (ton)",
                   "Lab Report",
                   "Status",
@@ -303,9 +303,7 @@ export default async function CoalQualityPage({
                         {row.unit.name}
                       </td>
                       <td className="px-4 py-3">
-                        <code className="rounded bg-slate-100 px-1.5 py-1">
-                          LAB-{String(row.id).padStart(4, "0")}
-                        </code>
+                        <span className="text-slate-400">Tidak tersedia</span>
                       </td>
                       <td className="px-4 py-3 font-semibold">
                         {formatNumber(row.gar)}
@@ -318,9 +316,18 @@ export default async function CoalQualityPage({
                         {formatNumber(row.sulfur, 3)}
                       </td>
                       <td className="px-4 py-3">{formatNumber(row.hgi, 2)}</td>
-                      <td className="px-4 py-3">—</td>
-                      <td className="px-4 py-3 font-semibold text-sky-700">
-                        PDF
+                      <td className="px-4 py-3 text-slate-400">
+                        Tidak tersedia
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          disabled
+                          title="Dokumen laporan belum tersedia pada model data."
+                          className="cursor-not-allowed text-slate-400"
+                        >
+                          Belum tersedia
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <span

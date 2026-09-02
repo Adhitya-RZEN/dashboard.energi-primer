@@ -1,5 +1,8 @@
 # Production Preparation Report
 
+> HISTORICAL BASELINE (Phase 6C, 2026-09-02): Password-recovery/mail entries
+> below describe the pre-remediation implementation only.
+
 Date: 2026-09-01  
 Project: `energiprimer-next`  
 Phase: 20 — Production Preparation  

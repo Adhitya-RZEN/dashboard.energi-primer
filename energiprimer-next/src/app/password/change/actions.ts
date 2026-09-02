@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 
 import { auth, signOut } from "@/auth";
-import { createRememberToken } from "@/lib/password-reset";
+import { createRememberToken } from "@/lib/auth-tokens";
 import { prisma } from "@/lib/prisma";
 
 export type ChangePasswordState = {

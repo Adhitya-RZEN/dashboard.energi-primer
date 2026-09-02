@@ -30,7 +30,9 @@ function statusWhere(status: CoalQualityStatus): Prisma.CoalQualityWhereInput {
   return { gar: { lt: attention } };
 }
 
-function buildWhere(filters: CoalQualityFilters): Prisma.CoalQualityWhereInput {
+export function buildCoalQualityWhere(
+  filters: CoalQualityFilters,
+): Prisma.CoalQualityWhereInput {
   const where: Prisma.CoalQualityWhereInput = {};
 
   if (filters.dateFrom || filters.dateTo) {
@@ -51,10 +53,22 @@ function buildWhere(filters: CoalQualityFilters): Prisma.CoalQualityWhereInput {
   return where;
 }
 
+function summaryWhere(
+  where: Prisma.CoalQualityWhereInput,
+  selectedStatus: CoalQualityStatus | undefined,
+  status: CoalQualityStatus,
+): Prisma.CoalQualityWhereInput {
+  if (selectedStatus !== undefined) {
+    return selectedStatus === status ? where : { ...where, id: { in: [] } };
+  }
+
+  return { AND: [where, statusWhere(status)] };
+}
+
 export async function getCoalQualityPage(filters: CoalQualityFilters = {}) {
   const page = Math.max(1, filters.page ?? 1);
   const perPage = Math.min(100, Math.max(1, filters.perPage ?? 15));
-  const where = buildWhere(filters);
+  const where = buildCoalQualityWhere(filters);
 
   const [records, total, onSpec, perhatian, offSpec, average, latest] =
     await Promise.all([
@@ -69,12 +83,19 @@ export async function getCoalQualityPage(filters: CoalQualityFilters = {}) {
           },
         },
       }),
-      prisma.coalQuality.count(),
-      prisma.coalQuality.count({ where: statusWhere("on_spec") }),
-      prisma.coalQuality.count({ where: statusWhere("perhatian") }),
-      prisma.coalQuality.count({ where: statusWhere("off_spec") }),
-      prisma.coalQuality.aggregate({ _avg: { gar: true } }),
+      prisma.coalQuality.count({ where }),
+      prisma.coalQuality.count({
+        where: summaryWhere(where, filters.status, "on_spec"),
+      }),
+      prisma.coalQuality.count({
+        where: summaryWhere(where, filters.status, "perhatian"),
+      }),
+      prisma.coalQuality.count({
+        where: summaryWhere(where, filters.status, "off_spec"),
+      }),
+      prisma.coalQuality.aggregate({ where, _avg: { gar: true } }),
       prisma.coalQuality.findFirst({
+        where,
         orderBy: { date: "desc" },
         select: { date: true },
       }),

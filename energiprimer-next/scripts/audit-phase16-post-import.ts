@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { readFile } from "node:fs/promises";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 import {
   GoogleSheetsIntegrationError,
@@ -1541,7 +1542,7 @@ try {
 } catch (error) {
   console.error(JSON.stringify({
     status: "FAIL_READ_ONLY_AUDIT",
-    error: error instanceof Error ? error.message : "phase16 audit failed",
+    category: safeErrorCategory(error),
     databaseWrites: 0,
     importPerformed: false,
     syncPerformed: false,

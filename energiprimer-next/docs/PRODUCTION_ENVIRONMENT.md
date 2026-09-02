@@ -1,52 +1,48 @@
-# Production Environment Variables — Phase 10A
+# Production Environment — Current Contract
 
-Tanggal: 2026-08-28  
-Nilai aktual tidak ditulis.
+Actual production values are intentionally omitted. Provision them only in a
+managed secret store or the platform environment configuration.
 
-| Variable                       | Required               | Sensitive        | Server/Client | Production                                                  |
-| ------------------------------ | ---------------------- | ---------------- | ------------- | ----------------------------------------------------------- |
-| DATABASE_URL                   | Yes                    | Yes              | Server        | Required; endpoint harus reachable Vercel                   |
-| NEXT_PUBLIC_APP_NAME           | No                     | No               | Client-safe   | Recommended                                                 |
-| NEXT_PUBLIC_APP_URL            | No/fallback            | No               | Client-safe   | Recommended sesuai domain                                   |
-| AUTH_SECRET                    | Yes                    | Yes              | Server        | Required, random dan production-specific                    |
-| AUTH_TRUST_HOST                | Yes for deployment     | No               | Server        | Required sesuai Auth.js/Vercel config                       |
-| CRON_SECRET                    | Yes when cron enabled  | Yes              | Server        | Required untuk endpoint sync terjadwal                      |
-| AUTH_URL                       | Yes for reset links    | No               | Server        | Required canonical HTTPS URL                                |
-| AUTH_MAILER                    | Yes when reset active  | No               | Server        | `resend` untuk production; `log` hanya development            |
-| RESEND_API_KEY                 | Yes when `resend`      | Yes              | Server        | Resend API key, Vercel secret                                 |
-| RESEND_FROM_EMAIL              | Yes when `resend`      | Config-sensitive | Server        | Verified sender/domain Resend                                 |
-| RESEND_TEST_RECIPIENT          | Test only              | No               | Server/script  | Controlled one-recipient smoke test, never required runtime  |
-| MAIL_MAILER                    | Optional fallback      | No               | Server        | Legacy fallback only                                        |
-| GOOGLE_SHEETS_CREDENTIALS_PATH | Alternative            | Config-sensitive | Server        | Local/file provisioning only                                |
-| GOOGLE_SERVICE_ACCOUNT_EMAIL   | Alternative pair       | Yes              | Server        | Recommended Vercel secret configuration                     |
-| GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY | Alternative pair   | Yes              | Server        | Recommended Vercel secret configuration                     |
-| GOOGLE_SHEETS_SPREADSHEET_ID   | Yes when Sheets active | Config-sensitive | Server        | Required                                                    |
-| GOOGLE_SHEETS_CACHE_TTL        | No                     | No               | Server        | Optional, default 120 seconds                               |
-| NODE_ENV                       | Framework              | No               | Server        | Managed by platform                                         |
-| AUTH_TEST_BASE_URL             | Test only              | No               | Server/script | Never production                                            |
-| AUTH_TEST_ADMIN_EMAIL          | Test only              | Yes              | Server/script | Never production                                            |
-| AUTH_TEST_ADMIN_PASSWORD       | Test only              | Yes              | Server/script | Never production                                            |
-| AUTH_TEST_SECRET               | Test only              | Yes              | Server/script | Never production                                            |
+| Variable | Boundary | Production use |
+|---|---|---|
+| `DATABASE_URL` | Server | Supabase/PostgreSQL runtime connection |
+| `AUTH_SECRET` | Server | Auth.js JWT signing; unique to production |
+| `AUTH_TRUST_HOST` | Server | Explicit deployment host trust |
+| `AUTH_URL` | Server | Canonical HTTPS Auth.js origin |
+| `CRON_SECRET` | Server | Scheduled sync bearer authorization |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Server | Google Sheets service identity |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Server | Google Sheets service credential |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Server | Workbook identity |
+| `GOOGLE_SHEETS_CACHE_TTL` | Server | Optional cache tuning |
+| `NEXT_PUBLIC_APP_NAME` | Client-safe | App branding |
+| `NEXT_PUBLIC_APP_URL` | Client-safe | Public canonical origin |
 
-## Audit conclusions
+`SUPABASE_DIRECT_URL` and `SUPABASE_POOLER_URL` are operator/transport
+configuration, not public browser configuration. A local credential-file path
+may be used during local development but must not be assumed to exist on
+Vercel.
 
-- Tidak ada secret yang menggunakan prefix NEXT_PUBLIC_.
-- Database, Auth.js, Google Sheets, mail configuration, password, dan test secret hanya direferensikan dari server/script.
-- .env.local di-ignore dan tidak tracked.
-- .env.example hanya memuat placeholder; tidak memuat secret aktual.
-- credentials/ di-ignore dan tidak tracked.
-- AUTH_URL telah ditambahkan ke .env.example karena dipakai reset URL.
-- Resend hanya aktif saat `AUTH_MAILER=resend`; API key dan sender tidak
-  pernah memakai prefix `NEXT_PUBLIC_`.
-- GOOGLE_SHEETS_WORKSHEET dan GOOGLE_SHEETS_RANGE tidak digunakan karena adapter menentukan worksheet/range. Pasangan GOOGLE_SERVICE_ACCOUNT_EMAIL dan GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY kini mendukung deployment tanpa file credential.
+## Decommissioned provider configuration
 
-## Manual configuration
+The application no longer provisions or reads `AUTH_MAILER`, `MAIL_MAILER`,
+`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, or `RESEND_TEST_RECIPIENT`. Email-based
+account recovery and its public routes are decommissioned. Any old provider
+secret found in an external environment must be revoked by the operator after
+dependency confirmation.
 
-Production tetap membutuhkan endpoint database, Auth secret, canonical URL,
-Resend API key/sender yang telah diverifikasi, dan Google Sheets credential
-provisioning. Jangan menyalin .env.local ke Vercel.
+## Production rules
+
+- Keep runtime, direct/operator, preview, local, and E2E database credentials
+  separate.
+- Do not run Prisma migration commands as part of build or deployment unless a
+  separately approved migration change authorizes it.
+- Never expose a server secret through `NEXT_PUBLIC_*` or client props.
+- Rotate `AUTH_SECRET`, database credentials, `CRON_SECRET`, Google credentials,
+  and any exposed E2E credentials before release according to the Phase 6C
+  rotation gate.
 
 ## Status
 
-**PASS untuk inventory dan boundary; NEEDS REVIEW untuk provisioning nilai
-production, sender/domain verification, dan smoke test email.**
+**PASS WITH ROTATION REQUIRED:** configuration contract is current; actual
+secret provisioning, key revocation, and platform log review remain operator
+actions.

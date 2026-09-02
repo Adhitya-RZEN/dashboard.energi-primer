@@ -9,6 +9,7 @@ import type {
   OverviewUnitValue,
 } from "@/types/overview";
 import {
+  isGoogleSheetsConfigComplete,
   readGoogleSheetsRange,
   type GoogleSheetRow,
 } from "@/lib/google-sheets";
@@ -113,11 +114,12 @@ function parseDay(raw: SheetRow[number]) {
 
 function numericValue(row: SheetRow, index: number) {
   const raw = row[index];
-  if (raw === null || raw === undefined || raw === "") return 0;
-  if (typeof raw === "number") return raw;
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
   let cleaned = String(raw)
     .trim()
     .replace(/[\s\u00a0]/g, "");
+  if (!cleaned || /^[\-\u2012-\u2015]+$/.test(cleaned)) return null;
   const comma = cleaned.lastIndexOf(",");
   const dot = cleaned.lastIndexOf(".");
   if (comma >= 0 && dot >= 0) {
@@ -130,7 +132,8 @@ function numericValue(row: SheetRow, index: number) {
   } else if (dot >= 0 && cleaned.split(".").at(-1)?.length === 3) {
     cleaned = cleaned.replace(/\./g, "");
   }
-  return Number.isFinite(Number(cleaned)) ? Number(cleaned) : 0;
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? value : null;
 }
 
 function nullableValue(row: SheetRow, index: number) {
@@ -158,8 +161,12 @@ function statusForHop(value: number) {
   return { status: "success" as const, label: "Aman" };
 }
 
-function metric(value: number, unit: string, source: string): OverviewMetric {
-  return { value, unit, source, available: true };
+function metric(
+  value: number | null,
+  unit: string,
+  source: string,
+): OverviewMetric {
+  return { value, unit, source, available: value !== null };
 }
 
 function unavailableMetric(
@@ -488,23 +495,17 @@ function buildGoogleData(
   );
   const stockValue = dynamicStockMetric.value;
   const dynamicHop = dynamicHopValues(dynamicFocus);
-  const hopValues = dynamicHop
-    ? dynamicHop.map((row) => row.value as number)
-    : [
-        numericValue(dailyRow, COL.hop1),
-        numericValue(dailyRow, COL.hop2),
-        numericValue(dailyRow, COL.hop3),
-      ];
   const targetRaw = numericValue(targetRow, COL.cumulative);
   const legacyTarget =
+    targetRaw !== null &&
     targetRaw > 0 &&
     targetRaw < 1000 &&
     /^\d{1,3}[.,]\d{3}$/.test(String(targetRow[COL.cumulative] ?? ""))
       ? Number(String(targetRow[COL.cumulative]).replace(/[.,]/g, ""))
-      : targetRaw > 0
+      : targetRaw !== null && targetRaw > 0
         ? targetRaw
         : TARGET_FALLBACK;
-  const legacyCumulative = numericValue(cumulativeRow, COL.cumulative);
+  const legacyCumulative = nullableValue(cumulativeRow, COL.cumulative);
   const targetMetric = semanticMetricOrLegacy(
     semantic,
     "biomassTarget",
@@ -527,15 +528,19 @@ function buildGoogleData(
     target !== null && cumulative !== null && target > 0
       ? Math.min(100, (cumulative / target) * 100)
       : null;
-  const legacyHopRows: OverviewHopRow[] = [
-    ["Unit 1", hopValues[0]],
-    ["Unit 2", hopValues[1]],
-    ["Unit 3", hopValues[2]],
-  ].map(([unit, value]) => ({
-    unit: unit as string,
-    value: value as number,
-    ...statusForHop(value as number),
-  }));
+  const legacyHopValues = [
+    numericValue(dailyRow, COL.hop1),
+    numericValue(dailyRow, COL.hop2),
+    numericValue(dailyRow, COL.hop3),
+  ];
+  const legacyHopRows: OverviewHopRow[] | null =
+    legacyHopValues.every((value): value is number => value !== null)
+      ? ["Unit 1", "Unit 2", "Unit 3"].map((unit, index) => ({
+          unit,
+          value: legacyHopValues[index],
+          ...statusForHop(legacyHopValues[index]),
+        }))
+      : null;
   const hopRows = dynamicHop ?? legacyHopRows;
   const series =
     dynamicSeries ??
@@ -645,7 +650,7 @@ function buildGoogleData(
     "%",
     worksheet,
     "semantic PROGRESS TARGET BIOMASSA",
-    metric(progress ?? 0, "%", `Google Sheets ${worksheet} · CO56/CO59`),
+    metric(progress, "%", `Google Sheets ${worksheet} · CO56/CO59`),
   );
   const coalReceiptMetric = semanticMetricOrLegacy(
     semantic,
@@ -666,7 +671,7 @@ function buildGoogleData(
     worksheet,
     "semantic PEMAKAIAN SOLAR HARIAN",
     metric(
-      nullableValue(dailyRow, COL.solarDaily) ?? 0,
+      nullableValue(dailyRow, COL.solarDaily),
       "liter",
       `Google Sheets ${worksheet} · CJ baris harian`,
     ),
@@ -727,10 +732,7 @@ function buildGoogleData(
 }
 
 export function isGoogleSheetsOverviewConfigured() {
-  return Boolean(
-    process.env.GOOGLE_SHEETS_CREDENTIALS_PATH?.trim() &&
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim(),
-  );
+  return isGoogleSheetsConfigComplete();
 }
 
 export async function getGoogleSheetsOverviewData(

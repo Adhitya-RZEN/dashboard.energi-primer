@@ -1,10 +1,21 @@
 # Dependency Audit — Phase 10
 
+> HISTORICAL BASELINE (2026-09-01). The dependency findings below predate the
+> Phase 6C remediation. The current package manifest and lockfile are
+> authoritative.
+
 ## Audit scope
 
 Audit dilakukan terhadap `package.json`, `package-lock.json`, installed tree,
-dan `npm audit --omit=dev` pada 2026-09-01. Resend ditambahkan secara sengaja
-untuk Phase 18; tidak ada `npm audit fix`, force upgrade, atau major upgrade.
+dan `npm audit --omit=dev` pada 2026-09-01. Tidak ada `npm audit fix`, force
+upgrade, atau major upgrade pada audit baseline.
+
+## Phase 6C current state
+
+The former `resend` runtime dependency and its transitive mail packages were
+removed with the decommissioned recovery flow. `package.json` and
+`package-lock.json` no longer declare the provider. Prisma/Auth.js versions
+remain unchanged; upgrades still require separate approval and regression.
 
 ## Runtime and development dependencies
 
@@ -14,17 +25,16 @@ untuk Phase 18; tidak ada `npm audit fix`, force upgrade, atau major upgrade.
 | Authentication  | `next-auth@5.0.0-beta.32`, `bcryptjs@3.0.3`                                        | Functionally used; Auth.js beta requires pre-production regression review |
 | Database        | `@prisma/client@6.19.3`, `prisma@6.19.3`                                           | Schema/read verification passes; vulnerability review remains open        |
 | Charts          | `recharts@3.10.1`, `react-is@19.2.8`                                               | Used by client-only chart components; no duplicate chart library          |
-| Mail            | `resend@6.25.0`                                                                   | Server-only password-reset delivery; no client import                    |
+| Mail            | None                                                                              | No active application mail provider after Phase 6C                         |
 | Server boundary | `server-only@0.0.1`                                                                | Used to protect Node-only Google Sheets/throttle modules                  |
 | Build and lint  | TypeScript `5.9.3`, ESLint `9.39.5`, `eslint-config-next@16.3.3`, Tailwind `4.3.3` | Lint, typecheck, and build pass                                           |
 
-Resend membawa transitive packages `postal-mime@2.7.5` dan
-`standardwebhooks@1.0.0`; keduanya tidak memiliki advisory pada audit ini.
+The removed mail dependency had transitive packages in the baseline tree; they
+are no longer part of the current lockfile.
 
 `googleapis` tidak terpasang karena implementasi Google Sheets menggunakan
 Node `crypto`, filesystem, dan `fetch` untuk protokol service-account JWT yang
-sama. Tidak ada dependency UI atau animation baru pada Phase 18; Resend hanya
-menambah mail SDK dan transitive packages yang tercatat di atas.
+sama. Tidak ada dependency UI atau animation baru pada Phase 18.
 
 ## `npm audit` result
 
@@ -46,8 +56,8 @@ Result: exit code `1`, dengan **3 HIGH**, **0 CRITICAL**, **0 MODERATE**, dan
 Audit tree yang terpasang menunjukkan jalur `@prisma/client` → `prisma` →
 `@prisma/config` → `deepmerge-ts`. Temuan ini tidak membuktikan adanya exploit
 di route aplikasi, tetapi tetap harus ditutup atau diterima secara formal
-sebelum production. Penambahan Resend tidak menambah finding audit yang
-teridentifikasi.
+sebelum production. The Phase 6C provider removal does not change this
+historical Prisma finding.
 
 ## Required decision
 
@@ -58,17 +68,17 @@ APPROVAL**. Jangan memakai `npm audit fix --force`.
 
 Auth.js `5.0.0-beta.32` juga **REQUIRES MANUAL APPROVAL** untuk upgrade karena
 perubahan authentication harus diikuti regression test login, logout, session,
-role, dan reset password.
+role, dan current password-change behavior.
 
 ## Validation
 
 - `npm.cmd ls --depth=0`: PASS, tidak ada package invalid pada installed tree.
-- `npm.cmd ls resend`: PASS, `resend@6.25.0` terpasang.
+- `npm.cmd ls resend`: expected absent after Phase 6C decommission.
 - `npm.cmd run lint`: PASS.
 - `npx.cmd tsc --noEmit`: PASS.
 - `npm.cmd run build`: PASS.
-- `npm audit --omit=dev`: exit code `1`, tetap 3 HIGH dari rantai Prisma; tidak
-  ada finding baru yang teridentifikasi dari Resend.
+- `npm audit --omit=dev`: baseline exit code `1`, tetap 3 HIGH dari rantai
+  Prisma; this historical result is not a Phase 6C package-clearance claim.
 
 ## Status
 

@@ -7,9 +7,9 @@
 
 Status: **PREPARED ONLY — NOT EXECUTED**
 
-This runbook describes a controlled future migration from the existing local
-PostgreSQL database to Supabase PostgreSQL. Phase 20 did not connect to,
-create, alter, or write to Supabase.
+This runbook describes the governed schema migration workflow for the current
+Supabase PostgreSQL target. Phase 6B does not execute a migration, resolve a
+history row, or change Supabase data/schema.
 
 ## Safety boundary
 
@@ -19,23 +19,27 @@ create, alter, or write to Supabase.
   in this document or in source control.
 - Execute the migration only after an owner-approved change window and a
   verified backup.
-- The existing Laravel schema/data and the additive Next.js tables are both in
-  scope for a future controlled migration; the Laravel project remains
-  read-only.
+- **SUPABASE PRODUCTION** is only
+  `prisma/production/schema.prisma` plus
+  `prisma/production/migrations/`.
+- `prisma/schema.prisma` plus `prisma/migrations/` is
+  **LEGACY/LOCAL-ONLY**. It is not interchangeable with the production
+  history and must not be run against the current Supabase database.
+- The Laravel project, application data, and `_prisma_migrations` rows remain
+  read-only during preparation.
 
 ## Current schema compatibility assessment
 
-The Prisma datasource is PostgreSQL. The schema uses PostgreSQL-compatible
+The Prisma production datasource is PostgreSQL. The schema uses PostgreSQL-compatible
 `BigInt`, `Decimal`, `Date`, and timestamp columns, ordinary indexes, unique
 constraints, and foreign keys. No custom PostgreSQL extension, UUID-specific
-type, or unsupported Prisma type was found in `prisma/schema.prisma`.
+type, or unsupported Prisma type was found in `prisma/production/schema.prisma`.
 
-The migration history contains one no-op baseline marker for the existing
-Laravel schema and four additive migrations dated 2026-08-30. The SQL audit
-found table/index creation and additive alteration only; it found no `DROP`,
-`TRUNCATE`, `DELETE`, `UPDATE`, or `INSERT` statements in the migration files.
-Foreign-key `ON DELETE` behavior remains part of the schema contract and must
-be reviewed before any data operation.
+The canonical production history currently contains one finished full-schema
+baseline, `20260901130000_production_schema_baseline`. The SQL audit found
+schema-only table/index/constraint creation and no `DROP`, `TRUNCATE`,
+`DELETE`, `UPDATE`, or `INSERT` statement. The root history's no-op Laravel
+baseline and additive migrations are a separate local/legacy contract.
 
 ## 1. Pre-migration backup gate
 
@@ -74,17 +78,18 @@ Reference: [Supabase PostgreSQL connection modes](https://supabase.com/docs/guid
 
 ## 3. Environment and pooling strategy
 
-The application currently reads only `DATABASE_URL` for Prisma. Do not add a
-second URL or alter the schema automatically. The production owner must decide
-which approved URL is used by the application and which direct URL is reserved
-for CLI/backup operations.
+The application reads `DATABASE_URL` for Prisma runtime traffic. Migration and
+backup tooling reads `SUPABASE_DIRECT_URL` only. These roles are deliberately
+separated; an operator must not make a migration command inherit a pooler URL.
 
 Recommended separation:
 
-- Vercel runtime: Supabase transaction-pooler URL, TLS enabled, conservative
-  `connection_limit`/pool settings, and an explicit connection timeout.
-- Migration/backup workstation: Supabase direct URL, never exposed to the
-  browser or bundled into the application.
+- Vercel runtime `DATABASE_URL`: Supabase transaction-pooler URL, TLS enabled,
+  conservative `connection_limit`/pool settings, and an explicit connection
+  timeout.
+- Migration/backup workstation `SUPABASE_DIRECT_URL`: Supabase Direct URL on
+  port 5432 with TLS, never exposed to the browser or bundled into the
+  application.
 - Prisma client: retain the existing module singleton and do not call
   `$disconnect()` per request in Vercel Functions.
 
@@ -94,23 +99,61 @@ against the selected Supabase plan. See [Prisma serverless connection guidance](
 
 ## 4. Migration strategy
 
-The approved operator should use this order in a controlled environment:
+### Development and staging
 
-1. Restore the verified source backup into the approved Supabase project or
-   an approved staging clone.
-2. Confirm the restored Laravel schema matches the no-op baseline assumption.
-3. Apply only the repository migration history in order using the direct
-   administrative connection, after explicit approval.
-4. Run Prisma Client generation in the build environment; do not use `db push`.
-5. Run the read-only database verification and application smoke test.
-6. Freeze the cutover decision until all counts, KPI values, relationships,
-   auth records, and sync registry values match the recorded baseline.
-7. Change Vercel `DATABASE_URL` only during the approved cutover window.
+When `prisma/production/schema.prisma` changes, generate the next migration
+only under the production history in a disposable/local or approved staging
+database:
 
-`prisma migrate deploy` is intentionally not run in Phase 20. A fresh target
-with an existing Laravel schema requires an operator decision about how the
-baseline migration is marked/applied; do not infer that decision from a clean
-database.
+```powershell
+npx prisma migrate dev --schema prisma/production/schema.prisma --name <descriptive_name>
+```
+
+Review the generated SQL, verify that it is schema-only and additive unless a
+separately approved exception exists, and run the required schema/diff checks.
+Never run this command with the root schema for a Supabase production change.
+
+### Production operator sequence
+
+The approved operator should use this order in a controlled change window:
+
+1. Confirm a verified backup/restore point, owner, and change window.
+2. Run `npm run supabase:production:migration:preflight` from an operator
+   environment containing `SUPABASE_DIRECT_URL`. This is read-only and must
+   pass target identity, history, checksum, status, and schema-diff checks.
+3. Review the planned migration and its diff, then obtain explicit owner
+   approval. For a planned migration, the operator may use the preflight's
+   `--planned-migration=<name>` and `--mode=execution-gate` checks; these still
+   do not execute a migration.
+4. Apply only the canonical production history with the Direct URL. The
+   command is defined below but was **not run in Phase 6B**.
+5. Run `migrate status`, the read-only production schema verifier, and the
+   application smoke test after deployment.
+6. Freeze the cutover decision until counts, KPI values, relationships, auth
+   records, and sync registry values match the recorded baseline.
+7. Change Vercel runtime `DATABASE_URL` only during the separately approved
+   application cutover window.
+
+### Defined production deploy command — not executed
+
+The command below is the canonical operator command. It is intentionally not a
+package script, Vercel build step, startup hook, route, or cron action. The
+operator must set `DATABASE_URL` in the child process from the Direct URL only
+after the gates above pass:
+
+```powershell
+$env:DATABASE_URL = $env:SUPABASE_DIRECT_URL
+node node_modules/prisma/build/index.js migrate deploy --schema prisma/production/schema.prisma
+Remove-Item Env:DATABASE_URL
+```
+
+Do not substitute `prisma/schema.prisma`, `prisma/migrations/`, a pooler URL,
+`prisma migrate resolve`, `prisma db push`, or `prisma migrate reset`.
+
+`prisma migrate deploy` is intentionally not run in Phase 6B. The current
+Supabase target already records the canonical production baseline and is
+up-to-date; a future migration must be planned explicitly rather than inferred
+from the root legacy history.
 
 ## 5. Data verification checklist
 

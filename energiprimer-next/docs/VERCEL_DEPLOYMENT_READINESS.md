@@ -1,5 +1,9 @@
 # Vercel Deployment Readiness
 
+> Historical snapshot from 2026-08-28. The current `vercel.json` contains the
+> sync cron only; it does not change the migration policy in the Phase 6B
+> governance report.
+
 Tanggal audit: 2026-08-28  
 Target: Vercel, tanpa deployment pada Phase 10.
 
@@ -13,7 +17,7 @@ Target: Vercel, tanpa deployment pada Phase 10.
 | Build          | `npm run build`                                                                                                     | PASS pada local environment |
 | Lint/typecheck | `npm run lint`, `npx tsc --noEmit`                                                                                  | PASS pada local environment |
 | Node           | Package Next mensyaratkan Node >=20.9.0; local audit memakai Node 24.x                                              | MANUAL PINNING              |
-| `vercel.json`  | Tidak diperlukan saat ini; tidak ada file tersebut                                                                  | PASS                        |
+| `vercel.json`  | Hanya mendefinisikan cron sync; tidak ada migration hook                                                                        | PASS                        |
 
 Vercel mendukung Node.js 20.x, 22.x, dan 24.x; versi project sebaiknya dipilih dan dipin secara eksplisit pada Project Settings atau `engines.node` setelah operator menyetujui target runtime. Referensi resmi: [Vercel Node.js runtimes](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 

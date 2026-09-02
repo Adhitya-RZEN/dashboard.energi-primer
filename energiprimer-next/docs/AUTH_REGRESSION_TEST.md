@@ -1,5 +1,9 @@
 # Auth.js Regression Test — Phase 10A
 
+> PHASE 6C UPDATE (2026-09-02): The active regression boundary is Auth.js
+> Credentials → Prisma → PostgreSQL/Supabase. Any recovery/mail references
+> retained below are historical and are not executable application flows.
+
 Tanggal: 2026-08-28  
 Scope: regression dan security review tanpa mengubah user/password production.
 

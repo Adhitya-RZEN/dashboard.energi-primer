@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import { safeErrorCategory } from "./safe-error.mjs";
 
 const prisma = new PrismaClient();
 const expectedTables = [
@@ -13,6 +14,33 @@ const expectedTables = [
   "biomass_targets",
   "biomass_cumulative_snapshots",
 ];
+const requestedHistory =
+  process.argv.find((argument) => argument.startsWith("--history="))?.slice(
+    "--history=".length,
+  ) ?? "production";
+const expectedMigrationsByHistory = {
+  production: ["20260901130000_production_schema_baseline"],
+  root: [
+    "0_baseline_existing_laravel_schema",
+    "20260830140000_add_dashboard_import_domain",
+    "20260830150000_add_coal_receipts",
+  ],
+};
+const expectedMigrations = expectedMigrationsByHistory[requestedHistory];
+
+if (!expectedMigrations) {
+  console.error(
+    JSON.stringify(
+      {
+        status: "FAIL",
+        message: "Unsupported migration history. Use --history=production or --history=root.",
+      },
+      null,
+      2,
+    ),
+  );
+  process.exitCode = 1;
+}
 
 try {
   const [tables, units, counts, migrationRows] = await Promise.all([
@@ -42,7 +70,7 @@ try {
     prisma.$queryRaw(Prisma.sql`
       SELECT migration_name
       FROM "_prisma_migrations"
-      WHERE migration_name IN ('0_baseline_existing_laravel_schema', '20260830140000_add_dashboard_import_domain', '20260830150000_add_coal_receipts')
+      WHERE migration_name IN (${Prisma.join(expectedMigrations ?? [])})
       ORDER BY migration_name
     `),
   ]);
@@ -57,10 +85,9 @@ try {
     unitNames.includes(name),
   );
   const migrationNames = migrationRows.map((row) => row.migration_name);
-  const migrationPass =
-    migrationNames.includes("0_baseline_existing_laravel_schema") &&
-    migrationNames.includes("20260830140000_add_dashboard_import_domain") &&
-    migrationNames.includes("20260830150000_add_coal_receipts");
+  const migrationPass = expectedMigrations.every((name) =>
+    migrationNames.includes(name),
+  );
   const allNewTablesEmpty = counts.every((count) => count === 0);
 
   if (missingTables.length || !unitMappingPass || !migrationPass) {
@@ -85,6 +112,8 @@ try {
           biomassTargets: counts[8],
           biomassCumulativeSnapshots: counts[9],
         },
+        migrationHistory: requestedHistory,
+        expectedMigrationNames: expectedMigrations,
         migrationNames,
         checks: {
           allExpectedTablesPresent: true,
@@ -102,7 +131,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message: error instanceof Error ? error.message : "Schema verification failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,

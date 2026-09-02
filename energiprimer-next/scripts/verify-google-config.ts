@@ -1,4 +1,7 @@
-import { getGoogleSheetsConfig } from "../src/lib/google-sheets";
+import {
+  getGoogleSheetsConfig,
+  isGoogleSheetsConfigComplete,
+} from "../src/lib/google-sheets";
 
 const keys = [
   "GOOGLE_SHEETS_CREDENTIALS_PATH",
@@ -14,6 +17,8 @@ try {
   process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY =
     "phase-19-fixture-private-key-placeholder";
   process.env.GOOGLE_SHEETS_SPREADSHEET_ID = "spreadsheet-placeholder";
+  if (!isGoogleSheetsConfigComplete())
+    throw new Error("Environment service-account pair was not recognized by the canonical check.");
   const config = getGoogleSheetsConfig();
   if (!config.serviceAccountEmail || !config.serviceAccountPrivateKey)
     throw new Error("Environment service-account pair was not accepted.");
@@ -27,6 +32,15 @@ try {
   }
   if (!rejectedPartial)
     throw new Error("Partial environment service-account config was accepted.");
+
+  delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  process.env.GOOGLE_SHEETS_CREDENTIALS_PATH = "./credentials/fixture.json";
+  if (!isGoogleSheetsConfigComplete())
+    throw new Error("Credential-file configuration was not recognized by the canonical check.");
+  const fileConfig = getGoogleSheetsConfig();
+  if (!fileConfig.credentialsPath)
+    throw new Error("Credential-file configuration was not accepted.");
 } finally {
   for (const key of keys) {
     const value = original.get(key);
@@ -40,8 +54,9 @@ console.log(
     {
       status: "PASS",
       checks: [
-        "server-side service-account environment pair is recognized",
+        "canonical check recognizes the server-side service-account environment pair",
         "partial service-account environment configuration is rejected",
+        "canonical check recognizes credential-file configuration",
         "credential values are not printed",
       ],
     },

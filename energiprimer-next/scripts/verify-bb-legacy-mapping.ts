@@ -1,4 +1,5 @@
 import { parseBBWorksheetName } from "../src/services/google-sheets/dynamic/worksheet-resolver";
+import { safeErrorCategory } from "../src/lib/safe-error";
 import type {
   DynamicParserResult,
   HeaderPath,
@@ -317,6 +318,7 @@ function run() {
 try {
   run();
 } catch (error) {
-  console.error(error instanceof Error ? error.message : "BB mapping regression failed.");
+  console.error("BB mapping regression failed.");
+  console.error(`Category: ${safeErrorCategory(error)}`);
   process.exitCode = 1;
 }

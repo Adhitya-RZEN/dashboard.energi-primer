@@ -1,5 +1,9 @@
 # Feature Parity Matrix — Phase 9
 
+> PHASE 6C UPDATE (2026-09-02): Password-recovery and Resend rows below are
+> historical/removed scope, not active feature commitments. The current auth
+> contract is Auth.js Credentials → Prisma → PostgreSQL/Supabase.
+
 ## Kesimpulan
 
 Next.js telah memiliki parity fungsional yang kuat untuk dashboard read-only,

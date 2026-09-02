@@ -1,5 +1,8 @@
 # PHASE 21G - SUPABASE CUTOVER RUNBOOK
 
+> HISTORICAL / NON-ACTIVE (Phase 6C, 2026-09-02): Recovery/mail references in
+> this preparation runbook are not current application configuration.
+
 Dokumen ini adalah runbook persiapan. Tidak ada langkah cutover pada Phase
 21G yang telah dijalankan.
 
@@ -8,12 +11,19 @@ Dokumen ini adalah runbook persiapan. Tidak ada langkah cutover pada Phase
     CURRENT (operator/local)
     DATABASE_URL -> PostgreSQL local dashboard_pln
 
-    TARGET (Vercel setelah approval)
-    DATABASE_URL -> Supabase PostgreSQL
-                      Direct atau Transaction Pooler sesuai keputusan infrastructure
+    TARGET runtime (Vercel setelah approval)
+    DATABASE_URL -> Supabase Transaction Pooler PostgreSQL
+
+    TARGET operator (migration/backup only)
+    SUPABASE_DIRECT_URL -> Supabase Direct PostgreSQL, port 5432
 
 DATABASE_URL local tetap unchanged. Jangan memakai host loopback sebagai
 database runtime Vercel.
+
+Untuk migration schema, canonical production path selalu
+`prisma/production/schema.prisma` dan
+`prisma/production/migrations/`. `prisma/schema.prisma` dan
+`prisma/migrations/` adalah **LEGACY/LOCAL-ONLY** dan tidak interchangeable.
 
 ## Guardrail wajib
 
@@ -36,7 +46,9 @@ database runtime Vercel.
 - [ ] Direct dan Pooler connectivity, TLS, dan connection limit dikonfirmasi.
 - [ ] Keputusan role runtime dibuat; least-privilege role lebih disukai daripada
       memakai role postgres.
-- [ ] prisma validate dan prisma migrate status PASS.
+- [ ] `npm run supabase:production:migration:preflight` PASS; pemeriksaan ini
+      menggunakan `SUPABASE_DIRECT_URL`, `prisma/production/schema.prisma`,
+      dan tidak melakukan write.
 - [ ] Post-import parity tetap missing 0, extra 0, mismatch 0.
 - [ ] Target business rows tetap 8.754.
 

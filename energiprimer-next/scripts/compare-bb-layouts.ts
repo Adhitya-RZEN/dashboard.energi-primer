@@ -2,6 +2,7 @@ import {
   listGoogleSheetsWorksheets,
   readGoogleSheetsRange,
 } from "../src/lib/google-sheets";
+import { safeErrorCategory } from "../src/lib/safe-error";
 import { DYNAMIC_SCAN_RANGE } from "../src/services/google-sheets/dynamic/reader";
 import { parseDynamicWorksheet } from "../src/services/google-sheets/dynamic/parser";
 import {
@@ -316,7 +317,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message: error instanceof Error ? error.message : "BB layout comparison failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,

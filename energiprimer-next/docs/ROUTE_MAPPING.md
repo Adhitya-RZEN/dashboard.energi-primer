@@ -1,5 +1,9 @@
 # Laravel Audit — Route Mapping
 
+> PHASE 6C UPDATE (2026-09-02): Laravel recovery routes listed below are
+> historical reference only. The active Next.js app exposes Auth.js login and
+> protected pages; public recovery/mail routes are decommissioned.
+
 Sumber utama: `backend/routes/web.php`, `backend/bootstrap/app.php`, dan verifikasi `php artisan route:list --except-vendor` (21 route). `backend/routes/api.php` tidak ada.
 
 ## Middleware

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 type Endpoint = "local" | "direct" | "pooler";
 
-const APPROVED_TARGET_ROWS = 8754;
+const APPROVED_STABLE_DATA_ROWS = 2406;
 const TARGET_YEAR = 2026;
 const TARGET_MONTH = 7;
 const TARGET_DAY = 28;
@@ -38,6 +38,28 @@ const APPLICATION_TABLES = [
   "biomass_targets",
   "biomass_cumulative_snapshots",
 ] as const;
+
+// Authentication, session, cache, queue, import-run, and sync-registry tables
+// are expected to change during normal runtime and must not invalidate the
+// normalized-data baseline.
+const RUNTIME_MUTABLE_TABLES = new Set([
+  "users",
+  "password_reset_tokens",
+  "sessions",
+  "cache",
+  "cache_locks",
+  "jobs",
+  "job_batches",
+  "failed_jobs",
+  "sync_sources",
+  "sync_worksheets",
+  "sync_runs",
+  "sync_row_states",
+  "sync_schema_changes",
+  "spreadsheet_import_logs",
+  "spreadsheet_import_runs",
+  "spreadsheet_import_staging",
+]);
 
 const EXPECTED_JULY = {
   biomassReceiptMonthly: 3223.46,
@@ -155,7 +177,10 @@ const countRows = await Promise.all(
 );
 const rowCounts = Object.fromEntries(countRows);
 const applicationRows = Object.values(rowCounts).reduce((total, count) => total + count, 0);
-if (endpoint !== "local") assert.equal(applicationRows, APPROVED_TARGET_ROWS);
+const stableDataRows = Object.entries(rowCounts)
+  .filter(([table]) => !RUNTIME_MUTABLE_TABLES.has(table))
+  .reduce((total, [, count]) => total + count, 0);
+if (endpoint !== "local") assert.equal(stableDataRows, APPROVED_STABLE_DATA_ROWS);
 
 const july = await getPostgresOverviewData({
   month: TARGET_MONTH,
@@ -265,6 +290,8 @@ console.log(JSON.stringify({
         : "NOT_REQUIRED_LOCAL",
   },
   applicationRows,
+  stableDataRows,
+  mutableRuntimeTablesExcluded: [...RUNTIME_MUTABLE_TABLES],
   localDatabaseUrlChangedByThisChildProcess: endpoint === "local" ? false : "NOT_APPLICABLE_TO_PARENT",
   localDatabaseWrites: 0,
   supabaseWrites: 0,

@@ -1,5 +1,9 @@
 # Vercel Configuration Readiness
 
+> Historical snapshot from 2026-08-28. The current repository now contains
+> `vercel.json` for the Google Sheets sync cron; the Phase 6B governance report
+> is the authoritative migration/build separation document.
+
 Tanggal: 2026-08-28  
 Target: Vercel, tanpa project mutation atau deployment.
 
@@ -15,7 +19,7 @@ Target: Vercel, tanpa project mutation atau deployment.
 | Node runtime      | Pin a compatible Node 20/22/24 version; local audit used Node 24.x | REQUIRES MANUAL CONFIGURATION |
 | Prisma generation | @prisma/client postinstall generates client; no migration in build | PASS WITH WARNINGS            |
 | Runtime           | proxy.ts/server modules require Node-compatible runtime            | PASS WITH WARNINGS            |
-| vercel.json       | Not required by current project                                    | PASS                          |
+| vercel.json       | Contains only the Google Sheets sync cron; no migration hook            | PASS                          |
 
 Vercel documents Node.js 20.x, 22.x, and 24.x as available runtimes; choose one explicitly for reproducibility. See [Vercel Node.js versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
@@ -43,7 +47,9 @@ Current code reads a local credential path. The ignored local JSON must not be c
 
 ### Authentication/mail
 
-Auth.js and bcrypt run server-side. Forgot/reset production uses the server-only Resend service with `AUTH_MAILER=resend`; `AUTH_MAILER=log` is development-only. See RESEND_INTEGRATION.md.
+Auth.js and bcrypt run server-side. The active contract is Credentials → Prisma
+→ PostgreSQL/Supabase with JWT sessions. Email/recovery and Resend configuration
+are decommissioned by Phase 6C and must not be provisioned for this app.
 
 ### Filesystem and jobs
 
@@ -54,7 +60,8 @@ No persistent upload/storage, queue worker, scheduler, or background job require
 1. Root Directory misconfiguration could select the Laravel project instead of the target.
 2. Local loopback database cannot serve a Vercel Function.
 3. Local Google credential file is absent from deployment.
-4. Missing Resend sender/API configuration makes password reset incomplete.
+4. Stale external mail/recovery configuration must be removed or revoked after
+   confirming that no other application depends on it.
 5. Prisma advisory remediation is unresolved.
 6. Auth.js beta and unmeasured preview performance need manual review.
 
@@ -64,7 +71,7 @@ No persistent upload/storage, queue worker, scheduler, or background job require
 2. Verify unauthenticated redirect and admin login with disposable/test account.
 3. Run read-only database check through application paths.
 4. Read the configured Google worksheet/range.
-5. Verify reset email through non-production mailbox.
+5. Verify Auth.js login/logout with an isolated non-production account.
 6. Check build logs, function errors, Web Vitals, and client bundle.
 
 ## Status

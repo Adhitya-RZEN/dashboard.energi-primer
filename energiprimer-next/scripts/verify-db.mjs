@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from "@prisma/client";
+import { safeErrorCategory } from "./safe-error.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -140,10 +141,8 @@ try {
     ),
   );
 } catch (error) {
-  console.error(
-    "Database read verification failed:",
-    error instanceof Error ? error.message : error,
-  );
+  console.error("Database read verification failed.");
+  console.error(`Category: ${safeErrorCategory(error)}`);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

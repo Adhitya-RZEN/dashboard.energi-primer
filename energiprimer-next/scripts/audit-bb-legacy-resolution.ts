@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 
 import { PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 import {
   GoogleSheetsIntegrationError,
@@ -1781,7 +1782,8 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : "BB legacy resolution audit failed.");
+    console.error("BB legacy resolution audit failed.");
+    console.error(`Category: ${safeErrorCategory(error)}`);
     process.exitCode = 1;
   })
   .finally(async () => {

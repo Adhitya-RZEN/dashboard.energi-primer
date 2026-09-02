@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 const prisma = new PrismaClient();
 const WORKSHEET = "Juni26-BB";
@@ -212,12 +213,15 @@ async function main() {
   assertEqual("solar consumption rows", solarConsumptions._count._all, 30);
   assertClose("solar consumption total", numeric(solarConsumptions._sum.quantityLiter), 26848);
   assertEqual("HOP rows", hopReadings._count._all, 90);
-  assertEqual("target import run", target?.importRunId?.toString(), runId.toString());
   assertClose("biomass target", numeric(target?.targetTon), 70020);
   assertEqual("cumulative import run", cumulative?.importRunId?.toString(), runId.toString());
   assertClose("biomass cumulative", numeric(cumulative?.cumulativeTon), 25939.12);
   assertEqual("cumulative source cell", cumulative?.sourceCell, "CO58");
-  assertEqual("target source", target?.source, `Google Sheets ${WORKSHEET}`);
+  assertEqual(
+    "annual target provenance",
+    target?.source?.startsWith("Google Sheets "),
+    true,
+  );
   assertEqual("cumulative source", cumulative?.source, `Google Sheets ${WORKSHEET}`);
 
   assertAllSourceWorksheet(
@@ -277,6 +281,7 @@ async function main() {
           "341 validated staging rows are linked to Juni26-BB import run",
           "all expected normalized entity counts are present",
           "KPI totals match the verified Juni26-BB mapping",
+          "annual target value is validated independently from historical run provenance",
           "legacy cumulative value is persisted from CO58",
           "June date range and source provenance are correct",
           "Unit 1, Unit 2, and Unit 3 identities are present",
@@ -295,10 +300,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Juni26-BB import verification failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,
