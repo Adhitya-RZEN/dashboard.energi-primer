@@ -48,6 +48,7 @@ export type OverviewData = {
   period: {
     monthLabel: string;
     requestedMonthLabel: string;
+    dashboardCutoffDate: string;
     isFallback: boolean;
     fallbackNotice: string | null;
     focusDate: string | null;

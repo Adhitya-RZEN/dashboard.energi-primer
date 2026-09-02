@@ -107,7 +107,12 @@ function PageIntro({
           {data.period.fallbackNotice}
         </DashboardWarning>
       ) : null}
-      <DashboardFilter data={data} action={action} themeKey={themeKey} />
+      <DashboardFilter
+        key={`${themeKey}-${data.period.dashboardCutoffDate}-${data.query.year}-${data.query.month}-${data.query.day ?? "all"}`}
+        data={data}
+        action={action}
+        themeKey={themeKey}
+      />
       {!data.hasData ? <OverviewEmptyState /> : null}
     </>
   );
