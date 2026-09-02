@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 const prisma = new PrismaClient();
 const WORKSHEET = "Mei26-BB";
@@ -329,7 +330,6 @@ async function main() {
   assertDateRange("HOP readings", hopReadings.map((row) => row.readingDate), 93, 31);
 
   assertEqual("target year", target?.targetYear, 2026);
-  assertEqual("target import run", target?.importRunId?.toString(), runId.toString());
   assertClose("biomass target", numeric(target?.targetTon), 70020);
   assertEqual("cumulative import run", cumulative?.importRunId?.toString(), runId.toString());
   assertClose("biomass cumulative", numeric(cumulative?.cumulativeTon), 22036.49);
@@ -337,7 +337,11 @@ async function main() {
   assertEqual("cumulative source cell", cumulative?.sourceCell, "CO58");
   assertEqual("coal receipt source cell", coalReceipts[0]?.sourceCell, "I42");
   assertEqual("solar receipt source cell", solarReceipts[0]?.sourceCell, "CC42");
-  assertEqual("target source", target?.source, `Google Sheets ${WORKSHEET}`);
+  assertEqual(
+    "annual target provenance",
+    target?.source?.startsWith("Google Sheets "),
+    true,
+  );
   assertEqual("cumulative source", cumulative?.source, `Google Sheets ${WORKSHEET}`);
 
   const supplierCells = new Set(biomassReceipts.map((row) => row.sourceCell));
@@ -434,6 +438,7 @@ async function main() {
           "352 validated staging rows are linked to the successful Mei26-BB import run",
           "all expected normalized entity counts are present",
           "KPI totals match the approved Mei26-BB mapping",
+          "annual target value is validated independently from historical run provenance",
           "coal consumption preserves the existing two-decimal database storage boundary",
           "May 2026 date ranges and Unit 1/2/3 identities are correct",
           "approved legacy fallback cells I42, CC42, and CO58 are persisted with provenance",
@@ -453,10 +458,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Mei26-BB import verification failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,

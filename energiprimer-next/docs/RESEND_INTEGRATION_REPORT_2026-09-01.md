@@ -1,5 +1,9 @@
 # Resend Integration Report
 
+> HISTORICAL / DECOMMISSIONED (Phase 6C, 2026-09-02): This report records the
+> former provider experiment. Resend, mail delivery, and public recovery are
+> not active application features.
+
 Tanggal: 1 September 2026  
 Project: `energiprimer-next`  
 Scope: Phase 18 — Resend Integration & Auth Mail.

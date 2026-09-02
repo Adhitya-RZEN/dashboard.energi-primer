@@ -1,5 +1,9 @@
 # Laravel Audit — Authentication and Authorization Mapping
 
+> HISTORICAL REFERENCE (Phase 6C, 2026-09-02): Laravel recovery/mail entries
+> are not active Next.js flows. The active boundary is Auth.js Credentials →
+> Prisma → PostgreSQL/Supabase; see `docs/AUTH_IMPLEMENTATION.md`.
+
 ## Ringkasan
 
 Authentication menggunakan Laravel session guard `web` + Eloquent provider `App\Models\User`. Tidak ada registration route. Seluruh area dashboard, data, monitoring, laporan, pengaturan, logout, dan change password hanya dapat diakses user ber-role `admin`.

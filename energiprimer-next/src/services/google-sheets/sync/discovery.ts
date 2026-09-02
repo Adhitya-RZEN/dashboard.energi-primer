@@ -198,7 +198,7 @@ export async function discoverGoogleSheetsWorksheets() {
       worksheetCount: current.length,
       diff,
     };
-  });
+  }, { maxWait: 10_000, timeout: 60_000 });
 
   return result;
 }

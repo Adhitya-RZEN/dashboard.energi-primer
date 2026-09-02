@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "./safe-error.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptDirectory, "..");
@@ -599,7 +600,7 @@ async function applyHardening(client, metadata) {
       }
     });
   } catch (error) {
-    result.failures.push(error instanceof Error ? error.message : "permission transaction failed");
+    result.failures.push(`permission transaction failed (${safeErrorCategory(error)})`);
     return false;
   }
 
@@ -710,7 +711,7 @@ if (result.failures.length === 0) {
       result.status = requestedMode === "execute" ? "PASS" : "PREFLIGHT_PASS";
     }
   } catch (error) {
-    result.failures.push(error instanceof Error ? error.message : "Supabase preflight failed");
+    result.failures.push(`Supabase preflight failed (${safeErrorCategory(error)})`);
   } finally {
     await client.$disconnect();
   }

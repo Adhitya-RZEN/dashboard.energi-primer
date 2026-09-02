@@ -29,7 +29,7 @@ const tableClassification = {
     category: "AUTH DATA / SENSITIVE DATA",
   },
   password_reset_tokens: {
-    purpose: "Password-reset token records",
+    purpose: "Legacy recovery token records",
     businessData: "NO",
     credentials: "YES — reset token",
     authData: "YES",

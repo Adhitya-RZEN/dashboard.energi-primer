@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "./safe-error.mjs";
 
 const prisma = new PrismaClient();
+const JULY_START = new Date("2026-07-01T00:00:00.000Z");
+const AUGUST_START = new Date("2026-08-01T00:00:00.000Z");
+const JULY_PERIOD = { gte: JULY_START, lt: AUGUST_START };
 
 function number(value) {
   return value === null ? null : Number(value);
@@ -38,20 +42,37 @@ try {
       Promise.all([
         prisma.spreadsheetImportRun.count(),
         prisma.spreadsheetImportStaging.count(),
-        prisma.biomassReceipt.count(),
-        prisma.biomassConsumption.count(),
-        prisma.coalReceipt.count(),
-        prisma.solarConsumption.count(),
-        prisma.solarReceipt.count(),
-        prisma.hopReading.count(),
+        prisma.biomassReceipt.count({ where: { periodStart: JULY_PERIOD } }),
+        prisma.biomassConsumption.count({ where: { readingDate: JULY_PERIOD } }),
+        prisma.coalReceipt.count({ where: { periodStart: JULY_PERIOD } }),
+        prisma.solarConsumption.count({ where: { readingDate: JULY_PERIOD } }),
+        prisma.solarReceipt.count({ where: { periodStart: JULY_PERIOD } }),
+        prisma.hopReading.count({ where: { readingDate: JULY_PERIOD } }),
         prisma.biomassTarget.count(),
-        prisma.biomassCumulativeSnapshot.count(),
+      prisma.biomassCumulativeSnapshot.count({
+        where: { periodStart: JULY_PERIOD },
+      }),
       ]),
-      prisma.biomassReceipt.aggregate({ _sum: { quantityTon: true } }),
-      prisma.biomassConsumption.aggregate({ _sum: { quantityTon: true } }),
-      prisma.coalReceipt.aggregate({ _sum: { quantityTon: true } }),
-      prisma.solarConsumption.aggregate({ _sum: { quantityLiter: true } }),
-      prisma.solarReceipt.aggregate({ _sum: { quantityLiter: true } }),
+      prisma.biomassReceipt.aggregate({
+        where: { periodStart: JULY_PERIOD },
+        _sum: { quantityTon: true },
+      }),
+      prisma.biomassConsumption.aggregate({
+        where: { readingDate: JULY_PERIOD },
+        _sum: { quantityTon: true },
+      }),
+      prisma.coalReceipt.aggregate({
+        where: { periodStart: JULY_PERIOD },
+        _sum: { quantityTon: true },
+      }),
+      prisma.solarConsumption.aggregate({
+        where: { readingDate: JULY_PERIOD },
+        _sum: { quantityLiter: true },
+      }),
+      prisma.solarReceipt.aggregate({
+        where: { periodStart: JULY_PERIOD },
+        _sum: { quantityLiter: true },
+      }),
       prisma.biomassTarget.findUnique({ where: { targetYear: 2026 } }),
       prisma.biomassCumulativeSnapshot.findUnique({
         where: { periodStart: new Date("2026-07-01T00:00:00.000Z") },
@@ -64,6 +85,9 @@ try {
           importedRows: true,
           requestedWorksheet: true,
           effectiveWorksheet: true,
+          requestedPeriod: true,
+          effectivePeriod: true,
+          completedAt: true,
         },
       }),
       prisma.unit.findMany({
@@ -71,28 +95,13 @@ try {
         select: { id: true, code: true, name: true },
       }),
       prisma.coalConsumption.count({
-        where: {
-          date: {
-            gte: new Date("2026-07-01T00:00:00.000Z"),
-            lt: new Date("2026-08-01T00:00:00.000Z"),
-          },
-        },
+        where: { date: JULY_PERIOD },
       }),
       prisma.coalStock.count({
-        where: {
-          date: {
-            gte: new Date("2026-07-01T00:00:00.000Z"),
-            lt: new Date("2026-08-01T00:00:00.000Z"),
-          },
-        },
+        where: { date: JULY_PERIOD },
       }),
       prisma.coalConsumption.aggregate({
-        where: {
-          date: {
-            gte: new Date("2026-07-01T00:00:00.000Z"),
-            lt: new Date("2026-08-01T00:00:00.000Z"),
-          },
-        },
+        where: { date: JULY_PERIOD },
         _sum: { coalUsed: true },
       }),
     ]);
@@ -126,7 +135,18 @@ try {
     throw new Error("Biomassa target 2026 is not 70020.");
   if (!cumulative || !cumulative.cumulativeTon.equals(29103.77))
     throw new Error("Biomassa cumulative snapshot is not 29103.77.");
-  const latestRun = runs.at(-1);
+  const latestRun = runs
+    .filter(
+      (run) =>
+        run.status === "SUCCESS" &&
+        run.effectivePeriod?.toISOString().slice(0, 10) === "2026-07-01",
+    )
+    .sort(
+      (left, right) =>
+        (left.completedAt?.getTime() ?? 0) -
+        (right.completedAt?.getTime() ?? 0),
+    )
+    .at(-1);
   assertEqual("latest import status", latestRun?.status, "SUCCESS");
   assertEqual("imported rows in latest run", latestRun?.importedRows, 352);
   assertEqual("effective worksheet", latestRun?.effectiveWorksheet, "Juli26-BB");
@@ -182,7 +202,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message: error instanceof Error ? error.message : "Import verification failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,

@@ -1,5 +1,9 @@
 # Resend Integration
 
+> HISTORICAL / DECOMMISSIONED (Phase 6C, 2026-09-02): Resend and the related
+> account-recovery flow were removed. The content below is retained for audit
+> history only and must not be used for provisioning.
+
 Tanggal: 1 September 2026  
 Scope: integrasi delivery email password reset pada Next.js tanpa mengganti
 Auth.js Credentials flow.

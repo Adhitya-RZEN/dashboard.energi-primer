@@ -1,80 +1,63 @@
-# Environment Variables — Phase 10
+# Environment Variables — Current Contract
 
 ## Scope
 
-Dokumen ini mencatat environment variable yang direferensikan oleh source
-Next.js, Prisma, authentication, Google Sheets, dan script verifikasi.
-Nilai aktual sengaja tidak ditulis. File `.env.local` tetap bersifat lokal dan
-tidak boleh di-commit.
+This document lists the current server/client configuration boundary. Actual
+values are never recorded here. `.env.local`, `.env.e2e.local`, and credential
+files remain local/ignored and must not be copied into source control.
 
-## Inventory
+## Active inventory
 
-| Variable                         | Required                         | Server/Client | Sensitive               | Used By                                                            | Production Required                       |
-| -------------------------------- | -------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------ | ----------------------------------------- |
-| `DATABASE_URL`                   | Yes                              | Server        | Yes                     | Prisma schema, `src/lib/prisma.ts`, data services, `verify-db.mjs` | Yes                                       |
-| `NEXT_PUBLIC_APP_NAME`           | Optional                         | Client-safe   | No                      | `src/lib/env.ts`, metadata, auth shell                             | Optional                                  |
-| `NEXT_PUBLIC_APP_URL`            | Optional                         | Client-safe   | No                      | `src/lib/env.ts`, reset URL fallback                               | Recommended                               |
-| `AUTH_SECRET`                    | Yes                              | Server        | Yes                     | Auth.js session/JWT signing                                        | Yes                                       |
-| `AUTH_TRUST_HOST`                | Yes for deployment configuration | Server        | No                      | Auth.js host trust                                                 | Yes                                       |
-| `CRON_SECRET`                    | Yes when scheduled sync is enabled | Server      | Yes                     | Vercel Cron synchronization endpoint                               | Yes when scheduled sync is enabled        |
-| `AUTH_MAILER`                    | Optional in development          | Server        | No                      | Password-reset delivery mode (`log` or explicit `resend`)          | Yes when reset delivery is enabled        |
-| `RESEND_API_KEY`                 | Required when `AUTH_MAILER=resend` | Server      | Yes                     | Resend password-reset delivery                                    | Yes when Resend is enabled                |
-| `RESEND_FROM_EMAIL`              | Required when `AUTH_MAILER=resend` | Server      | Config-sensitive        | Verified Resend sender                                             | Yes when Resend is enabled                |
-| `RESEND_TEST_RECIPIENT`          | Test-only                         | Server/script | No                    | One-recipient controlled smoke test                               | No                                        |
-| `AUTH_URL`                       | Recommended                      | Server        | No                      | Canonical password-reset URL                                       | Yes for production reset links            |
-| `GOOGLE_SHEETS_CREDENTIALS_PATH` | Yes when Sheets is active        | Server        | Yes/config path         | Google Sheets service                                              | Yes when Sheets is active                 |
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL`   | Alternative with private key    | Server        | Yes                     | Google Sheets service                                              | Recommended for Vercel when no file mount |
-| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Alternative with email       | Server        | Yes                     | Google Sheets service                                              | Recommended for Vercel when no file mount |
-| `GOOGLE_SHEETS_SPREADSHEET_ID`   | Yes when Sheets is active        | Server        | Configuration-sensitive | Google Sheets service                                              | Yes when Sheets is active                 |
-| `GOOGLE_SHEETS_CACHE_TTL`        | Optional                         | Server        | No                      | Google Sheets in-memory range cache                                | Optional; defaults to `120`               |
-| `MAIL_MAILER`                    | Optional fallback                | Server        | No                      | Legacy-compatible fallback in password reset helper                | No; prefer `AUTH_MAILER`                  |
-| `NODE_ENV`                       | Framework-provided               | Server        | No                      | Next.js, cookie `secure` behavior, logging                         | Managed by platform                       |
-| `AUTH_TEST_BASE_URL`             | Test-only                        | Server/script | No                      | `scripts/verify-auth.mjs`                                          | No                                        |
-| `AUTH_TEST_ADMIN_EMAIL`          | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
-| `AUTH_TEST_ADMIN_PASSWORD`       | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
-| `AUTH_TEST_SECRET`               | Test-only                        | Server/script | Yes                     | `scripts/verify-auth.mjs`                                          | No                                        |
+| Variable | Required when | Boundary | Sensitive |
+|---|---|---|---|
+| `DATABASE_URL` | Application/runtime access | Server | Yes |
+| `AUTH_SECRET` | Auth.js sessions | Server | Yes |
+| `AUTH_TRUST_HOST` | Deployment host trust | Server | No |
+| `AUTH_URL` | Canonical deployment origin | Server | No |
+| `CRON_SECRET` | Scheduled Google Sheets sync | Server | Yes |
+| `NEXT_PUBLIC_APP_NAME` | App branding | Client-safe | No |
+| `NEXT_PUBLIC_APP_URL` | Public app URL/fallback | Client-safe | No |
+| `GOOGLE_SHEETS_CREDENTIALS_PATH` | Local Google Sheets access | Server | Path/config |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Environment credential pair | Server | Yes |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Environment credential pair | Server | Yes |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Google Sheets access | Server | Config-sensitive |
+| `GOOGLE_SHEETS_CACHE_TTL` | Optional Sheets cache tuning | Server | No |
+| `DASHBOARD_DATA_SOURCE` | Optional source selection | Server | No |
+| `SUPABASE_DIRECT_URL` | Operator-only read-only checks | Operator script | Yes |
+| `SUPABASE_POOLER_URL` | Operator/runtime transport checks | Operator/server | Yes |
+| `AUTH_TEST_BASE_URL` | Isolated auth E2E only | Test script | No |
+| `AUTH_TEST_ADMIN_EMAIL` | Isolated auth E2E only | Test script | Yes |
+| `AUTH_TEST_ADMIN_PASSWORD` | Isolated auth E2E only | Test script | Yes |
+| `AUTH_TEST_SECRET` | Isolated auth E2E only | Test script | Yes |
 
-## Configuration decisions
+`NODE_ENV` and `VERCEL_ENV` are platform/framework values. They are not
+credentials. The application exposes only the two app-identity variables with
+the `NEXT_PUBLIC_` prefix.
 
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL` dan `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` dapat
-  digunakan berpasangan sebagai alternatif serverless terhadap file JSON.
-  `GOOGLE_SHEETS_CREDENTIALS_PATH` tetap didukung untuk local development.
-  `GOOGLE_SHEETS_WORKSHEET` dan `GOOGLE_SHEETS_RANGE` tidak digunakan karena
-  worksheet/range ditentukan oleh adapter dan registry.
-- `AUTH_MAILER=log` hanya untuk development. `AUTH_MAILER=resend` mengaktifkan
-  delivery Resend dan membutuhkan `RESEND_API_KEY` serta
-  `RESEND_FROM_EMAIL`; sender harus sudah diverifikasi di Resend.
-- `RESEND_TEST_RECIPIENT` hanya dipakai oleh controlled smoke test dengan flag
-  `--real`; test biasa selalu memakai mock dan tidak mengirim email.
-- `AUTH_URL` dipakai agar reset link tidak bergantung pada URL preview atau
-  URL lokal. `NEXT_PUBLIC_APP_URL` hanya fallback non-secret.
-- `DATABASE_URL` pada environment lokal menunjuk ke host loopback. Nilai
-  production harus diganti dengan PostgreSQL yang dapat dijangkau Vercel dan
-  tidak ditulis di repository.
+## Decommissioned configuration
 
-## Security checks
+`AUTH_MAILER`, `MAIL_MAILER`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and
+`RESEND_TEST_RECIPIENT` are not active application configuration. They must not
+be added to `.env.example`, Vercel, CI, or new local setups. If an old provider
+credential is still provisioned outside this repository, revoke/delete it as an
+operator action after confirming no other application depends on it.
 
-- Tidak ada secret yang menggunakan prefix `NEXT_PUBLIC_`.
-- `DATABASE_URL`, `AUTH_SECRET`, `CRON_SECRET`, Google configuration, password, dan token
-  hanya direferensikan pada server atau script lokal.
-- `.env.local` tetap di-ignore.
-- `.env.example` sekarang di-unignore agar dapat dicatat di repository, tetapi
-  hanya berisi placeholder; tidak berisi secret aktual.
-- Direktori `credentials/` tetap di-ignore.
-- `AUTH_SECRET` pada `.env.example` telah diganti placeholder non-secret pada
-  Phase 10.
-- Jangan mengisi environment test dengan credential production.
+The former public recovery routes and email provider were removed in Phase 6C.
+The Prisma legacy token model is retained only until a separately reviewed
+database cleanup migration is approved.
 
-## Deployment gaps
+## Security rules
 
-Vercel masih membutuhkan konfigurasi manual untuk `DATABASE_URL`, `AUTH_SECRET`,
-`AUTH_TRUST_HOST`, `AUTH_URL`, `AUTH_MAILER`, konfigurasi Resend, dan
-konfigurasi Google Sheets. Credential file lokal tidak otomatis tersedia pada
-deployment. Detailnya ada di
-[`GOOGLE_SHEETS_PRODUCTION.md`](./GOOGLE_SHEETS_PRODUCTION.md) dan
-[`VERCEL_DEPLOYMENT_READINESS.md`](./VERCEL_DEPLOYMENT_READINESS.md).
+- Never use `NEXT_PUBLIC_` for database, auth, cron, Google, Supabase, mail, or
+  token material.
+- Keep production, preview, local, and E2E database credentials separate.
+- Do not print environment values in diagnostics, reports, or CI logs.
+- Use `.env.example` only as a placeholder template.
+- Rotate credentials through the secret manager; this repository remediation
+  performs no automatic rotation.
 
 ## Status
 
-**PASS untuk inventory dan source boundary; NEEDS REVIEW untuk provisioning
-sender/domain/API key production dan real-email smoke test.**
+**PASS WITH ROTATION REQUIRED:** active names have a server-only boundary and
+the template contains no mail/recovery provider variables. External secret
+rotation and provider-log review remain operator actions.

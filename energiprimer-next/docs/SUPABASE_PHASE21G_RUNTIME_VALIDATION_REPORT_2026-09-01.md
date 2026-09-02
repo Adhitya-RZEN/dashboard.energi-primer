@@ -1,5 +1,8 @@
 # PHASE 21G - SUPABASE PRODUCTION RUNTIME VALIDATION
 
+> HISTORICAL BASELINE (Phase 6C, 2026-09-02): Any recovery/mail references in
+> this runtime report are not current application behavior.
+
 Tanggal audit: 2026-09-01
 Scope: validasi runtime read-only dan persiapan cutover
 Target: Supabase PostgreSQL melalui server-side Prisma

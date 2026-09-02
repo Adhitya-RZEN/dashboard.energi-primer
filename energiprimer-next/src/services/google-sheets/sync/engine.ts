@@ -564,6 +564,8 @@ export async function runGoogleSheetsIncrementalSync(
       worksheets: worksheetResults,
     };
   } catch (error) {
+    const safeError = safeErrorMessage(error);
+    console.error("[google-sheets-sync]", safeError);
     if (syncRunId !== null) {
       await prisma.syncRun.update({
         where: { id: syncRunId },
@@ -571,7 +573,7 @@ export async function runGoogleSheetsIncrementalSync(
           status: "FAILED",
           finishedAt: new Date(),
           durationMs: Date.now() - startedAt,
-          errorSummary: safeErrorMessage(error),
+          errorSummary: safeError,
           failed: 1,
         },
       });

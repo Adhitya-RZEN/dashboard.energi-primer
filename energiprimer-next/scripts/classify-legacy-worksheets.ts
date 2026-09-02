@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 
 import { PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 import {
   GoogleSheetsIntegrationError,
@@ -230,13 +231,13 @@ function errorDetails(error: unknown) {
     return {
       code: error.code,
       status: error.status ?? null,
-      message: error.message,
+      message: "read failed",
     };
   }
   return {
     code: "unknown",
     status: null,
-    message: error instanceof Error ? error.message : "Unknown read error.",
+    message: "read failed",
   };
 }
 
@@ -1679,7 +1680,8 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : "Legacy worksheet classification failed.");
+    console.error("Legacy worksheet classification failed.");
+    console.error(`Category: ${safeErrorCategory(error)}`);
     process.exitCode = 1;
   })
   .finally(async () => {

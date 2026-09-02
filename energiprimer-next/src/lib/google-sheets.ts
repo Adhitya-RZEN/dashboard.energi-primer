@@ -15,6 +15,15 @@ export type GoogleSheetsConfig = {
   cacheTtlSeconds: number;
 };
 
+export type GoogleSheetsEnvironment = {
+  [name: string]: string | undefined;
+  GOOGLE_SHEETS_CREDENTIALS_PATH?: string;
+  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+  GOOGLE_SHEETS_SPREADSHEET_ID?: string;
+  GOOGLE_SHEETS_CACHE_TTL?: string;
+};
+
 export type GoogleSheetsReadResult = {
   worksheet: string;
   range: string;
@@ -73,13 +82,15 @@ const worksheetMetadataCache = new Map<
   { expiresAt: number; result: GoogleSheetsWorksheetMetadata[] }
 >();
 
-export function getGoogleSheetsConfig(): GoogleSheetsConfig {
-  const credentialsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH?.trim();
-  const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+export function getGoogleSheetsConfig(
+  environment: GoogleSheetsEnvironment = process.env,
+): GoogleSheetsConfig {
+  const credentialsPath = environment.GOOGLE_SHEETS_CREDENTIALS_PATH?.trim();
+  const serviceAccountEmail = environment.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const serviceAccountPrivateKey =
-    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
-  const configuredTtl = Number(process.env.GOOGLE_SHEETS_CACHE_TTL ?? "120");
+    environment.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
+  const spreadsheetId = environment.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  const configuredTtl = Number(environment.GOOGLE_SHEETS_CACHE_TTL ?? "120");
 
   const hasFileCredentials = Boolean(credentialsPath);
   const hasEnvironmentCredentials = Boolean(
@@ -113,6 +124,22 @@ export function getGoogleSheetsConfig(): GoogleSheetsConfig {
     spreadsheetId,
     cacheTtlSeconds: configuredTtl,
   };
+}
+
+/**
+ * Configuration-only check shared by dashboard source selection and the
+ * Google Sheets client. It validates the same credential mode and spreadsheet
+ * requirement without reading credential files or exposing secret material.
+ */
+export function isGoogleSheetsConfigComplete(
+  environment: GoogleSheetsEnvironment = process.env,
+) {
+  try {
+    getGoogleSheetsConfig(environment);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function classifyGoogleSheetsStatus(

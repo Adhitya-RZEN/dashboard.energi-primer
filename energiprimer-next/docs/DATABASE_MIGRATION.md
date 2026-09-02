@@ -14,6 +14,32 @@ Phase 3 menambahkan Prisma sebagai data access layer di Next.js. Schema Prisma
 ditulis berdasarkan migration Laravel dan mempertahankan nama tabel/kolom
 existing menggunakan `@@map` dan `@map`.
 
+## Migration history policy (Phase 6B)
+
+Repository ini memiliki dua history yang sengaja dipisahkan dan tidak boleh
+dipilih berdasarkan kebetulan command berada di root:
+
+- **SUPABASE PRODUCTION:** `prisma/production/schema.prisma`,
+  `prisma/production/migrations/`, dan
+  `prisma/production/migrations/migration_lock.toml`. Ini adalah history
+  canonical untuk database Supabase production.
+- **LEGACY/LOCAL ONLY:** `prisma/schema.prisma` dan `prisma/migrations/`.
+  History ini merepresentasikan baseline Laravel existing serta migration
+  additive lokal. History root tidak aman untuk target Supabase current dan
+  tidak boleh dihapus, digabung, di-rename, atau diterapkan ke sana.
+
+Semua command production harus menyebutkan
+`--schema prisma/production/schema.prisma` secara eksplisit. Pemeriksaan
+read-only yang disediakan untuk operator adalah:
+
+```powershell
+npm run supabase:production:migration:preflight
+```
+
+Command tersebut memakai `SUPABASE_DIRECT_URL`; `DATABASE_URL` tetap kontrak
+runtime aplikasi. Tidak ada migration production yang dijalankan oleh build,
+startup, route, atau Vercel cron.
+
 ## Implementasi
 
 ```text
@@ -45,10 +71,11 @@ Instalasi npm melaporkan 3 high severity vulnerabilities pada dependency tree.
 `npm audit fix --force` tidak dijalankan karena dapat memicu perubahan versi
 breaking; perlu ditinjau terpisah sebelum deployment.
 
-Prisma CLI dipakai untuk `generate`, `validate`, dan `migrate deploy` terhadap
-migration additive yang sudah disetujui. Migration baseline hanya menandai
-schema Laravel existing sebagai baseline; migration berikutnya membuat tabel
-normalized baru tanpa mengubah tabel lama secara destruktif.
+Prisma CLI dipakai untuk `generate` dan `validate` pada workflow umum. Untuk
+Supabase production, `migrate deploy` hanya boleh dijalankan oleh operator
+setelah preflight, backup, change window, review, dan approval lulus; command
+deploy canonical harus selalu menunjuk schema production. Phase 6B tidak
+menjalankan command tersebut.
 
 ## Laravel Model → Prisma Model
 

@@ -1,5 +1,9 @@
 # Auth E2E & Security Hardening Report
 
+> HISTORICAL BASELINE (Phase 6C, 2026-09-02): Password-recovery and Resend
+> references in this dated report describe the pre-remediation state only.
+> Current auth is Auth.js Credentials → Prisma → PostgreSQL/Supabase.
+
 Tanggal audit: 2026-09-01  
 Project: `energiprimer-next`  
 Scope: Auth.js, Credentials Provider, session, authorization, protected routes,

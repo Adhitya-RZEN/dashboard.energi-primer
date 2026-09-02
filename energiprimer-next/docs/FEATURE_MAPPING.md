@@ -1,5 +1,9 @@
 # Laravel Audit — Feature Mapping
 
+> PHASE 6C UPDATE (2026-09-02): This Laravel mapping is historical reference
+> material. Password recovery and mail entries below are not active Next.js
+> features; consult the current source and `docs/PROJECT_MAP.md`.
+
 Format setiap item: **Laravel implementation → target Next.js implementation → dependency → database dependency → API dependency → kompleksitas → risiko migrasi**. Tidak ada implementasi Next.js pada fase audit ini.
 
 ## 1. Authentication admin

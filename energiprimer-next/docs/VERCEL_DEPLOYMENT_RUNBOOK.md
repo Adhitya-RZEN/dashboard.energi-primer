@@ -1,5 +1,9 @@
 # Vercel Deployment Runbook
 
+> PHASE 6C UPDATE (2026-09-02): Do not provision the former Resend or public
+> recovery flow. Deployment authentication is Auth.js Credentials with Prisma
+> and PostgreSQL/Supabase.
+
 Status: **PREPARED ONLY — NOT DEPLOYED**
 
 This is a future deployment procedure for `energiprimer-next`. No Vercel
@@ -18,6 +22,12 @@ Recommended commands:
 Install: npm ci
 Build:   npm run build
 ```
+
+The build remains `next build`; it does not run `prisma migrate deploy`,
+`prisma migrate resolve`, `prisma db push`, or any database migration. Schema
+migrations are an operator/CI concern and must use the explicit
+`prisma/production/schema.prisma` history outside Vercel build, startup,
+request, and cron execution.
 
 Vercel manages the production start process for a Next.js deployment; local
 production equivalence is `npm run start` after a successful build.
@@ -48,6 +58,9 @@ Finding: `NODE_RUNTIME_REVIEW_REQUIRED` — no automatic runtime change was made
 - The cron endpoint requires the server-only `CRON_SECRET`, uses a lease, and
   keeps idempotent row state. Do not invoke it against production during this
   preparation phase.
+- `vercel.json` contains only the Google Sheets sync cron. No migration command
+  is attached to the cron, and no migration command is present in the Vercel
+  runtime path.
 
 ## 4. Environment configuration
 

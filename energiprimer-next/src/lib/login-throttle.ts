@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import "server-only";
 
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 const MAX_ATTEMPTS = 6;
@@ -43,37 +45,50 @@ export function getRequestIp(
 export async function consumeLoginAttempt(email: string, ipAddress: string) {
   const now = Math.floor(Date.now() / 1000);
   const key = cacheKey(email, ipAddress);
-  const existing = await prisma.cache.findUnique({ where: { key } });
-  const expiresAt = Number(existing?.expiration ?? 0);
 
-  if (existing && expiresAt > now) {
-    const count = requestCount(existing.value);
-    if (count >= MAX_ATTEMPTS) {
-      return { allowed: false, retryAfterSeconds: expiresAt - now };
-    }
+  return prisma.$transaction(
+    async (tx) => {
+      // PostgreSQL advisory transaction locks serialize this key across
+      // application instances without changing the existing Laravel cache
+      // schema. The lock is released automatically when the transaction ends.
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`,
+      );
 
-    await prisma.cache.update({
-      where: { key },
-      data: {
-        value: JSON.stringify({ count: count + 1 }),
-        expiration: BigInt(expiresAt),
-      },
-    });
-    return { allowed: true, retryAfterSeconds: 0 };
-  }
+      const existing = await tx.cache.findUnique({ where: { key } });
+      const expiresAt = Number(existing?.expiration ?? 0);
 
-  await prisma.cache.upsert({
-    where: { key },
-    create: {
-      key,
-      value: JSON.stringify({ count: 1 }),
-      expiration: BigInt(now + WINDOW_SECONDS),
+      if (existing && expiresAt > now) {
+        const count = requestCount(existing.value);
+        if (count >= MAX_ATTEMPTS) {
+          return { allowed: false, retryAfterSeconds: expiresAt - now };
+        }
+
+        await tx.cache.update({
+          where: { key },
+          data: {
+            value: JSON.stringify({ count: count + 1 }),
+            expiration: BigInt(expiresAt),
+          },
+        });
+        return { allowed: true, retryAfterSeconds: 0 };
+      }
+
+      await tx.cache.upsert({
+        where: { key },
+        create: {
+          key,
+          value: JSON.stringify({ count: 1 }),
+          expiration: BigInt(now + WINDOW_SECONDS),
+        },
+        update: {
+          value: JSON.stringify({ count: 1 }),
+          expiration: BigInt(now + WINDOW_SECONDS),
+        },
+      });
+
+      return { allowed: true, retryAfterSeconds: 0 };
     },
-    update: {
-      value: JSON.stringify({ count: 1 }),
-      expiration: BigInt(now + WINDOW_SECONDS),
-    },
-  });
-
-  return { allowed: true, retryAfterSeconds: 0 };
+    { timeout: 5_000 },
+  );
 }

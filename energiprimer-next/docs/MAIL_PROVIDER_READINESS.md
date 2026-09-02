@@ -1,5 +1,9 @@
 # Mail Provider Readiness
 
+> HISTORICAL / DECOMMISSIONED (Phase 6C, 2026-09-02): This document records
+> the former mail/recovery experiment. It is not an active runtime contract;
+> do not provision its variables or routes.
+
 Tanggal: 2026-09-01
 Scope: audit dan integrasi forgot-password/reset-password tanpa mengirim email production.
 

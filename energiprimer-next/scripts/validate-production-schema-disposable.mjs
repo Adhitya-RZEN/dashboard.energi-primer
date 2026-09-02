@@ -6,11 +6,20 @@ import { PrismaClient } from "@prisma/client";
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptsDirectory, "..");
-const schemaPath = path.join(projectDirectory, "prisma", "schema.prisma");
+const schemaPath = path.join(
+  projectDirectory,
+  "prisma",
+  "production",
+  "schema.prisma",
+);
+const migrationName = "20260901130000_production_schema_baseline";
 const artifactPath = path.join(
   projectDirectory,
-  "docs",
-  "SUPABASE_PRODUCTION_SCHEMA_BASELINE_DESIGN.sql",
+  "prisma",
+  "production",
+  "migrations",
+  migrationName,
+  "migration.sql",
 );
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -140,7 +149,10 @@ if (!localHostnames.has(parsedUrl.hostname.toLowerCase())) {
 }
 
 const schema = fs.readFileSync(schemaPath, "utf8");
-const artifact = fs.readFileSync(artifactPath, "utf8");
+const artifact = fs
+  .readFileSync(artifactPath, "utf8")
+  .replace(/\r\n/g, "\n")
+  .replace(/\r/g, "\n");
 const expectedModelTables = parseModelTables(schema);
 const parsedArtifact = parseArtifact(artifact);
 const validationDatabaseName = `phase21d_validation_${process.pid}_${Date.now()}`;
@@ -346,8 +358,8 @@ try {
       prismaCliPath,
       "migrate",
       "diff",
-      "--from-schema-datasource=prisma/schema.prisma",
-      "--to-schema-datamodel=prisma/schema.prisma",
+      `--from-schema-datasource=${path.relative(projectDirectory, schemaPath)}`,
+      `--to-schema-datamodel=${path.relative(projectDirectory, schemaPath)}`,
       "--exit-code",
     ],
     {

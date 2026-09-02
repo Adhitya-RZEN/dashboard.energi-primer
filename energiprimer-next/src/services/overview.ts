@@ -62,7 +62,12 @@ export async function getOverviewData(
   const configuredSource = process.env.DASHBOARD_DATA_SOURCE?.trim().toLowerCase();
   const useGoogle = configuredSource === "google";
 
-  if (useGoogle && isGoogleSheetsOverviewConfigured()) {
+  if (useGoogle) {
+    if (!isGoogleSheetsOverviewConfigured()) {
+      throw new Error(
+        "Google Sheets dashboard source is selected but its server configuration is incomplete.",
+      );
+    }
     return getGoogleSheetsOverviewData(query);
   }
 

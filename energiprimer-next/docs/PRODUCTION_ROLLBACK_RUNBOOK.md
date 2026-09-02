@@ -1,5 +1,9 @@
 # Production Rollback Runbook
 
+> PHASE 6C UPDATE (2026-09-02): Recovery/mail references below are historical
+> only. Rollback scope must not re-enable Resend, email recovery, or public
+> recovery routes without a separately approved change.
+
 > Phase 21 status (2026-09-01): no cutover or target write occurred, so no
 > rollback action is required. The migration remains blocked at Gate B0.
 

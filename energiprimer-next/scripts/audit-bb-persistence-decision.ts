@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 import { readAndParseDynamicWorksheet, DYNAMIC_SCAN_RANGE } from "../src/services/google-sheets/dynamic/reader";
 import { parseNumericValue } from "../src/services/google-sheets/dynamic/validators";
@@ -346,7 +347,7 @@ try {
 } catch (error) {
   console.error(JSON.stringify({
     status: "FAIL_READ_ONLY",
-    message: error instanceof Error ? error.message : "Read-only persistence audit failed.",
+    category: safeErrorCategory(error),
     databaseWrites: 0,
   }, jsonReplacer, 2));
   process.exitCode = 1;

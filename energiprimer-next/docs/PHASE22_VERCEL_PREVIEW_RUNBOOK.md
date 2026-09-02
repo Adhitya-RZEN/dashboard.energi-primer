@@ -1,5 +1,8 @@
 # Phase 22 — Vercel Preview Runbook
 
+> PHASE 6C UPDATE (2026-09-02): Any Resend or recovery steps below are
+> historical and must not be executed for the current application contract.
+
 Runbook ini hanya untuk Preview. Jangan gunakan untuk production cutover,
 schema migration, data migration, Google Sheets import, atau aktivasi cron
 production.

@@ -1,5 +1,9 @@
 # Next.js Architecture — Phases 2–5
 
+> PHASE 6C UPDATE (2026-09-02): Recovery/mail references retained below are
+> historical. The active architecture is Auth.js Credentials → Prisma →
+> PostgreSQL/Supabase; public recovery routes and Resend are decommissioned.
+
 ## Status
 
 - **Phase:** 5 — Layout & Navigation

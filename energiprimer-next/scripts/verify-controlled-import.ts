@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { safeErrorCategory } from "../src/lib/safe-error";
 
 const prisma = new PrismaClient();
 const TARGET_WORKSHEET = "Juli26-BB";
@@ -258,7 +259,7 @@ try {
     JSON.stringify(
       {
         status: "FAIL",
-        message: error instanceof Error ? error.message : "Controlled import verification failed.",
+        category: safeErrorCategory(error),
       },
       null,
       2,

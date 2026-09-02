@@ -1,5 +1,8 @@
 # Phase 22 — Vercel Preview Deployment & Production-like E2E Report
 
+> HISTORICAL BASELINE (Phase 6C, 2026-09-02): Mail/recovery references in this
+> report describe the pre-remediation state and are not active configuration.
+
 Tanggal audit: 2026-09-01  
 Target: Vercel Preview untuk `energiprimer-next`  
 Scope: preparation, validation, dan deployment Preview saja

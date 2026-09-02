@@ -10,6 +10,25 @@ const restrictedRoles = ["anon", "authenticated"];
 const protectedRoles = ["postgres", "service_role"];
 const tablePrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
 const migrationTable = "_prisma_migrations";
+const APPROVED_STABLE_DATA_ROWS = 2406;
+const RUNTIME_MUTABLE_TABLES = new Set([
+  "users",
+  "password_reset_tokens",
+  "sessions",
+  "cache",
+  "cache_locks",
+  "jobs",
+  "job_batches",
+  "failed_jobs",
+  "sync_sources",
+  "sync_worksheets",
+  "sync_runs",
+  "sync_row_states",
+  "sync_schema_changes",
+  "spreadsheet_import_logs",
+  "spreadsheet_import_runs",
+  "spreadsheet_import_staging",
+]);
 
 function parseMappedTables(schema) {
   return [...schema.matchAll(/model\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g)].map(
@@ -80,6 +99,9 @@ async function countTables(client, tables) {
   );
   return {
     totalRows: counts.reduce((total, item) => total + item.rows, 0),
+    stableDataRows: counts
+      .filter((item) => !RUNTIME_MUTABLE_TABLES.has(item.table))
+      .reduce((total, item) => total + item.rows, 0),
     nonEmptyTables: counts.filter((item) => item.rows > 0),
   };
 }
@@ -268,6 +290,8 @@ const output = {
     authenticatedTableAccess: direct.tablePrivileges?.authenticated?.tablesWithAnyPrivilege === 0 ? "DENIED" : "REVIEW",
     postgresTableAccess: direct.tablePrivileges?.postgres?.tablesWithAnyPrivilege === expectedTables.length ? "ALLOWED" : "REVIEW",
     serviceRoleTableAccess: direct.tablePrivileges?.service_role?.tablesWithAnyPrivilege === expectedTables.length ? "ALLOWED" : "REVIEW",
+    stableBusinessRowsOnSupabase: direct.businessData?.stableDataRows ?? "NOT_VERIFIED",
+    approvedStableBusinessRowsOnSupabase: APPROVED_STABLE_DATA_ROWS,
   },
   dataApiConfiguration: {
     actualProjectSetting: "NOT_VERIFIED_BY_SQL_ONLY_PREFLIGHT",
@@ -284,7 +308,7 @@ if (
   output.finalChecks.poolerSsl !== "PASS" ||
   output.finalChecks.anonTableAccess !== "DENIED" ||
   output.finalChecks.authenticatedTableAccess !== "DENIED" ||
-  output.finalChecks.businessRowsOnSupabase !== 0
+  output.finalChecks.stableBusinessRowsOnSupabase !== APPROVED_STABLE_DATA_ROWS
 ) {
   process.exitCode = 1;
 }

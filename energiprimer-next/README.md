@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Energi Primer
 
-## Getting Started
+Dashboard PLN Jeranjang berbasis Next.js App Router. Authentication aktif
+adalah Auth.js/NextAuth Credentials dengan Prisma `users`; dashboard normal
+membaca PostgreSQL melalui Prisma; Google Sheets adalah source import/sync.
 
-First, run the development server:
+## Menjalankan lokal
 
-```bash
+1. Salin `.env.example` menjadi `.env.local` dan isi konfigurasi server yang
+   diperlukan. Jangan commit `.env.local` atau file di `credentials/`.
+2. Jalankan:
+
+```powershell
+npm install
+npm run db:generate
+npm run db:validate
+npm run ops:verify-env
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka `http://localhost:3000/login`. Login memerlukan akun admin yang sudah ada
+di database PostgreSQL.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Release checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npm run lint
+npx tsc --noEmit --incremental false
+npm run build
+npm run sync:verify-cron-auth
+npm run sync:verify-preview-write-safety
+npm run sync:verify-retry
+npm run sync:verify-auto-admission
+npm run dynamic:verify
+npm run bb:mapping:test
+npm run sync:verify-schema
+```
 
-## Learn More
+`npm run sync:verify-preview-write-safety` memastikan environment Preview dan
+identity deployment yang tidak dikenal tidak dapat mencapai sync write path.
 
-To learn more about Next.js, take a look at the following resources:
+## Data and deployment notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **SUPABASE PRODUCTION:** canonical schema adalah
+  `prisma/production/schema.prisma` dan canonical history adalah
+  `prisma/production/migrations/`. History ini tidak boleh diganti dengan
+  history root.
+- **LEGACY/LOCAL ONLY:** `prisma/schema.prisma` dan `prisma/migrations/`
+  mempertahankan baseline Laravel/local serta migration additive lama. Keduanya
+  tidak boleh diterapkan ke Supabase production dan tidak boleh dihapus,
+  digabung, atau dianggap interchangeable.
+- Pemeriksaan production yang read-only memakai:
+  `npm run supabase:production:migration:preflight`. Command ini mengharuskan
+  `--schema prisma/production/schema.prisma` secara internal, memakai
+  `SUPABASE_DIRECT_URL`, dan tidak menjalankan migration.
+- Build Vercel tetap `npm run build` (`next build`). Migration schema tidak
+  dijalankan saat build, startup, request, atau cron sync.
+- Supabase hanya tersisa sebagai konteks/operator scripts; tidak ada Supabase
+  Auth aktif di aplikasi.
+- Google credential dapat berupa file JSON server-side atau pasangan email dan
+  private key server-side. Jangan menaruhnya di client, log, atau dokumentasi.
+- `src/app/(protected)/data-batu-bara` hanya menampilkan field yang tersedia di
+  model saat ini; fitur import/export/report yang belum memiliki backend tetap
+  disabled.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Dokumen konteks utama untuk coding agent adalah `docs/AGENT_CONTEXT.md`,
+`docs/PROJECT_MAP.md`, dan `docs/PROJECT_AUDIT.md`. Keputusan implementasi
+stabilisasi terakhir dicatat di
+`docs/IMPLEMENTATION_DECISIONS_2026-09-02.md`.

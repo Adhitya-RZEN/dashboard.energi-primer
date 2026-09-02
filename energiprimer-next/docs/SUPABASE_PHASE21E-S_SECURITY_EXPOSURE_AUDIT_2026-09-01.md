@@ -1,5 +1,8 @@
 # Phase 21E-S — Supabase Security Exposure Audit
 
+> HISTORICAL BASELINE (Phase 6C, 2026-09-02): Recovery/mail references are
+> retained as audit evidence and are not active application configuration.
+
 Date: 2026-09-01  
 Status: **PASS WITH REVIEW — no remediation performed**
 

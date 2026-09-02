@@ -39,7 +39,9 @@ import {
 } from "../src/services/google-sheets/sync/schema-detection";
 import { withSyncRetry } from "../src/services/google-sheets/sync/retry";
 
-const prisma = new PrismaClient({ log: ["error"] });
+// Prisma error events can contain provider/endpoint details; reports use the
+// script's safe error classifier instead.
+const prisma = new PrismaClient({ log: [] });
 const REQUEST_DELAY_MS = 1_500;
 const MAX_RETRY_ATTEMPTS = 3;
 const IMPORT_START_YEAR = 2023;

@@ -1,5 +1,9 @@
 # Production Smoke Test Plan
 
+> PHASE 6C UPDATE (2026-09-02): Do not test or provision the former Resend or
+> public recovery flow. Authentication smoke tests cover Auth.js Credentials,
+> protected access, logout, and role enforcement with an isolated account.
+
 Status: **PLAN ONLY — NOT EXECUTED AGAINST PRODUCTION**
 
 Run this plan first in a non-production Preview environment with isolated

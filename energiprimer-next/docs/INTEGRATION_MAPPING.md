@@ -1,5 +1,11 @@
 # Laravel Audit — Integration Mapping
 
+> HISTORICAL / NON-ACTIVE FOR THE NEXT.JS APP (Phase 6C, 2026-09-02): This
+> document records the former Laravel integration surface. Its mail and
+> account-recovery references are evidence only, not current runtime
+> configuration. The current Next.js environment template contains placeholders
+> only and is authoritative for active names.
+
 ## 1. Google Sheets API
 
 **Status: aktif untuk dashboard.** `GoogleSheetsDataSource` memakai `google/apiclient` `v2.15.0` dan Google Sheets API v4 dengan scope read-only. Binding interface dilakukan di `AppServiceProvider`:
@@ -48,11 +54,14 @@ Target Next perlu memilih salah satu pola berikut; keputusan belum dibuat:
 
 **NEEDS REVIEW:** target deployment, connection pooling, migrasi schema existing, dan source of truth.
 
-## 3. Mail / password reset
+## 3. Historical Laravel mail / password reset
 
 `ForgotPasswordController` memakai native Laravel password broker dan `Password::sendResetLink`. `.env.example` default `MAIL_MAILER=log`, sedangkan opsi SMTP, SES, Postmark, Resend, dan sendmail tersedia di config.
 
-Service yang benar-benar dipanggil source adalah password reset; tidak ditemukan custom Mailable. Target Next perlu memilih provider dan mekanisme token. **NEEDS REVIEW**.
+Service yang benar-benar dipanggil source adalah password reset; tidak ditemukan
+custom Mailable. This was a Laravel finding. The Next.js Resend/recovery flow
+was decommissioned in Phase 6C; do not use this section to provision mail
+variables or routes.
 
 ## 4. Frontend build dan asset
 

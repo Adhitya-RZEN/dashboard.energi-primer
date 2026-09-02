@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
 import { publicEnv } from "@/lib/env";
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
   description: "Foundation aplikasi dashboard Energi Primer.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="id" className="h-full antialiased">
       <body className="min-h-full">{children}</body>

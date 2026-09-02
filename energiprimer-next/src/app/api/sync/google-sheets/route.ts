@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { isSyncAllowedEnvironment } from "@/lib/deployment-environment";
+import { GoogleSheetsIntegrationError } from "@/lib/google-sheets";
 import { runGoogleSheetsIncrementalSync } from "@/services/google-sheets/sync/engine";
+import { classifySyncError } from "@/services/google-sheets/sync/error-classification";
 import { isAuthorizedCronRequest } from "@/services/google-sheets/sync/cron-auth";
 
 export const runtime = "nodejs";
@@ -14,7 +17,19 @@ function unauthorized() {
   );
 }
 
+function disabledForDeploymentEnvironment() {
+  return NextResponse.json(
+    {
+      status: "DISABLED",
+      message: "Synchronization is disabled for this deployment environment.",
+    },
+    { status: 403 },
+  );
+}
+
 async function handle(request: Request) {
+  if (!isSyncAllowedEnvironment()) return disabledForDeploymentEnvironment();
+
   if (!process.env.CRON_SECRET)
     return NextResponse.json(
       { status: "NOT_CONFIGURED", message: "Synchronization is not configured." },
@@ -28,6 +43,8 @@ async function handle(request: Request) {
       // Discovery is broad, but cron admits only valid BB worksheets after
       // Juli26-BB whose period is due and whose schema matches Juli26-BB.
       scope: "automatic",
+      // The deployment gate above is the explicit boundary for the route's
+      // remote-capable write path. The CLI keeps its local-only guard.
       allowNonLocalDatabase: true,
     });
     return NextResponse.json({
@@ -39,7 +56,11 @@ async function handle(request: Request) {
       skipped: result.skipped,
       failed: result.failed,
     });
-  } catch {
+  } catch (error) {
+    const safeCategory = error instanceof GoogleSheetsIntegrationError
+      ? `google_sheets_${error.code}`
+      : `sync_${classifySyncError(error).toLocaleLowerCase("en-US")}`;
+    console.error("[google-sheets-sync]", safeCategory);
     return NextResponse.json(
       { status: "FAILED", message: "Synchronization failed." },
       { status: 500 },

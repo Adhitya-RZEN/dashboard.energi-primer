@@ -1,4 +1,5 @@
 import { encode } from "next-auth/jwt";
+import { safeErrorCategory } from "./safe-error.mjs";
 
 const baseUrl = (
   process.env.AUTH_TEST_BASE_URL || "http://localhost:3000"
@@ -189,19 +190,6 @@ try {
     "Non-admin role was not redirected to login",
   );
 
-  const forgotPage = await request("/forgot-password");
-  assert(
-    forgotPage.status === 200,
-    `Forgot password page returned ${forgotPage.status}`,
-  );
-  const resetPage = await request(
-    "/reset-password/invalid-token?email=unknown%40example.com",
-  );
-  assert(
-    resetPage.status === 200,
-    `Reset password page returned ${resetPage.status}`,
-  );
-
   console.log(
     JSON.stringify(
       {
@@ -212,8 +200,6 @@ try {
           "valid admin login creates a session and opens dashboard",
           "logout invalidates session cookie",
           "operator role is rejected by authorization boundary",
-          "forgot-password page available",
-          "reset-password page available",
         ],
         roleUnauthorized:
           "authorization callback tested with a signed operator-role session; no user record was changed",
@@ -223,9 +209,7 @@ try {
     ),
   );
 } catch (error) {
-  console.error(
-    "Authentication verification failed:",
-    error instanceof Error ? error.message : error,
-  );
+  console.error("Authentication verification failed.");
+  console.error(`Category: ${safeErrorCategory(error)}`);
   process.exitCode = 1;
 }

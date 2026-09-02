@@ -6,13 +6,22 @@ import { PrismaClient } from "@prisma/client";
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptsDirectory, "..");
-const schemaPath = path.join(projectDirectory, "prisma", "schema.prisma");
-const artifactPath = path.join(
-  projectDirectory,
-  "docs",
-  "SUPABASE_PRODUCTION_SCHEMA_BASELINE_DESIGN.sql",
-);
 const expectedMigrationName = "20260901130000_production_schema_baseline";
+const expectEmptyData = process.argv.includes("--expect-empty");
+const schemaPath = path.join(
+  projectDirectory,
+  "prisma",
+  "production",
+  "schema.prisma",
+);
+const migrationPath = path.join(
+  projectDirectory,
+  "prisma",
+  "production",
+  "migrations",
+  expectedMigrationName,
+  "migration.sql",
+);
 
 function parseModelTables(schema) {
   return [...schema.matchAll(/model\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g)].map(
@@ -142,7 +151,10 @@ if (!process.env.SUPABASE_DIRECT_URL) {
   result.failures.push("target is not an approved Direct Connection shape");
 } else {
   const schema = fs.readFileSync(schemaPath, "utf8");
-  const artifact = fs.readFileSync(artifactPath, "utf8");
+  const artifact = fs
+    .readFileSync(migrationPath, "utf8")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
   const expectedModelTables = parseModelTables(schema);
   const parsedArtifact = parseArtifact(artifact);
   const artifactMarker = artifact.indexOf("-- CreateSchema");
@@ -349,8 +361,11 @@ if (!process.env.SUPABASE_DIRECT_URL) {
       totalRows: Object.values(rowCounts).reduce((sum, count) => sum + count, 0),
       nonEmptyTables,
       allApplicationTablesEmpty: nonEmptyTables.length === 0,
+      expectation: expectEmptyData ? "EMPTY" : "POPULATED_ALLOWED",
     };
-    if (nonEmptyTables.length > 0) result.failures.push("unexpected business rows found after schema migration");
+    if (expectEmptyData && nonEmptyTables.length > 0) {
+      result.failures.push("unexpected business rows found after schema migration");
+    }
     result.checks.biomassStockAbsent = !expectedTables.includes("biomass_stock");
     if (!result.checks.biomassStockAbsent) result.failures.push("BIOMASS_STOCK is unexpectedly present");
   } catch {
