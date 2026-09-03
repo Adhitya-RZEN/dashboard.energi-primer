@@ -43,6 +43,14 @@ import { GoogleSheetsIntegrationError } from "@/lib/google-sheets";
 import { withDatabaseRetry, withSyncRetry } from "./retry";
 import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/profiles";
 import { classifySyncError } from "./error-classification";
+import {
+  createSyncRequestId,
+  diagnosticDurationMs,
+  diagnosticNow,
+  emitSyncDiagnostic,
+  type SyncDiagnosticContext,
+} from "./diagnostic-core";
+import { safeSyncErrorDetails, withSyncDiagnostic } from "./diagnostics";
 
 export type SyncTriggerType = "manual" | "cron" | "verification";
 export type SyncRunStatus = "SUCCESS" | "PARTIAL" | "FAILED" | "LOCKED";
@@ -53,6 +61,7 @@ export type IncrementalSyncOptions = {
   worksheetKey?: string;
   scope?: "current" | "all" | "automatic";
   allowNonLocalDatabase?: boolean;
+  requestId?: string;
 };
 
 export type WorksheetSyncResult = {
@@ -263,6 +272,9 @@ async function syncWorksheet(
     worksheetKey: worksheet.worksheetKey,
     worksheetTitle: worksheet.worksheetTitle,
   };
+  const diagnostic: SyncDiagnosticContext | undefined = options.requestId
+    ? { requestId: options.requestId }
+    : undefined;
   if (!parseBBWorksheetName(worksheet.worksheetTitle)) {
     await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
     return {
@@ -278,11 +290,21 @@ async function syncWorksheet(
   }
 
   let readResult: DynamicWorksheetReadResult;
+  const worksheetReadStartedAt = diagnosticNow();
   try {
     readResult = await withSyncRetry(() =>
       readAndParseDynamicWorksheet(worksheet.worksheetTitle),
     );
   } catch (error) {
+    if (diagnostic) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "worksheet_processing",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(worksheetReadStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+    }
     await markWorksheetFailure(worksheet.id, "ERROR");
     return {
       ...base,
@@ -402,20 +424,40 @@ async function syncWorksheet(
   const writePlan = filterImportPlanToSourceKeys(plan, changedKeys);
   try {
     if (changedKeys.size > 0) {
-      await withDatabaseRetry(() => commitGoogleSheetsImportPlan(writePlan, {
-        allowNonLocalDatabase: options.allowNonLocalDatabase === true,
-        source: "google_sheets_sync",
-      }));
+      await withSyncDiagnostic(
+        diagnostic,
+        "import_transaction",
+        () =>
+          withDatabaseRetry(() =>
+            commitGoogleSheetsImportPlan(writePlan, {
+              allowNonLocalDatabase: options.allowNonLocalDatabase === true,
+              source: "google_sheets_sync",
+            }),
+          ),
+      );
+    } else if (diagnostic) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "import_transaction",
+        status: "PASS",
+        durationMs: 0,
+        errorCode: "NOT_REQUIRED",
+      });
     }
-    await persistRowStates({
-      worksheetId: worksheet.id,
-      worksheetContentHash: contentHashForStagingRows(plan.stagingRows),
-      worksheetSchemaHash: schemaSnapshot.hash,
-      worksheetSchemaSnapshot: JSON.stringify(schemaSnapshot),
-      rowCount: plan.stagingRows.length,
-      rows: classification.changes,
-      now: new Date(),
-    });
+    await withSyncDiagnostic(
+      diagnostic,
+      "row_state_transaction",
+      () =>
+        persistRowStates({
+          worksheetId: worksheet.id,
+          worksheetContentHash: contentHashForStagingRows(plan.stagingRows),
+          worksheetSchemaHash: schemaSnapshot.hash,
+          worksheetSchemaSnapshot: JSON.stringify(schemaSnapshot),
+          rowCount: plan.stagingRows.length,
+          rows: classification.changes,
+          now: new Date(),
+        }),
+    );
   } catch (error) {
     await markWorksheetFailure(worksheet.id, "ERROR");
     return {
@@ -444,11 +486,39 @@ async function syncWorksheet(
 export async function runGoogleSheetsIncrementalSync(
   options: IncrementalSyncOptions = {},
 ): Promise<IncrementalSyncResult> {
-  const discovery = await withSyncRetry(() =>
-    discoverGoogleSheetsWorksheets(),
+  const requestId = options.requestId ?? createSyncRequestId();
+  const syncOptions = { ...options, requestId };
+  const diagnostic: SyncDiagnosticContext = { requestId };
+  const discovery = await withSyncRetry((attempt) =>
+    discoverGoogleSheetsWorksheets({ requestId, attempt }),
   );
   const sourceId = BigInt(discovery.sourceId);
-  const lease = await acquireSyncSourceLease(sourceId);
+  const leaseStartedAt = diagnosticNow();
+  let lease: Awaited<ReturnType<typeof acquireSyncSourceLease>>;
+  try {
+    lease = await acquireSyncSourceLease(sourceId);
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "source_lease",
+      status: lease ? "PASS" : "FAIL",
+      durationMs: diagnosticDurationMs(leaseStartedAt),
+      ...(lease
+        ? {}
+        : {
+            errorCategory: "CONCURRENCY",
+            errorCode: "NOT_ACQUIRED",
+          }),
+    });
+  } catch (error) {
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "source_lease",
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(leaseStartedAt),
+      ...safeSyncErrorDetails(error),
+    });
+    throw error;
+  }
   if (!lease) {
     return {
       status: "LOCKED",
@@ -465,17 +535,28 @@ export async function runGoogleSheetsIncrementalSync(
 
   let syncRunId: bigint | null = null;
   const startedAt = Date.now();
+  const diagnosticStartedAt = diagnosticNow();
+  let fallbackStage:
+    | "sync_run_create"
+    | "worksheet_processing"
+    | "sync_run_finalize" = "sync_run_create";
   const worksheetResults: WorksheetSyncResult[] = [];
   try {
-    const syncRun = await prisma.syncRun.create({
-      data: {
-        sourceId,
-        triggerType: options.triggerType ?? "manual",
-        status: "RUNNING",
-      },
-      select: { id: true },
-    });
+    const syncRun = await withSyncDiagnostic(
+      diagnostic,
+      "sync_run_create",
+      () =>
+        prisma.syncRun.create({
+          data: {
+            sourceId,
+            triggerType: syncOptions.triggerType ?? "manual",
+            status: "RUNNING",
+          },
+          select: { id: true },
+        }),
+    );
     syncRunId = syncRun.id;
+    fallbackStage = "worksheet_processing";
     const source = await prisma.syncSource.findUnique({
       where: { id: sourceId },
       select: { id: true },
@@ -485,7 +566,7 @@ export async function runGoogleSheetsIncrementalSync(
       where: { sourceId: source.id },
       orderBy: { worksheetTitle: "asc" },
     });
-    const selected = selectedWorksheets(worksheets, options);
+    const selected = selectedWorksheets(worksheets, syncOptions);
     const canonicalCandidates = preferredWorksheetsByPeriod(
       worksheets.filter((worksheet) => {
         const period = parseBBWorksheetName(worksheet.worksheetTitle);
@@ -498,15 +579,82 @@ export async function runGoogleSheetsIncrementalSync(
           worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
           BB_CANONICAL_WORKSHEET.toLocaleLowerCase("en-US"),
       ) ?? canonicalCandidates[0] ?? null;
-    if ((options.worksheetKey || options.worksheetTitle) && selected.length !== 1) {
+    if (
+      (syncOptions.worksheetKey || syncOptions.worksheetTitle) &&
+      selected.length !== 1
+    ) {
       throw new Error("Requested worksheet is not uniquely registered.");
     }
+    if (selected.length === 0) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "worksheet_processing",
+        status: "PASS",
+        durationMs: 0,
+        errorCode: "NOT_REQUIRED",
+      });
+    }
     for (const worksheet of selected) {
-      if (!(await renewSyncSourceLease(sourceId, lease.token)))
-        throw new Error("Synchronization lease was lost.");
-      worksheetResults.push(
-        await syncWorksheet(worksheet, options, canonicalWorksheet?.schemaSnapshot ?? null),
-      );
+      const renewStartedAt = diagnosticNow();
+      let renewed: Awaited<ReturnType<typeof renewSyncSourceLease>>;
+      try {
+        renewed = await renewSyncSourceLease(sourceId, lease.token);
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "source_lease",
+          status: renewed ? "PASS" : "FAIL",
+          durationMs: diagnosticDurationMs(renewStartedAt),
+          ...(renewed
+            ? {}
+            : {
+                errorCategory: "CONCURRENCY",
+                errorCode: "NOT_RENEWED",
+              }),
+        });
+      } catch (error) {
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "source_lease",
+          status: "FAIL",
+          durationMs: diagnosticDurationMs(renewStartedAt),
+          ...safeSyncErrorDetails(error),
+        });
+        throw error;
+      }
+      if (!renewed) throw new Error("Synchronization lease was lost.");
+      const worksheetStartedAt = diagnosticNow();
+      try {
+        const worksheetResult = await syncWorksheet(
+          worksheet,
+          syncOptions,
+          canonicalWorksheet?.schemaSnapshot ?? null,
+        );
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "worksheet_processing",
+          status: worksheetResult.status === "SUCCESS" ? "PASS" : "FAIL",
+          durationMs: diagnosticDurationMs(worksheetStartedAt),
+          ...(worksheetResult.status === "SUCCESS"
+            ? {}
+            : {
+                errorCategory:
+                  worksheetResult.status === "SCHEMA_REVIEW"
+                    ? "SCHEMA"
+                    : "SYNC",
+                errorCode: worksheetResult.status,
+              }),
+        });
+        worksheetResults.push(worksheetResult);
+      } catch (error) {
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "worksheet_processing",
+          status: "FAIL",
+          durationMs: diagnosticDurationMs(worksheetStartedAt),
+          ...safeSyncErrorDetails(error),
+        });
+        throw error;
+      }
     }
 
     const rowsScanned = worksheetResults.reduce(
@@ -531,27 +679,33 @@ export async function runGoogleSheetsIncrementalSync(
     );
     const status: SyncRunStatus =
       failed === 0 ? "SUCCESS" : failed < selected.length ? "PARTIAL" : "FAILED";
-    await prisma.syncRun.update({
-      where: { id: syncRun.id },
-      data: {
-        status,
-        finishedAt: new Date(),
-        worksheetsScanned: selected.length,
-        rowsScanned,
-        inserted,
-        updated,
-        skipped,
-        failed,
-        durationMs: Date.now() - startedAt,
-        errorSummary:
-          failed > 0
-            ? worksheetResults
-                .filter((result) => result.error)
-                .map((result) => result.error)
-                .join("; ")
-            : null,
-      },
-    });
+    fallbackStage = "sync_run_finalize";
+    await withSyncDiagnostic(
+      diagnostic,
+      "sync_run_finalize",
+      () =>
+        prisma.syncRun.update({
+          where: { id: syncRun.id },
+          data: {
+            status,
+            finishedAt: new Date(),
+            worksheetsScanned: selected.length,
+            rowsScanned,
+            inserted,
+            updated,
+            skipped,
+            failed,
+            durationMs: Date.now() - startedAt,
+            errorSummary:
+              failed > 0
+                ? worksheetResults
+                    .filter((result) => result.error)
+                    .map((result) => result.error)
+                    .join("; ")
+                : null,
+          },
+        }),
+    );
     return {
       status,
       syncRunId: syncRun.id.toString(),
@@ -565,7 +719,13 @@ export async function runGoogleSheetsIncrementalSync(
     };
   } catch (error) {
     const safeError = safeErrorMessage(error);
-    console.error("[google-sheets-sync]", safeError);
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: fallbackStage,
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(diagnosticStartedAt),
+      ...safeSyncErrorDetails(error),
+    });
     if (syncRunId !== null) {
       await prisma.syncRun.update({
         where: { id: syncRunId },
@@ -580,7 +740,11 @@ export async function runGoogleSheetsIncrementalSync(
     }
     throw error;
   } finally {
-    await releaseSyncSourceLease(sourceId, lease.token);
+    await withSyncDiagnostic(
+      diagnostic,
+      "source_lease",
+      () => releaseSyncSourceLease(sourceId, lease.token),
+    );
   }
 }
 

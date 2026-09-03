@@ -5,10 +5,18 @@ import { createHash } from "node:crypto";
 import {
   getGoogleSheetsConfig,
   listGoogleSheetsWorksheets,
+  type GoogleSheetsConfig,
   type GoogleSheetsWorksheetMetadata,
 } from "@/lib/google-sheets";
 import { prisma } from "@/lib/prisma";
 import { normalizeWorksheetName } from "@/services/google-sheets/dynamic/worksheet-resolver";
+import {
+  diagnosticDurationMs,
+  diagnosticNow,
+  emitSyncDiagnostic,
+  type SyncDiagnosticContext,
+} from "./diagnostic-core";
+import { safeSyncErrorDetails } from "./diagnostics";
 
 export const SYNC_WORKSHEET_STATUSES = [
   "DISCOVERED",
@@ -112,95 +120,145 @@ function statusForExistingWorksheet(status: string | undefined): SyncWorksheetSt
   return "DISCOVERED";
 }
 
-export async function discoverGoogleSheetsWorksheets() {
-  const config = getGoogleSheetsConfig();
+export async function discoverGoogleSheetsWorksheets(
+  context?: SyncDiagnosticContext,
+) {
+  const configStartedAt = diagnosticNow();
+  let config: GoogleSheetsConfig;
+  try {
+    config = getGoogleSheetsConfig();
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "google_config",
+        status: "PASS",
+        durationMs: diagnosticDurationMs(configStartedAt),
+      });
+    }
+  } catch (error) {
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "google_config",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(configStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+    }
+    throw error;
+  }
   // The metadata request is deliberately completed before any database write.
-  const current = await listGoogleSheetsWorksheets();
+  const current = await listGoogleSheetsWorksheets({
+    config,
+    diagnostic: context,
+  });
   const now = new Date();
   const sourceKey = stableGoogleSheetsSourceKey(config.spreadsheetId);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const source = await tx.syncSource.upsert({
-      where: { sourceKey },
-      create: {
-        sourceKey,
-        provider: "google_sheets",
-        externalId: config.spreadsheetId,
-        status: "ACTIVE",
-        lastDiscoveredAt: now,
-      },
-      update: {
-        externalId: config.spreadsheetId,
-        status: "ACTIVE",
-        lastDiscoveredAt: now,
-      },
-      select: { id: true },
-    });
-    const previous = await tx.syncWorksheet.findMany({
-      where: { sourceId: source.id },
-      select: {
-        worksheetKey: true,
-        worksheetTitle: true,
-        status: true,
-      },
-    });
-    const diff = classifyWorksheetDiscovery(previous, current);
-    const previousByKey = new Map(
-      previous.map((worksheet) => [worksheet.worksheetKey, worksheet]),
-    );
-
-    for (const worksheet of current) {
-      const existing = previousByKey.get(worksheet.sheetId);
-      await tx.syncWorksheet.upsert({
-        where: {
-          sourceId_worksheetKey: {
-            sourceId: source.id,
-            worksheetKey: worksheet.sheetId,
-          },
-        },
+  const transactionStartedAt = diagnosticNow();
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const source = await tx.syncSource.upsert({
+        where: { sourceKey },
         create: {
-          sourceId: source.id,
-          worksheetKey: worksheet.sheetId,
-          worksheetTitle: worksheet.title,
-          normalizedTitle: normalizeWorksheetName(worksheet.title),
-          status: "DISCOVERED",
-          firstSeenAt: now,
-          lastSeenAt: now,
-          rowCount: worksheet.rowCount ?? 0,
+          sourceKey,
+          provider: "google_sheets",
+          externalId: config.spreadsheetId,
+          status: "ACTIVE",
+          lastDiscoveredAt: now,
         },
         update: {
-          worksheetTitle: worksheet.title,
-          normalizedTitle: normalizeWorksheetName(worksheet.title),
-          status: statusForExistingWorksheet(existing?.status),
-          lastSeenAt: now,
-          rowCount: worksheet.rowCount ?? 0,
+          externalId: config.spreadsheetId,
+          status: "ACTIVE",
+          lastDiscoveredAt: now,
+        },
+        select: { id: true },
+      });
+      const previous = await tx.syncWorksheet.findMany({
+        where: { sourceId: source.id },
+        select: {
+          worksheetKey: true,
+          worksheetTitle: true,
+          status: true,
         },
       });
-    }
+      const diff = classifyWorksheetDiscovery(previous, current);
+      const previousByKey = new Map(
+        previous.map((worksheet) => [worksheet.worksheetKey, worksheet]),
+      );
 
-    for (const worksheet of previous) {
-      if (!current.some((item) => item.sheetId === worksheet.worksheetKey)) {
-        await tx.syncWorksheet.update({
+      for (const worksheet of current) {
+        const existing = previousByKey.get(worksheet.sheetId);
+        await tx.syncWorksheet.upsert({
           where: {
             sourceId_worksheetKey: {
               sourceId: source.id,
-              worksheetKey: worksheet.worksheetKey,
+              worksheetKey: worksheet.sheetId,
             },
           },
-          data: { status: "MISSING" },
+          create: {
+            sourceId: source.id,
+            worksheetKey: worksheet.sheetId,
+            worksheetTitle: worksheet.title,
+            normalizedTitle: normalizeWorksheetName(worksheet.title),
+            status: "DISCOVERED",
+            firstSeenAt: now,
+            lastSeenAt: now,
+            rowCount: worksheet.rowCount ?? 0,
+          },
+          update: {
+            worksheetTitle: worksheet.title,
+            normalizedTitle: normalizeWorksheetName(worksheet.title),
+            status: statusForExistingWorksheet(existing?.status),
+            lastSeenAt: now,
+            rowCount: worksheet.rowCount ?? 0,
+          },
         });
       }
+
+      for (const worksheet of previous) {
+        if (!current.some((item) => item.sheetId === worksheet.worksheetKey)) {
+          await tx.syncWorksheet.update({
+            where: {
+              sourceId_worksheetKey: {
+                sourceId: source.id,
+                worksheetKey: worksheet.worksheetKey,
+              },
+            },
+            data: { status: "MISSING" },
+          });
+        }
+      }
+
+      return {
+        sourceId: source.id.toString(),
+        sourceKey,
+        worksheetCount: current.length,
+        diff,
+      };
+    }, { maxWait: 10_000, timeout: 60_000 });
+
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "discovery_transaction",
+        status: "PASS",
+        durationMs: diagnosticDurationMs(transactionStartedAt),
+      });
     }
-
-    return {
-      sourceId: source.id.toString(),
-      sourceKey,
-      worksheetCount: current.length,
-      diff,
-    };
-  }, { maxWait: 10_000, timeout: 60_000 });
-
-  return result;
+    return result;
+  } catch (error) {
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "discovery_transaction",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(transactionStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+    }
+    throw error;
+  }
 }
 
 export async function getSyncSourceByKey(sourceKey: string) {

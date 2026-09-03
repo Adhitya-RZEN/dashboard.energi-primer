@@ -2,6 +2,15 @@ import { createSign } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import "server-only";
 
+import {
+  diagnosticDurationMs,
+  diagnosticNow,
+  emitSyncDiagnostic,
+  safeGoogleDiagnostic,
+  withGoogleDiagnostic,
+  type SyncDiagnosticContext,
+} from "@/services/google-sheets/sync/diagnostic-core";
+
 // This module imports Node-only APIs and must remain reachable only from server code.
 
 export type GoogleSheetCell = string | number | null;
@@ -406,104 +415,155 @@ export async function readGoogleSheetsRange(
  * the stable identity used by the synchronization registry; title is treated
  * as mutable display metadata.
  */
-export async function listGoogleSheetsWorksheets(): Promise<
+export type GoogleSheetsWorksheetListOptions = {
+  config?: GoogleSheetsConfig;
+  diagnostic?: SyncDiagnosticContext;
+};
+
+export async function listGoogleSheetsWorksheets(
+  options: GoogleSheetsWorksheetListOptions = {},
+): Promise<
   GoogleSheetsWorksheetMetadata[]
 > {
-  const config = getGoogleSheetsConfig();
+  const config = options.config ?? getGoogleSheetsConfig();
+  const diagnostic = options.diagnostic;
   const cacheKey = config.spreadsheetId;
   const cached = worksheetMetadataCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.result;
+  if (cached && cached.expiresAt > Date.now()) {
+    if (diagnostic) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "google_metadata",
+        status: "PASS",
+        durationMs: 0,
+        errorCode: "CACHE_HIT",
+      });
+    }
+    return cached.result;
+  }
   if (cached) worksheetMetadataCache.delete(cacheKey);
 
-  const credentials = await readServiceAccount(config);
-  const token = await getAccessToken(credentials);
+  const token = await withGoogleDiagnostic(
+    diagnostic,
+    "google_oauth",
+    async () => {
+      const credentials = await readServiceAccount(config);
+      return getAccessToken(credentials);
+    },
+  );
   const fields =
     "sheets(properties(sheetId,title,index,sheetType,gridProperties(rowCount,columnCount)))";
-  const url = `${SHEETS_API_URL}/${encodeURIComponent(config.spreadsheetId)}?includeGridData=false&fields=${encodeURIComponent(fields)}`;
-  const response = await fetchWithTimeout(url, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-
-  if (!response.ok) {
-    const code = classifyGoogleSheetsStatus(response.status);
-    if (code === "authentication") accessToken = null;
-    throw new GoogleSheetsIntegrationError(
-      code,
-      "Google Sheets metadata request failed.",
-      { status: response.status },
-    );
-  }
-
-  let body: unknown;
+  const metadataStartedAt = diagnosticNow();
   try {
-    body = await response.json();
-  } catch {
-    throw new GoogleSheetsIntegrationError(
-      "malformed_response",
-      "Google Sheets metadata response is invalid.",
-    );
-  }
+    const url = `${SHEETS_API_URL}/${encodeURIComponent(config.spreadsheetId)}?includeGridData=false&fields=${encodeURIComponent(fields)}`;
+    const response = await fetchWithTimeout(url, {
+      headers: { authorization: `Bearer ${token}` },
+    });
 
-  if (!isRecord(body) || body.sheets === undefined) {
-    throw new GoogleSheetsIntegrationError(
-      "malformed_response",
-      "Google Sheets metadata response is incomplete.",
-    );
-  }
-
-  if (!Array.isArray(body.sheets)) {
-    throw new GoogleSheetsIntegrationError(
-      "malformed_response",
-      "Google Sheets metadata has an invalid worksheet list.",
-    );
-  }
-
-  const worksheets: GoogleSheetsWorksheetMetadata[] = [];
-  for (const sheet of body.sheets) {
-    if (!isRecord(sheet) || !isRecord(sheet.properties)) {
+    if (!response.ok) {
+      const code = classifyGoogleSheetsStatus(response.status);
+      if (code === "authentication") accessToken = null;
       throw new GoogleSheetsIntegrationError(
-        "malformed_response",
-        "Google Sheets metadata contains an invalid worksheet.",
+        code,
+        "Google Sheets metadata request failed.",
+        { status: response.status },
       );
     }
 
-    const properties = sheet.properties;
-    const rawSheetId = properties.sheetId;
-    const title = properties.title;
-    if (
-      (typeof rawSheetId !== "number" && typeof rawSheetId !== "string") ||
-      typeof title !== "string" ||
-      !title.trim()
-    ) {
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
       throw new GoogleSheetsIntegrationError(
         "malformed_response",
-        "Google Sheets worksheet metadata is incomplete.",
+        "Google Sheets metadata response is invalid.",
       );
     }
 
-    const gridProperties = isRecord(properties.gridProperties)
-      ? properties.gridProperties
-      : null;
-    const numberOrNull = (value: unknown) =>
-      typeof value === "number" && Number.isFinite(value) ? value : null;
-    worksheets.push({
-      sheetId: String(rawSheetId),
-      title: title.trim(),
-      index: numberOrNull(properties.index),
-      sheetType:
-        typeof properties.sheetType === "string"
-          ? properties.sheetType
-          : null,
-      rowCount: numberOrNull(gridProperties?.rowCount),
-      columnCount: numberOrNull(gridProperties?.columnCount),
-    });
-  }
+    if (!isRecord(body) || body.sheets === undefined) {
+      throw new GoogleSheetsIntegrationError(
+        "malformed_response",
+        "Google Sheets metadata response is incomplete.",
+      );
+    }
 
-  if (config.cacheTtlSeconds > 0) {
-    worksheetMetadataCache.set(cacheKey, {
-      expiresAt: Date.now() + config.cacheTtlSeconds * 1000,
-      result: worksheets,
-    });
+    if (!Array.isArray(body.sheets)) {
+      throw new GoogleSheetsIntegrationError(
+        "malformed_response",
+        "Google Sheets metadata has an invalid worksheet list.",
+      );
+    }
+
+    const worksheets: GoogleSheetsWorksheetMetadata[] = [];
+    for (const sheet of body.sheets) {
+      if (!isRecord(sheet) || !isRecord(sheet.properties)) {
+        throw new GoogleSheetsIntegrationError(
+          "malformed_response",
+          "Google Sheets metadata contains an invalid worksheet.",
+        );
+      }
+
+      const properties = sheet.properties;
+      const rawSheetId = properties.sheetId;
+      const title = properties.title;
+      if (
+        (typeof rawSheetId !== "number" && typeof rawSheetId !== "string") ||
+        typeof title !== "string" ||
+        !title.trim()
+      ) {
+        throw new GoogleSheetsIntegrationError(
+          "malformed_response",
+          "Google Sheets worksheet metadata is incomplete.",
+        );
+      }
+
+      const gridProperties = isRecord(properties.gridProperties)
+        ? properties.gridProperties
+        : null;
+      const numberOrNull = (value: unknown) =>
+        typeof value === "number" && Number.isFinite(value) ? value : null;
+      worksheets.push({
+        sheetId: String(rawSheetId),
+        title: title.trim(),
+        index: numberOrNull(properties.index),
+        sheetType:
+          typeof properties.sheetType === "string"
+            ? properties.sheetType
+            : null,
+        rowCount: numberOrNull(gridProperties?.rowCount),
+        columnCount: numberOrNull(gridProperties?.columnCount),
+      });
+    }
+
+    if (config.cacheTtlSeconds > 0) {
+      worksheetMetadataCache.set(cacheKey, {
+        expiresAt: Date.now() + config.cacheTtlSeconds * 1000,
+        result: worksheets,
+      });
+    }
+    if (diagnostic) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "google_metadata",
+        status: "PASS",
+        durationMs: diagnosticDurationMs(metadataStartedAt),
+      });
+    }
+    return worksheets;
+  } catch (error) {
+    const details = safeGoogleDiagnostic(error) ?? {
+      category: "UNKNOWN",
+      errorCode: "UNKNOWN",
+    };
+    if (diagnostic) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "google_metadata",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(metadataStartedAt),
+        ...details,
+      });
+    }
+    throw error;
   }
-  return worksheets;
 }
