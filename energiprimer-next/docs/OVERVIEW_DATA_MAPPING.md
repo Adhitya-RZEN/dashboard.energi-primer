@@ -21,7 +21,7 @@ Data source dipilih sebagai berikut:
 - Realisasi kumulatif biomassa: indeks baris `48`, spreadsheet row 59.
 - Indeks kolom di bawah adalah relatif terhadap kolom B (`B = 0`).
 
-Filter `day` memilih baris tanggal yang cocok. Bila tidak ada, Laravel memilih baris harian terakhir yang memiliki tanggal. Tanpa `day`, Laravel memakai tanggal server (`UTC` pada konfigurasi Laravel). Next.js mempertahankan perilaku tersebut.
+Filter `day` memilih baris tanggal yang cocok. Bila tidak ada, Laravel memilih baris harian terakhir yang memiliki tanggal. Pada dashboard Next.js, tanggal default dan batas atas data mengikuti `real-world calendar date - 1 calendar day` pada timezone operasional `Asia/Makassar`; hasil tersebut tidak bergantung pada tanggal terbaru di database atau Google Sheets.
 
 ## KPI mapping
 
@@ -71,7 +71,7 @@ Next.js merender chart menggunakan Recharts pada client boundary khusus chart. P
 ## Filter, fallback, dan state
 
 - Query: `month`, `year`, `day` pada URL `/dashboard`.
-- Input dinormalisasi dan dibatasi pada bulan valid, tahun 2024 sampai current year + 1, serta jumlah hari valid pada bulan tersebut.
+- Input dinormalisasi dan dibatasi pada bulan valid, tahun 2024 sampai tahun cutoff, serta jumlah hari valid sampai `dashboardCutoffDate` pada bulan cutoff.
 - Jika Google worksheet periode yang diminta gagal dibaca, adapter mencoba hingga 12 worksheet sebelumnya dan menampilkan `fallbackNotice`.
 - Jika PostgreSQL tidak memiliki baris pada periode yang diminta, service mencari bulan paling baru dalam jendela 12 bulan dan menampilkan notice.
 - Error koneksi/data service menghasilkan error state; data tidak diganti dengan dummy.

@@ -172,7 +172,12 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
           {period.fallbackNotice}
         </DashboardWarning>
       ) : null}
-      <DashboardFilter data={data} action="/dashboard" themeKey="overview" />
+      <DashboardFilter
+        key={`${data.period.dashboardCutoffDate}-${data.query.year}-${data.query.month}-${data.query.day ?? "all"}`}
+        data={data}
+        action="/dashboard"
+        themeKey="overview"
+      />
       {!data.hasData ? <OverviewEmptyState /> : null}
 
       <section aria-labelledby="summary-title" className="space-y-4">

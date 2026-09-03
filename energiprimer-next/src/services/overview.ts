@@ -7,6 +7,11 @@ import {
   isGoogleSheetsOverviewConfigured,
 } from "@/services/google-sheets-overview";
 import { getPostgresOverviewData } from "@/services/overview-postgres";
+import {
+  constrainOverviewQuery,
+  defaultOverviewQuery,
+  getDashboardCutoffDate,
+} from "@/lib/dashboard-date";
 import type {
   OverviewData,
   OverviewQuery,
@@ -17,27 +22,22 @@ export function normalizeOverviewQuery(input: {
   year?: string;
   day?: string;
 }): OverviewQuery {
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
+  const cutoffDate = getDashboardCutoffDate();
+  const defaultQuery = defaultOverviewQuery(cutoffDate);
   const monthValue = Number.parseInt(input.month ?? "", 10);
   const yearValue = Number.parseInt(input.year ?? "", 10);
   const dayValue =
     input.day === undefined || input.day === ""
       ? null
       : Number.parseInt(input.day, 10);
-  const month = Number.isFinite(monthValue)
-    ? Math.min(12, Math.max(1, monthValue))
-    : now.getUTCMonth() + 1;
-  const year = Number.isFinite(yearValue)
-    ? Math.min(currentYear + 1, Math.max(2024, yearValue))
-    : currentYear;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const day =
-    dayValue === null || !Number.isFinite(dayValue)
-      ? null
-      : Math.min(daysInMonth, Math.max(1, dayValue));
-
-  return { month, year, day };
+  return constrainOverviewQuery(
+    {
+      month: Number.isFinite(monthValue) ? monthValue : defaultQuery.month,
+      year: Number.isFinite(yearValue) ? yearValue : defaultQuery.year,
+      day: dayValue,
+    },
+    cutoffDate,
+  );
 }
 
 export async function getPersistedOverviewQuery(input: {
@@ -59,6 +59,8 @@ export async function getPersistedOverviewQuery(input: {
 export async function getOverviewData(
   query: OverviewQuery,
 ): Promise<OverviewData> {
+  const dashboardCutoffDate = getDashboardCutoffDate();
+  const constrainedQuery = constrainOverviewQuery(query, dashboardCutoffDate);
   const configuredSource = process.env.DASHBOARD_DATA_SOURCE?.trim().toLowerCase();
   const useGoogle = configuredSource === "google";
 
@@ -71,5 +73,5 @@ export async function getOverviewData(
     return getGoogleSheetsOverviewData(query);
   }
 
-  return getPostgresOverviewData(query);
+  return getPostgresOverviewData(constrainedQuery, dashboardCutoffDate);
 }

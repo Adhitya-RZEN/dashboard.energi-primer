@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import type { OverviewData } from "@/types/overview";
+import { maxVisibleDayForMonth } from "@/lib/dashboard-date";
 
 import { getDashboardTheme, type DashboardThemeKey } from "./dashboard-themes";
 
@@ -34,16 +35,56 @@ export function DashboardFilter({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [selectedYear, setSelectedYear] = useState(String(data.query.year));
+  const [selectedMonth, setSelectedMonth] = useState(
+    String(data.query.month).padStart(2, "0"),
+  );
+  const [selectedDay, setSelectedDay] = useState(
+    data.query.day === null ? "" : String(data.query.day),
+  );
   const theme = getDashboardTheme(
     `/dashboard/${themeKey === "overview" ? "" : themeKey}`,
   );
-  const days = new Date(
-    Date.UTC(data.query.year, data.query.month, 0),
-  ).getUTCDate();
+  const cutoffDate = data.period.dashboardCutoffDate;
+  const cutoffYear = Number(cutoffDate.slice(0, 4));
+  const cutoffMonth = Number(cutoffDate.slice(5, 7));
+  const selectedYearNumber = Number(selectedYear) || data.query.year;
+  const selectedMonthNumber = Number(selectedMonth) || data.query.month;
+  const days = maxVisibleDayForMonth(
+    selectedYearNumber,
+    selectedMonthNumber,
+    cutoffDate,
+  );
+  const months = MONTHS.map((month, index) => [month, index] as const).filter(
+    ([, index]) =>
+      selectedYearNumber < cutoffYear || index + 1 <= cutoffMonth,
+  );
   const years = Array.from(
-    { length: new Date().getUTCFullYear() + 1 - 2024 + 1 },
-    (_, index) => new Date().getUTCFullYear() + 1 - index,
-  ).filter((year) => year >= 2024);
+    { length: Math.max(0, cutoffYear - 2024 + 1) },
+    (_, index) => cutoffYear - index,
+  );
+
+  function changeYear(value: string) {
+    const nextYear = Number(value);
+    setSelectedYear(value);
+    const maxMonth = nextYear === cutoffYear ? cutoffMonth : 12;
+    if (selectedMonthNumber > maxMonth) {
+      setSelectedMonth(String(maxMonth).padStart(2, "0"));
+      setSelectedDay("");
+    }
+  }
+
+  function changeMonth(value: string) {
+    setSelectedMonth(value);
+    const nextDays = maxVisibleDayForMonth(
+      selectedYearNumber,
+      Number(value),
+      cutoffDate,
+    );
+    if (selectedDay !== "" && Number(selectedDay) > nextDays) {
+      setSelectedDay("");
+    }
+  }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,7 +124,8 @@ export function DashboardFilter({
           Tanggal
           <select
             name="day"
-            defaultValue={data.query.day === null ? "" : String(data.query.day)}
+            value={selectedDay}
+            onChange={(event) => setSelectedDay(event.target.value)}
             className={`rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-current focus:ring-2 ${theme.text} ${theme.ring}`}
           >
             <option value="">Semua tanggal</option>
@@ -100,21 +142,24 @@ export function DashboardFilter({
           Bulan
           <select
             name="month"
-            defaultValue={String(data.query.month).padStart(2, "0")}
+            value={selectedMonth}
+            onChange={(event) => changeMonth(event.target.value)}
             className={`rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-current focus:ring-2 ${theme.text} ${theme.ring}`}
           >
-            {MONTHS.map((month, index) => (
-              <option key={month} value={String(index + 1).padStart(2, "0")}>
-                {month}
-              </option>
-            ))}
+            {months
+              .map(([month, index]) => (
+                <option key={month} value={String(index + 1).padStart(2, "0")}>
+                  {month}
+                </option>
+              ))}
           </select>
         </label>
         <label className="flex min-w-24 flex-1 flex-col gap-1 text-xs font-semibold text-slate-500 sm:flex-none">
           Tahun
           <select
             name="year"
-            defaultValue={String(data.query.year)}
+            value={selectedYear}
+            onChange={(event) => changeYear(event.target.value)}
             className={`rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-current focus:ring-2 ${theme.text} ${theme.ring}`}
           >
             {years.map((year) => (
