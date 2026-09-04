@@ -18,7 +18,7 @@ export type { SyncDiagnosticContext, SyncDiagnosticStage };
 export function safeSyncErrorDetails(error: unknown): SafeDiagnosticError {
   if (error instanceof GoogleSheetsIntegrationError) {
     return safeGoogleDiagnostic(error) ?? {
-      category: "UNKNOWN",
+      errorCategory: "UNKNOWN",
       errorCode: "UNKNOWN",
     };
   }
@@ -27,9 +27,9 @@ export function safeSyncErrorDetails(error: unknown): SafeDiagnosticError {
   const errorCode = safePrismaErrorCode(error);
   if (category === "DATABASE" && errorCode === "UNKNOWN" &&
       !isPrismaDiagnosticError(error)) {
-    return { category: "UNKNOWN", errorCode: "UNKNOWN" };
+    return { errorCategory: "UNKNOWN", errorCode: "UNKNOWN" };
   }
-  return { category, errorCode };
+  return { errorCategory: category, errorCode };
 }
 
 export async function withSyncDiagnostic<T>(

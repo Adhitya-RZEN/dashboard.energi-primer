@@ -22,11 +22,13 @@ import {
   contentHashForStagingRows,
 } from "./identity";
 import {
-  discoverGoogleSheetsWorksheets,
+  persistGoogleSheetsWorksheetDiscovery,
+  prepareGoogleSheetsWorksheetDiscovery,
   stableGoogleSheetsSourceKey,
 } from "./discovery";
 import {
   acquireSyncSourceLease,
+  ensureSyncSourceForDiscovery,
   releaseSyncSourceLease,
   renewSyncSourceLease,
 } from "./lease";
@@ -489,10 +491,43 @@ export async function runGoogleSheetsIncrementalSync(
   const requestId = options.requestId ?? createSyncRequestId();
   const syncOptions = { ...options, requestId };
   const diagnostic: SyncDiagnosticContext = { requestId };
-  const discovery = await withSyncRetry((attempt) =>
-    discoverGoogleSheetsWorksheets({ requestId, attempt }),
-  );
-  const sourceId = BigInt(discovery.sourceId);
+  const discoveryStartedAt = diagnosticNow();
+  let prepared: Awaited<
+    ReturnType<typeof prepareGoogleSheetsWorksheetDiscovery>
+  >;
+  try {
+    prepared = await withSyncRetry((attempt) =>
+      prepareGoogleSheetsWorksheetDiscovery({ requestId, attempt }),
+    );
+  } catch (error) {
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "discovery_total",
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(discoveryStartedAt),
+      ...safeSyncErrorDetails(error),
+    });
+    throw error;
+  }
+
+  let sourceId: bigint;
+  try {
+    sourceId = await ensureSyncSourceForDiscovery(
+      prepared.sourceKey,
+      prepared.externalId,
+      diagnostic,
+    );
+  } catch (error) {
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "discovery_total",
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(discoveryStartedAt),
+      ...safeSyncErrorDetails(error),
+    });
+    throw error;
+  }
+
   const leaseStartedAt = diagnosticNow();
   let lease: Awaited<ReturnType<typeof acquireSyncSourceLease>>;
   try {
@@ -517,9 +552,24 @@ export async function runGoogleSheetsIncrementalSync(
       durationMs: diagnosticDurationMs(leaseStartedAt),
       ...safeSyncErrorDetails(error),
     });
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "discovery_total",
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(discoveryStartedAt),
+      ...safeSyncErrorDetails(error),
+    });
     throw error;
   }
   if (!lease) {
+    emitSyncDiagnostic({
+      context: diagnostic,
+      stage: "discovery_total",
+      status: "FAIL",
+      durationMs: diagnosticDurationMs(discoveryStartedAt),
+      errorCategory: "CONCURRENCY",
+      errorCode: "NOT_ACQUIRED",
+    });
     return {
       status: "LOCKED",
       syncRunId: null,
@@ -533,212 +583,237 @@ export async function runGoogleSheetsIncrementalSync(
     };
   }
 
-  let syncRunId: bigint | null = null;
-  const startedAt = Date.now();
-  const diagnosticStartedAt = diagnosticNow();
-  let fallbackStage:
-    | "sync_run_create"
-    | "worksheet_processing"
-    | "sync_run_finalize" = "sync_run_create";
-  const worksheetResults: WorksheetSyncResult[] = [];
   try {
-    const syncRun = await withSyncDiagnostic(
-      diagnostic,
-      "sync_run_create",
-      () =>
-        prisma.syncRun.create({
-          data: {
-            sourceId,
-            triggerType: syncOptions.triggerType ?? "manual",
-            status: "RUNNING",
-          },
-          select: { id: true },
-        }),
-    );
-    syncRunId = syncRun.id;
-    fallbackStage = "worksheet_processing";
-    const source = await prisma.syncSource.findUnique({
-      where: { id: sourceId },
-      select: { id: true },
-    });
-    if (!source) throw new Error("Synchronization source registry not found.");
-    const worksheets = await prisma.syncWorksheet.findMany({
-      where: { sourceId: source.id },
-      orderBy: { worksheetTitle: "asc" },
-    });
-    const selected = selectedWorksheets(worksheets, syncOptions);
-    const canonicalCandidates = preferredWorksheetsByPeriod(
-      worksheets.filter((worksheet) => {
-        const period = parseBBWorksheetName(worksheet.worksheetTitle);
-        return period?.month === 7 && period.year === 2026;
-      }),
-    );
-    const canonicalWorksheet =
-      canonicalCandidates.find(
-        (worksheet) =>
-          worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
-          BB_CANONICAL_WORKSHEET.toLocaleLowerCase("en-US"),
-      ) ?? canonicalCandidates[0] ?? null;
-    if (
-      (syncOptions.worksheetKey || syncOptions.worksheetTitle) &&
-      selected.length !== 1
-    ) {
-      throw new Error("Requested worksheet is not uniquely registered.");
-    }
-    if (selected.length === 0) {
+    try {
+      await persistGoogleSheetsWorksheetDiscovery(
+        prepared,
+        sourceId,
+        diagnostic,
+      );
       emitSyncDiagnostic({
         context: diagnostic,
-        stage: "worksheet_processing",
+        stage: "discovery_total",
         status: "PASS",
-        durationMs: 0,
-        errorCode: "NOT_REQUIRED",
+        durationMs: diagnosticDurationMs(discoveryStartedAt),
       });
-    }
-    for (const worksheet of selected) {
-      const renewStartedAt = diagnosticNow();
-      let renewed: Awaited<ReturnType<typeof renewSyncSourceLease>>;
-      try {
-        renewed = await renewSyncSourceLease(sourceId, lease.token);
-        emitSyncDiagnostic({
-          context: diagnostic,
-          stage: "source_lease",
-          status: renewed ? "PASS" : "FAIL",
-          durationMs: diagnosticDurationMs(renewStartedAt),
-          ...(renewed
-            ? {}
-            : {
-                errorCategory: "CONCURRENCY",
-                errorCode: "NOT_RENEWED",
-              }),
-        });
-      } catch (error) {
-        emitSyncDiagnostic({
-          context: diagnostic,
-          stage: "source_lease",
-          status: "FAIL",
-          durationMs: diagnosticDurationMs(renewStartedAt),
-          ...safeSyncErrorDetails(error),
-        });
-        throw error;
-      }
-      if (!renewed) throw new Error("Synchronization lease was lost.");
-      const worksheetStartedAt = diagnosticNow();
-      try {
-        const worksheetResult = await syncWorksheet(
-          worksheet,
-          syncOptions,
-          canonicalWorksheet?.schemaSnapshot ?? null,
-        );
-        emitSyncDiagnostic({
-          context: diagnostic,
-          stage: "worksheet_processing",
-          status: worksheetResult.status === "SUCCESS" ? "PASS" : "FAIL",
-          durationMs: diagnosticDurationMs(worksheetStartedAt),
-          ...(worksheetResult.status === "SUCCESS"
-            ? {}
-            : {
-                errorCategory:
-                  worksheetResult.status === "SCHEMA_REVIEW"
-                    ? "SCHEMA"
-                    : "SYNC",
-                errorCode: worksheetResult.status,
-              }),
-        });
-        worksheetResults.push(worksheetResult);
-      } catch (error) {
-        emitSyncDiagnostic({
-          context: diagnostic,
-          stage: "worksheet_processing",
-          status: "FAIL",
-          durationMs: diagnosticDurationMs(worksheetStartedAt),
-          ...safeSyncErrorDetails(error),
-        });
-        throw error;
-      }
+    } catch (error) {
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: "discovery_total",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(discoveryStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+      throw error;
     }
 
-    const rowsScanned = worksheetResults.reduce(
-      (total, result) => total + result.rowsScanned,
-      0,
-    );
-    const inserted = worksheetResults.reduce(
-      (total, result) => total + result.inserted,
-      0,
-    );
-    const updated = worksheetResults.reduce(
-      (total, result) => total + result.updated,
-      0,
-    );
-    const skipped = worksheetResults.reduce(
-      (total, result) => total + result.skipped,
-      0,
-    );
-    const failed = worksheetResults.reduce(
-      (total, result) => total + result.failed,
-      0,
-    );
-    const status: SyncRunStatus =
-      failed === 0 ? "SUCCESS" : failed < selected.length ? "PARTIAL" : "FAILED";
-    fallbackStage = "sync_run_finalize";
-    await withSyncDiagnostic(
-      diagnostic,
-      "sync_run_finalize",
-      () =>
-        prisma.syncRun.update({
-          where: { id: syncRun.id },
-          data: {
-            status,
-            finishedAt: new Date(),
-            worksheetsScanned: selected.length,
-            rowsScanned,
-            inserted,
-            updated,
-            skipped,
-            failed,
-            durationMs: Date.now() - startedAt,
-            errorSummary:
-              failed > 0
-                ? worksheetResults
-                    .filter((result) => result.error)
-                    .map((result) => result.error)
-                    .join("; ")
-                : null,
-          },
-        }),
-    );
-    return {
-      status,
-      syncRunId: syncRun.id.toString(),
-      worksheetsScanned: selected.length,
-      rowsScanned,
-      inserted,
-      updated,
-      skipped,
-      failed,
-      worksheets: worksheetResults,
-    };
-  } catch (error) {
-    const safeError = safeErrorMessage(error);
-    emitSyncDiagnostic({
-      context: diagnostic,
-      stage: fallbackStage,
-      status: "FAIL",
-      durationMs: diagnosticDurationMs(diagnosticStartedAt),
-      ...safeSyncErrorDetails(error),
-    });
-    if (syncRunId !== null) {
-      await prisma.syncRun.update({
-        where: { id: syncRunId },
-        data: {
-          status: "FAILED",
-          finishedAt: new Date(),
-          durationMs: Date.now() - startedAt,
-          errorSummary: safeError,
-          failed: 1,
-        },
+    let syncRunId: bigint | null = null;
+    const startedAt = Date.now();
+    const diagnosticStartedAt = diagnosticNow();
+    let fallbackStage:
+      | "sync_run_create"
+      | "worksheet_processing"
+      | "sync_run_finalize" = "sync_run_create";
+    const worksheetResults: WorksheetSyncResult[] = [];
+    try {
+      const syncRun = await withSyncDiagnostic(
+        diagnostic,
+        "sync_run_create",
+        () =>
+          prisma.syncRun.create({
+            data: {
+              sourceId,
+              triggerType: syncOptions.triggerType ?? "manual",
+              status: "RUNNING",
+            },
+            select: { id: true },
+          }),
+      );
+      syncRunId = syncRun.id;
+      fallbackStage = "worksheet_processing";
+      const source = await prisma.syncSource.findUnique({
+        where: { id: sourceId },
+        select: { id: true },
       });
+      if (!source) throw new Error("Synchronization source registry not found.");
+      const worksheets = await prisma.syncWorksheet.findMany({
+        where: { sourceId: source.id },
+        orderBy: { worksheetTitle: "asc" },
+      });
+      const selected = selectedWorksheets(worksheets, syncOptions);
+      const canonicalCandidates = preferredWorksheetsByPeriod(
+        worksheets.filter((worksheet) => {
+          const period = parseBBWorksheetName(worksheet.worksheetTitle);
+          return period?.month === 7 && period.year === 2026;
+        }),
+      );
+      const canonicalWorksheet =
+        canonicalCandidates.find(
+          (worksheet) =>
+            worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
+            BB_CANONICAL_WORKSHEET.toLocaleLowerCase("en-US"),
+        ) ?? canonicalCandidates[0] ?? null;
+      if (
+        (syncOptions.worksheetKey || syncOptions.worksheetTitle) &&
+        selected.length !== 1
+      ) {
+        throw new Error("Requested worksheet is not uniquely registered.");
+      }
+      if (selected.length === 0) {
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "worksheet_processing",
+          status: "PASS",
+          durationMs: 0,
+          errorCode: "NOT_REQUIRED",
+        });
+      }
+      for (const worksheet of selected) {
+        const renewStartedAt = diagnosticNow();
+        let renewed: Awaited<ReturnType<typeof renewSyncSourceLease>>;
+        try {
+          renewed = await renewSyncSourceLease(sourceId, lease.token);
+          emitSyncDiagnostic({
+            context: diagnostic,
+            stage: "source_lease",
+            status: renewed ? "PASS" : "FAIL",
+            durationMs: diagnosticDurationMs(renewStartedAt),
+            ...(renewed
+              ? {}
+              : {
+                  errorCategory: "CONCURRENCY",
+                  errorCode: "NOT_RENEWED",
+                }),
+          });
+        } catch (error) {
+          emitSyncDiagnostic({
+            context: diagnostic,
+            stage: "source_lease",
+            status: "FAIL",
+            durationMs: diagnosticDurationMs(renewStartedAt),
+            ...safeSyncErrorDetails(error),
+          });
+          throw error;
+        }
+        if (!renewed) throw new Error("Synchronization lease was lost.");
+        const worksheetStartedAt = diagnosticNow();
+        try {
+          const worksheetResult = await syncWorksheet(
+            worksheet,
+            syncOptions,
+            canonicalWorksheet?.schemaSnapshot ?? null,
+          );
+          emitSyncDiagnostic({
+            context: diagnostic,
+            stage: "worksheet_processing",
+            status: worksheetResult.status === "SUCCESS" ? "PASS" : "FAIL",
+            durationMs: diagnosticDurationMs(worksheetStartedAt),
+            ...(worksheetResult.status === "SUCCESS"
+              ? {}
+              : {
+                  errorCategory:
+                    worksheetResult.status === "SCHEMA_REVIEW"
+                      ? "SCHEMA"
+                      : "SYNC",
+                  errorCode: worksheetResult.status,
+                }),
+          });
+          worksheetResults.push(worksheetResult);
+        } catch (error) {
+          emitSyncDiagnostic({
+            context: diagnostic,
+            stage: "worksheet_processing",
+            status: "FAIL",
+            durationMs: diagnosticDurationMs(worksheetStartedAt),
+            ...safeSyncErrorDetails(error),
+          });
+          throw error;
+        }
+      }
+
+      const rowsScanned = worksheetResults.reduce(
+        (total, result) => total + result.rowsScanned,
+        0,
+      );
+      const inserted = worksheetResults.reduce(
+        (total, result) => total + result.inserted,
+        0,
+      );
+      const updated = worksheetResults.reduce(
+        (total, result) => total + result.updated,
+        0,
+      );
+      const skipped = worksheetResults.reduce(
+        (total, result) => total + result.skipped,
+        0,
+      );
+      const failed = worksheetResults.reduce(
+        (total, result) => total + result.failed,
+        0,
+      );
+      const status: SyncRunStatus =
+        failed === 0 ? "SUCCESS" : failed < selected.length ? "PARTIAL" : "FAILED";
+      fallbackStage = "sync_run_finalize";
+      await withSyncDiagnostic(
+        diagnostic,
+        "sync_run_finalize",
+        () =>
+          prisma.syncRun.update({
+            where: { id: syncRun.id },
+            data: {
+              status,
+              finishedAt: new Date(),
+              worksheetsScanned: selected.length,
+              rowsScanned,
+              inserted,
+              updated,
+              skipped,
+              failed,
+              durationMs: Date.now() - startedAt,
+              errorSummary:
+                failed > 0
+                  ? worksheetResults
+                      .filter((result) => result.error)
+                      .map((result) => result.error)
+                      .join("; ")
+                  : null,
+            },
+          }),
+      );
+      return {
+        status,
+        syncRunId: syncRun.id.toString(),
+        worksheetsScanned: selected.length,
+        rowsScanned,
+        inserted,
+        updated,
+        skipped,
+        failed,
+        worksheets: worksheetResults,
+      };
+    } catch (error) {
+      const safeError = safeErrorMessage(error);
+      emitSyncDiagnostic({
+        context: diagnostic,
+        stage: fallbackStage,
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(diagnosticStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+      if (syncRunId !== null) {
+        await prisma.syncRun.update({
+          where: { id: syncRunId },
+          data: {
+            status: "FAILED",
+            finishedAt: new Date(),
+            durationMs: Date.now() - startedAt,
+            errorSummary: safeError,
+            failed: 1,
+          },
+        });
+      }
+      throw error;
     }
-    throw error;
   } finally {
     await withSyncDiagnostic(
       diagnostic,

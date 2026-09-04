@@ -1,5 +1,13 @@
 # Google Sheets Synchronization Architecture — S1 Audit
 
+> **HISTORICAL / SUPERSEDED:** This S1 audit records the pre-implementation
+> architecture observed on 2026-08-30. The current discovery transaction
+> design is documented in `PHASE6I_REMEDIATION_DESIGN_REPORT_2026-09-04.md`
+> and its Phase 6J implementation status is documented in
+> `PHASE6J_IMPLEMENTATION_REPORT_2026-09-04.md`. Statements below that say a
+> capability is not yet implemented are historical evidence, not the current
+> runtime contract.
+
 Tanggal audit: 2026-08-30  
 Scope: audit arsitektur existing sebelum implementasi Phase 11.  
 Status checkpoint S1: **PASS WITH FINDINGS**.

@@ -1,5 +1,9 @@
 # Google Sheets Sync Audit, Recovery, and Concurrency
 
+> **Phase 6J update (2026-09-04):** The discovery order and diagnostic rules
+> below reflect the implemented local hardening. The Phase 6J report records
+> which write-capable cases remain blocked without disposable PostgreSQL.
+
 Status checkpoint: **S5 PASS**
 
 ## Audit state
@@ -18,7 +22,21 @@ Each synchronization run records only operational metadata:
 No credential, access token, private key, database URL, or raw service-account
 document is stored in these tables.
 
-## Run lifecycle
+## Current Phase 6J discovery lifecycle
+
+```text
+Google metadata read (outside transaction)
+  -> bounded retry for eligible Google read failures only
+  -> source bootstrap -> atomic source lease
+  -> registry snapshot while the lease is held
+  -> pure diff/status preparation
+  -> short atomic registry persistence
+  -> syncRun creation -> selected worksheet processing
+```
+
+The original S5 lifecycle is retained below as historical checkpoint evidence.
+
+## Run lifecycle (S5 baseline)
 
 ```text
 DISCOVER
@@ -58,9 +76,11 @@ response.
 
 `sync_sources.lock_token` and `lock_expires_at` form a database lease. The
 atomic conditional update means only one process can acquire a live lease. The
-orchestrator renews the lease before each worksheet and releases it by matching
-the token. A competing invocation returns `LOCKED` and does not write source or
-normalized data.
+orchestrator acquires it before the registry snapshot, renews it before each
+worksheet, and releases it by matching the token. A competing invocation
+returns `LOCKED` and does not persist worksheet registry or normalized data;
+the small source bootstrap operation may have already ensured the source
+identity exists.
 
 ## Partial recovery
 
@@ -76,9 +96,10 @@ normalized data.
   until the business rule is approved.
 
 Database connectivity errors with Prisma transient codes (`P1001`, `P1008`,
-`P1017`, `P2024`, and `P2034`) receive a bounded second attempt around the
-transactional write. Constraint and validation errors fail fast; retrying them
-could hide a data or schema problem.
+`P1017`, `P2024`, and `P2034`) retain the existing bounded retry policy around
+the normalized importer transaction. The Phase 6J discovery transaction does
+not retry P2028: it records a safe diagnostic and fails fast so an uncertain
+transaction is never replayed automatically.
 
 ## Error safety
 
@@ -86,6 +107,14 @@ Run error summaries contain stable categories such as
 `google_sheets_permission`, `google_sheets_rate_limit`, or
 `synchronization_failed`; arbitrary exception text is not exposed. API responses
 are generic and contain only aggregate counters.
+
+Discovery diagnostics use bounded stages for source bootstrap, lease, registry
+read, pure preparation, current persistence, missing persistence, transaction,
+and total duration. Only safe `error_category`, `error_code`, duration, request
+ID, and bounded Google status are eligible for output; no SQL, stack, URL,
+credential, or raw exception text is emitted. The discovery timeout remains
+`60,000 ms` and the Phase 6J performance gate is `<=45,000 ms` on a
+representative disposable fixture.
 
 ## Verification
 
@@ -95,6 +124,7 @@ lease behavior:
 ```bash
 npm run sync:verify-retry
 npm run sync:verify-retry -- --live
+npm run sync:verify-diagnostics
 ```
 
 The live lease check acquired one local lease, confirmed a second acquisition

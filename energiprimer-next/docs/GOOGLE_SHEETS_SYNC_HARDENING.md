@@ -1,5 +1,9 @@
 # Google Sheets Sync Hardening
 
+> **Phase 6J implementation update (2026-09-04):** The discovery transaction
+> hardening is implemented locally. Production deployment and Production sync
+> remain outside this phase; see the Phase 6J implementation report.
+
 Status checkpoint: **S7 PASS WITH WARNINGS**
 
 ## Security boundary
@@ -39,7 +43,13 @@ together; partial configuration fails fast.
 - The parser runs on the server before normalized data is passed to the existing
   transactional importer.
 - Google network calls are outside the database transaction.
-- Source lease prevents duplicate concurrent cron work.
+- Source lease is acquired before the registry snapshot and prevents duplicate
+  concurrent discovery/sync work.
+- Discovery preparation is pure and outside the persistence transaction.
+- Current worksheet registry values use one parameterized set-oriented write;
+  missing worksheet keys use one homogeneous `updateMany`.
+- The discovery transaction timeout remains 60 seconds. P2028 is classified for
+  diagnostics and is not included in automatic retry.
 - Lease renewal occurs before each worksheet to protect long-running backfills.
 - Dashboard charts do not call the sync endpoint or Google Sheets directly.
 - Existing Prisma singleton reuse remains in place for development/serverless
@@ -57,6 +67,10 @@ together; partial configuration fails fast.
   parser validation, and duplicate stable-key detection. A new tab is
   registered automatically, but a schema-drifted or future-dated tab remains
   in review/not-due state and is not imported.
+- The metadata registry may contain 199 worksheets, while the required monthly
+  BB business source set is exactly `Januari26-BB` through `Juli26-BB` for the
+  seven named titles. Non-required tabs are retained and are not automatically
+  treated as required monthly sources.
 - Stable row identity excludes spreadsheet row number and cell address. The
   normalized worksheet content hash is used for change detection; unchanged
   rows are `SKIP` and are excluded from the import write plan.
@@ -74,9 +88,10 @@ together; partial configuration fails fast.
    domain data but do not have persisted sync row states/schema approval in the
    existing registry. They must not be presented as fully idempotent until a
    separately approved registry reconciliation is completed.
-3. Existing normalized importer upserts are sequential inside a transaction.
-   This is safe for the current workbook size but should be load-tested before
-   expanding historical backfills.
+3. Existing normalized importer upserts remain sequential inside their own
+   transaction. This discovery hardening removes the per-worksheet sequential
+   registry upserts, but normalized import duration still needs load testing
+   before expanding historical backfills.
 4. The import-run table has no unique checksum constraint. The source lease
    protects the normal sync orchestrator; direct concurrent importer calls
    still require operational serialization or a future additive constraint
@@ -93,12 +108,17 @@ together; partial configuration fails fast.
 
 ```bash
 npm run sync:verify-config
+npm run sync:verify-discovery:disposable
 npm run sync:verify-cron-auth
 npm run sync:verify-auto-admission
+npm run sync:verify-diagnostics
 npm run sync:verify-retry -- --live
 npm run sync:verify-schema -- --live
 npm run sync:verify-incremental -- --live
 ```
 
 All live commands above use the local environment/database only. Production
-credential and database validation remain a deployment-stage manual check.
+credential and database validation remain a deployment-stage manual check. The
+Phase 6J write-capable discovery matrix requires disposable PostgreSQL; an
+unavailable disposable target is a BLOCKED result, never a Production
+substitute.

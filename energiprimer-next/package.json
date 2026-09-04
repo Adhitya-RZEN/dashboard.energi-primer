@@ -15,6 +15,8 @@
     "db:verify-import-data": "node --env-file-if-exists=.env.local scripts/verify-import-data.mjs",
     "db:verify-overview": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-postgres-overview.ts",
     "sync:verify-discovery": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-worksheet-discovery.ts",
+    "sync:verify-discovery:disposable": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-discovery-disposable.ts",
+    "sync:verify-diagnostics": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-sync-diagnostics.ts",
     "sync:verify-incremental": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-incremental-sync.ts",
     "sync:verify-schema": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-schema-detection.ts",
     "sync:verify-retry": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-sync-retry.ts",

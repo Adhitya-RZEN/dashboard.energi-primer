@@ -552,7 +552,7 @@ export async function listGoogleSheetsWorksheets(
     return worksheets;
   } catch (error) {
     const details = safeGoogleDiagnostic(error) ?? {
-      category: "UNKNOWN",
+      errorCategory: "UNKNOWN",
       errorCode: "UNKNOWN",
     };
     if (diagnostic) {

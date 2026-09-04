@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   classifyGoogleSheetsStatus,
@@ -7,6 +9,7 @@ import {
 import {
   classifyWorksheetDiscovery,
   discoverGoogleSheetsWorksheets,
+  prepareWorksheetDiscovery,
 } from "../src/services/google-sheets/sync/discovery";
 
 const sheet = (
@@ -22,6 +25,41 @@ const sheet = (
 });
 
 function runStaticChecks() {
+  const discoverySource = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../src/services/google-sheets/sync/discovery.ts",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  );
+  const engineSource = readFileSync(
+    fileURLToPath(
+      new URL("../src/services/google-sheets/sync/engine.ts", import.meta.url),
+    ),
+    "utf8",
+  );
+  assert.match(discoverySource, /Prisma\.join\(values\)/u);
+  assert.match(discoverySource, /tx\.syncWorksheet\.updateMany/u);
+  assert.doesNotMatch(discoverySource, /await tx\.syncWorksheet\.upsert/u);
+  const sourceBootstrapCall = engineSource.indexOf(
+    "sourceId = await ensureSyncSourceForDiscovery",
+  );
+  const persistenceCall = engineSource.indexOf(
+    "await persistGoogleSheetsWorksheetDiscovery",
+  );
+  const leaseCall = engineSource.indexOf("lease = await acquireSyncSourceLease");
+  const syncRunCall = engineSource.indexOf("const syncRun = await");
+  assert.ok(
+    sourceBootstrapCall >= 0 &&
+      leaseCall > sourceBootstrapCall &&
+      persistenceCall > sourceBootstrapCall &&
+      persistenceCall > leaseCall &&
+      syncRunCall > persistenceCall,
+    "source bootstrap and lease precede discovery persistence and syncRun creation",
+  );
+
   const previous = [
     { worksheetKey: "1", worksheetTitle: "Juli26-BB", status: "ACTIVE" },
     { worksheetKey: "2", worksheetTitle: "Juni26-BB", status: "ACTIVE" },
@@ -35,6 +73,37 @@ function runStaticChecks() {
   assert.equal(diff.renamedCount, 1);
   assert.equal(diff.missingCount, 1);
   assert.equal(diff.unchangedCount, 0);
+
+  const prepared = prepareWorksheetDiscovery(
+    [
+      { worksheetKey: "1", worksheetTitle: "Juli26-BB", status: "MISSING" },
+      { worksheetKey: "2", worksheetTitle: "Juni26-BB", status: "ACTIVE" },
+    ],
+    [
+      sheet("1", "Juli26-BB"),
+      sheet("3", "Agustus26-BB"),
+    ],
+    BigInt(1),
+    "source-key",
+    new Date("2026-09-03T00:00:00.000Z"),
+  );
+  assert.deepEqual(prepared.missingKeys, ["2"]);
+  assert.equal(prepared.current.length, 2);
+  assert.equal(prepared.current[0]?.status, "DISCOVERED");
+  assert.equal(prepared.current[0]?.normalizedTitle, "JULI26-BB");
+  assert.equal(prepared.current[1]?.status, "DISCOVERED");
+
+  assert.throws(
+    () =>
+      prepareWorksheetDiscovery(
+        [],
+        [sheet("duplicate", "Januari26-BB"), sheet("duplicate", "Mei26-BB")],
+        BigInt(1),
+        "source-key",
+        new Date("2026-09-03T00:00:00.000Z"),
+      ),
+    /Duplicate worksheet stable key/u,
+  );
 
   const repeated = classifyWorksheetDiscovery(
     current.map((item) => ({
@@ -85,10 +154,14 @@ console.log(
         "new worksheet detection",
         "repeated discovery",
         "title rename detection by stable sheet ID",
-        "missing worksheet detection without delete",
-        "empty worksheet list handling",
-        "Google API error classification",
-      ],
+      "missing worksheet detection without delete",
+      "empty worksheet list handling",
+      "Google API error classification",
+      "lease-snapshot preparation preserves status recovery and missing keys",
+      "duplicate current worksheet keys fail before persistence",
+      "discovery persistence is set-oriented without sequential worksheet upsert",
+        "source bootstrap and lease precede registry persistence and syncRun creation",
+    ],
     },
     null,
     2,

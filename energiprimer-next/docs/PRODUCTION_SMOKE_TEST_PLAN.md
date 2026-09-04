@@ -1,5 +1,11 @@
 # Production Smoke Test Plan
 
+> **Phase 6J boundary (2026-09-04):** This remains a deployment-stage plan.
+> The Phase 6J implementation was tested locally/static only. Any write-capable
+> discovery test must use disposable PostgreSQL; Production is not a test
+> fixture. The USER deploys manually and a separate explicit Production sync
+> approval is required after deployment.
+
 > PHASE 6C UPDATE (2026-09-02): Do not test or provision the former Resend or
 > public recovery flow. Authentication smoke tests cover Auth.js Credentials,
 > protected access, logout, and role enforcement with an isolated account.
@@ -7,8 +13,9 @@
 Status: **PLAN ONLY — NOT EXECUTED AGAINST PRODUCTION**
 
 Run this plan first in a non-production Preview environment with isolated
-credentials and a database snapshot. Any test that can write authentication,
-sync, or business data requires explicit approval and a controlled test target.
+credentials and a disposable/approved snapshot. Any test that can write
+authentication, sync, or business data requires explicit approval and a
+controlled non-Production target.
 
 ## Preconditions
 
@@ -16,6 +23,9 @@ sync, or business data requires explicit approval and a controlled test target.
 - Preview environment variables are configured without exposing values.
 - Preview database is disposable or an approved snapshot.
 - Google service account has read access only for the initial read-only test.
+- The required monthly BB source set is exactly `Januari26-BB`,
+  `Februari26-BB`, `Maret26-BB`, `April26-BB`, `Mei26-BB`, `Juni26-BB`, and
+  `Juli26-BB`; a 199-row metadata registry is not the required processing set.
 - Resend sender/domain is verified if a real email test is approved.
 - `AUTH_TEST_*` values, if used, are isolated and never production values.
 
@@ -55,7 +65,7 @@ separate approved change.
 | Charts | Tooltip, legend, point/bar selection, responsive layout | Data points and values match server-provided data |
 | Cron auth | Missing/wrong bearer | 401/503 as configured; no sync action |
 | Google read | One approved worksheet/range read | Canonical parser/mapping passes; no credential in output |
-| Sync write | Controlled approved run only | Idempotent counts and audit rows match plan; never run in Phase 20 |
+| Sync write | Controlled approved run only | Idempotent counts and audit rows match plan; never run without a new explicit approval |
 | Database | Read-only baseline script | No orphan, expected counts, business writes remain zero during smoke |
 
 ## Dashboard route checklist

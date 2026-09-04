@@ -1,5 +1,9 @@
 # Full Worksheet Import Report
 
+> **HISTORICAL / SUPERSEDED:** This dry-run report records the 2026-08-30
+> pre-Phase 6J workbook classification. The 199-row inventory remains evidence,
+> not the current required seven-source business contract.
+
 Tanggal: 30 Agustus 2026  
 Project: Dashboard Batu Bara PLN Jeranjang  
 Status: **FULL DRY-RUN — BLOCKED**

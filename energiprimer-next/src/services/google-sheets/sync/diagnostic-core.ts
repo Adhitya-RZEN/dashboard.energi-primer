@@ -8,7 +8,13 @@ export const SYNC_DIAGNOSTIC_STAGES = [
   "google_config",
   "google_oauth",
   "google_metadata",
+  "source_bootstrap",
   "discovery_transaction",
+  "discovery_registry_read",
+  "discovery_preparation",
+  "discovery_current_persistence",
+  "discovery_missing_persistence",
+  "discovery_total",
   "source_lease",
   "sync_run_create",
   "worksheet_processing",
@@ -27,7 +33,7 @@ export type SyncDiagnosticContext = {
 };
 
 export type SafeDiagnosticError = {
-  category: string;
+  errorCategory: string;
   errorCode: string;
   googleHttpStatus?: number;
 };
@@ -113,7 +119,7 @@ export function safeGoogleDiagnostic(error: unknown): SafeDiagnosticError | null
 
   const googleHttpStatus = safeHttpStatus(record.status);
   return {
-    category,
+    errorCategory: category,
     errorCode: "GOOGLE_" + record.code.toUpperCase(),
     ...(googleHttpStatus === undefined ? {} : { googleHttpStatus }),
   };
@@ -202,7 +208,7 @@ export async function withGoogleDiagnostic<T>(
     return result;
   } catch (error) {
     const details = safeGoogleDiagnostic(error) ?? {
-      category: "UNKNOWN",
+      errorCategory: "UNKNOWN",
       errorCode: "UNKNOWN",
     };
     emitSyncDiagnostic({

@@ -1,5 +1,9 @@
 # Google Sheets Incremental Sync
 
+> **Phase 6J update (2026-09-04):** Discovery now uses the lease-guarded,
+> set-oriented preparation/persistence path described below. The Phase 6J
+> implementation report is the authoritative gate record.
+
 Status checkpoint: **S3 PASS**
 
 Dokumen ini menjelaskan mekanisme import incremental Phase 11. Google Sheets
@@ -7,7 +11,24 @@ tetap menjadi source of truth, sedangkan PostgreSQL menyimpan state operasional
 dan hasil normalisasi untuk dibaca dashboard. Tidak ada penghapusan data sumber
 atau propagasi delete otomatis pada checkpoint ini.
 
-## Alur
+## Current Phase 6J discovery order
+
+```text
+Google metadata read (outside transaction)
+  -> source bootstrap -> source lease
+  -> registry snapshot while lease is held
+  -> pure diff/status preparation (outside transaction)
+  -> short atomic registry persistence
+  -> syncRun creation and existing worksheet processing
+```
+
+Discovery registry persistence uses one parameterized set-oriented current-row
+write and one homogeneous `updateMany` for missing keys. The metadata request
+and in-memory preparation are never held inside the Prisma transaction. The
+discovery transaction keeps the existing `60,000 ms` timeout; P2028 is
+diagnostic-only and is not retried.
+
+## Baseline S3 flow
 
 ```text
 Google Sheets metadata
@@ -72,6 +93,18 @@ worksheet/cell. Credential tidak pernah masuk ke staging, response, atau log.
 - `spreadsheet_import_runs` serta tabel staging/normalized lama tetap digunakan
   oleh importer transactional yang sudah tervalidasi.
 
+The registry is allowed to contain the complete Google metadata inventory. The
+required monthly BB source contract is exactly:
+
+```text
+Januari26-BB, Februari26-BB, Maret26-BB, April26-BB,
+Mei26-BB, Juni26-BB, Juli26-BB
+```
+
+The observed 199 registry rows are not the required monthly processing set.
+Non-required tabs remain visible in the registry and do not get deleted or
+treated as required monthly sources.
+
 ## Idempotensi verification
 
 Verifikasi live terbatas dilakukan terhadap worksheet `Juli26-BB` pada database
@@ -101,11 +134,13 @@ diarahkan ke database production tanpa approval terpisah.
    yang hilang dari source dipertahankan untuk mencegah kehilangan data; aturan
    rekonsiliasi/archive membutuhkan keputusan bisnis.
 2. Duplicate business identity diblokir, bukan dipilih secara otomatis.
-3. Sync saat ini memanggil importer existing secara transactional per worksheet;
-   network read tidak berada di dalam transaction database.
+3. After discovery, sync still calls the existing importer transactionally per
+   selected worksheet; Google network reads and discovery preparation remain
+   outside the database transaction.
 4. Manual/verification commit tetap local-only secara default. Endpoint cron
    production baru boleh mengaktifkan target non-local setelah konfigurasi dan
-   approval deployment tersedia.
+   approval deployment tersedia. Deployment is manual by the user, and any
+   Production sync requires a separate explicit approval.
 
 ## Files utama
 

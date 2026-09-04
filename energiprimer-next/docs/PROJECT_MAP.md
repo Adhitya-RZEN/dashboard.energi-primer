@@ -4,6 +4,11 @@ Audit date: 2026-09-02
 Scope: `energiprimer-next` application and its repository-level configuration, scripts, migrations, documentation, and current worktree artifacts.
 Mutation policy: this audit did not write to the database, Google Sheets, mail provider, or production source code.
 
+Phase 6J update: local application source, verification scripts, and
+documentation may be changed by the implementation checkpoint; no Production
+database, Google Sheets, Vercel, environment, secret, migration, or deployment
+operation is authorized here.
+
 ## Evidence convention
 
 - **VERIFIED** — directly observed in source, configuration, or a command result.
@@ -33,8 +38,9 @@ Browser
 Vercel Cron or an authorized operator
   └── GET/POST /api/sync/google-sheets
           └── CRON_SECRET check
-                  └── discovery → worksheet registry → lease
-                          → dynamic reader/parser/normalizer
+                  └── Google metadata → source bootstrap → lease
+                         → registry snapshot → pure preparation → persistence
+                                → dynamic reader/parser/normalizer
                                   → import plan and validation gates
                                           → staging and normalized PostgreSQL upserts
                                                   → sync row state / monitoring
@@ -233,6 +239,18 @@ Google spreadsheet metadata and worksheet ranges
   → monitoring snapshot and PostgreSQL dashboard reads
 ```
 
+The discovery boundary is lease-guarded: Google metadata is read first, the
+source is bootstrapped, the lease is acquired before the registry snapshot, and
+diff/status preparation happens in memory before a short atomic registry
+transaction. Current worksheet rows use a parameterized set-oriented write;
+missing keys use one homogeneous update. The discovery timeout remains 60
+seconds and P2028 is diagnostic-only, not an automatic retry.
+
+The registry may contain 199 Google metadata worksheets, while the required
+monthly BB source set is exactly `Januari26-BB`, `Februari26-BB`, `Maret26-BB`,
+`April26-BB`, `Mei26-BB`, `Juni26-BB`, and `Juli26-BB`. Non-required tabs are
+retained metadata and are not deleted or implicitly treated as required sources.
+
 Transformation risks are concentrated in heuristic table detection, ambiguous date formats, hardcoded unit/supplier mappings, and the absence of clear deletion propagation for source rows that disappear. Direct Google metrics now preserve missing values as `null` and explicit source zeros as `0`.
 
 ### Decommissioned recovery flow
@@ -320,6 +338,13 @@ SpreadsheetImportRun
 The application has a small HTTP API surface. Most business reads happen in server-rendered pages rather than JSON endpoints.
 
 ### `/api/sync/google-sheets`
+
+Phase 6J execution order after the deployment and cron gates is:
+metadata read -> source bootstrap -> lease -> registry snapshot -> pure
+preparation -> atomic registry persistence -> `syncRun.create` -> existing
+worksheet processing. A failed lease or discovery transaction cannot create a
+sync run or persist worksheet registry data. The user deploys manually, and a
+new explicit approval is required before any Production sync.
 
 ```text
 Request
@@ -412,17 +437,23 @@ Local development
   → local PostgreSQL is required for commit mode
 
 Build
-  → next build (currently not release-ready because TypeScript check fails)
+  → next build (Phase 6J local gate: PASS)
 
 Vercel runtime (intended)
   → Next.js Node route for cron
-  → /api/sync/google-sheets every 15 minutes from vercel.json
+  → /api/sync/google-sheets at 0 22 * * * (06:00 WITA daily) from vercel.json
   → Google Sheets + remote PostgreSQL
 ```
 
 The manual import commit guard only allows loopback `DATABASE_URL` with database name `dashboard_pln` unless the caller passes `allowNonLocalDatabase`. The cron route passes that override only after the deployment-environment gate (production/development allowed; preview/unknown denied).
 
-There is no current `.github` CI workflow evidence. Migration deployment status, Vercel project settings, production environment variables, and actual production database state are **UNKNOWN** from this read-only audit.
+There is no current `.github` CI workflow evidence. Local TypeScript/lint/build
+and read-only migration/preflight results are release gates, but a disposable
+PostgreSQL write fixture is required for the Phase 6J discovery acceptance
+matrix. Migration deployment status, Vercel project settings, production
+environment variables, and actual production database state are **UNKNOWN**
+from this repository audit. The user deploys manually; the agent does not
+deploy or trigger Production sync.
 
 ## 15. Business-rule map
 

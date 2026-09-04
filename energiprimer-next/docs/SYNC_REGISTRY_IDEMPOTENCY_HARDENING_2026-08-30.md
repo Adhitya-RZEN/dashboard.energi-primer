@@ -1,5 +1,10 @@
 # Sync Registry & Idempotency Hardening
 
+> **HISTORICAL / SUPERSEDED:** This design/checkpoint predates the Phase 6I
+> approved architecture and Phase 6J implementation. Retain its evidence and
+> business decisions, but use the Phase 6J report for the current transaction,
+> lease, diagnostic, and acceptance-test contract.
+
 Tanggal audit: 1 September 2026 (Asia/Makassar)
 Environment: PostgreSQL lokal, database dashboard_pln
 Scope data: Januari26-BB sampai Juli26-BB

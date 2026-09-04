@@ -1,5 +1,10 @@
 # Phase 11 — Automated Google Sheets Synchronization
 
+> **HISTORICAL / SUPERSEDED:** This 2026-08-30 checkpoint predates the Phase
+> 6I/6J discovery transaction hardening. Its PASS result is not the current
+> release-readiness decision; use `PHASE6J_IMPLEMENTATION_REPORT_2026-09-04.md`
+> for current implementation and gate status.
+
 Tanggal validasi: 2026-08-30  
 Scope: implementasi dan validasi lokal terhadap source Google Sheets, database
 PostgreSQL lokal, dan build Next.js. Tidak ada deployment Vercel.

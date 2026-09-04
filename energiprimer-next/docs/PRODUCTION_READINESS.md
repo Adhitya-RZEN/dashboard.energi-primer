@@ -2,7 +2,15 @@
 
 > **Current authoritative audit:** [Production Preparation Report — 2026-09-01](./PRODUCTION_PREPARATION_REPORT_2026-09-01.md). This file retains the historical Phase 10A evidence and is indexed here for continuity.
 
-## Phase 20 current gate
+> **Phase 6K-A verification (2026-09-04):** The Phase 6J implementation
+> checkpoint remains historical and unchanged. Its disposable PostgreSQL
+> acceptance tests passed, while its then-blocked Production metadata gates
+> have now been reverified read-only: canonical migration status, target
+> identity, migration history, checksum, schema diff, and schema parity pass.
+> This verification does not authorize migration, deployment, or Production
+> sync. See [Phase 6K-A report](./PHASE6K-A_PRODUCTION_MIGRATION_METADATA_REPORT_2026-09-04.md).
+
+## Phase 20 current gate (historical)
 
 Phase 20 preparation-only audit: **PASS WITH REVIEW**. Architecture and local
 build checks are ready for manual production configuration, but Supabase,

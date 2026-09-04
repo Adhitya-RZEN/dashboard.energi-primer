@@ -17,6 +17,8 @@ if (!isRetryableDatabaseError({ code: "P1001" }))
   throw new Error("Transient database error was not retryable.");
 if (isRetryableDatabaseError({ code: "P2002" }))
   throw new Error("Constraint error was retried.");
+if (isRetryableDatabaseError({ code: "P2028" }))
+  throw new Error("P2028 transaction expiry was retried.");
 
 let attempts = 0;
 const delays: number[] = [];
@@ -73,6 +75,7 @@ const checks = [
   "permission error fails fast",
   "bounded retry sequence uses exponential backoff hook",
   "transient database error retries while constraint error fails fast",
+  "P2028 transaction expiry is not retried",
   "database retry recovers on a subsequent attempt",
   "operational errors are classified without exposing exception details",
 ];

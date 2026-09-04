@@ -1,6 +1,11 @@
 # Google Sheets Sync Scheduler
 
-Status checkpoint: **Phase 17 code PASS WITH REVIEW; deployment configuration pending**
+> **Phase 6J update (2026-09-04):** The local sync path now acquires the
+> source lease before the worksheet registry snapshot and uses short,
+> set-oriented discovery persistence. The user deploys manually; no deployment
+> or Production sync is performed by the agent in Phase 6J.
+
+Status checkpoint: **Phase 6J local implementation; manual deployment verification pending**
 
 ## Endpoint
 
@@ -32,11 +37,12 @@ generic `401`.
 `vercel.json` configures:
 
 ```text
-*/15 * * * *  → /api/sync/google-sheets
+0 22 * * *  → /api/sync/google-sheets (06:00 WITA daily)
 ```
 
 The cron invocation uses scope `automatic`. Discovery first reads the workbook
-metadata and registers new tabs by their stable Google `sheetId`. The importer
+metadata, bootstraps the source, acquires its lease, snapshots the registry, and
+registers new tabs by their stable Google `sheetId`. The importer
 then admits only the preferred worksheet for each period when all of these
 conditions hold:
 
@@ -55,7 +61,12 @@ unrelated tab, duplicate period title, or schema-drifted tab is registered but
 not imported automatically. A schema-review state must be resolved explicitly
 before that worksheet can re-enter the automatic path. Historical/backfill
 synchronization remains a separately controlled operation and is not triggered
-by arbitrary request parameters.
+ by arbitrary request parameters.
+
+The registry may contain all 199 metadata worksheets. That inventory is not the
+required monthly BB processing set. The required business source set is exactly
+`Januari26-BB`, `Februari26-BB`, `Maret26-BB`, `April26-BB`, `Mei26-BB`,
+`Juni26-BB`, and `Juli26-BB`; non-required tabs remain retained metadata.
 
 ## Response safety
 
@@ -103,7 +114,16 @@ manual. Scope `automatic` adalah kebijakan scheduler yang digunakan route
 terproteksi; jangan menjalankan backfill penuh sebagai pengganti cron.
 
 The route itself must be tested in a local server with a test-only `CRON_SECRET`
-before deployment. No deployment was performed in Phase 17.
+before deployment. The current schedule is daily at 22:00 UTC (06:00 WITA),
+not the historical 15-minute schedule described by the Phase 17 checkpoint.
+
+## Phase 6J deployment and sync approval boundary
+
+After local gates and disposable PostgreSQL write tests pass, the USER performs
+the reviewed Vercel deployment manually. The agent must not change
+`vercel.json`, environment variables, secrets, or the Cron schedule. Deployment
+does not authorize a Production sync: a new explicit Production sync approval
+is required, and post-deployment checks remain read-only until that approval.
 
 ## Vercel configuration still required
 
@@ -115,4 +135,4 @@ before deployment. No deployment was performed in Phase 17.
 3. Set the production PostgreSQL URL with an approved connection-pooling plan.
 4. Confirm the service account has read access to the configured spreadsheet.
 5. Confirm the Vercel plan/runtime limit is compatible with the selected sync
-   duration and 15-minute schedule.
+   duration and daily schedule.

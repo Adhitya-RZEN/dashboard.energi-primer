@@ -1,5 +1,10 @@
 # Project Audit — Energi Primer
 
+> **HISTORICAL / SUPERSEDED:** This 2026-09-02 audit predates the Phase 6J
+> discovery transaction implementation. Findings that describe the old
+> discovery write shape or test coverage are retained as evidence; the current
+> status is in `PHASE6J_IMPLEMENTATION_REPORT_2026-09-04.md`.
+
 Audit date: 2026-09-02
 Auditor scope: static repository and current-worktree audit of `energiprimer-next`.
 Mutation policy: no production source code was modified. No database, Google Sheets, mail provider, Vercel project, or other external system was written during this audit.

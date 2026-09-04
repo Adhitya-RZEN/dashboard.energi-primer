@@ -1,5 +1,14 @@
 # Vercel Deployment Runbook
 
+> **Phase 6J update (2026-09-04):** This runbook is an operator procedure.
+> The USER performs deployment manually after the local and disposable-target
+> gates pass. The agent does not deploy, change Cron/environment/secrets, or
+> trigger a Production sync. Deployment is not sync approval.
+
+> Wording below that refers to Phase 20 is historical checkpoint evidence. It
+> does not establish the current Vercel deployment state; verify deployment
+> provenance through the operator-controlled Vercel interface.
+
 > PHASE 6C UPDATE (2026-09-02): Do not provision the former Resend or public
 > recovery flow. Deployment authentication is Auth.js Credentials with Prisma
 > and PostgreSQL/Supabase.
@@ -51,8 +60,8 @@ Finding: `NODE_RUNTIME_REVIEW_REQUIRED` — no automatic runtime change was made
   client boundaries.
 - The Google Sheets sync handler explicitly uses Node.js runtime,
   `force-dynamic`, and `maxDuration = 300`.
-- The cron declaration is in `vercel.json` at `0 1 * * *` for
-  `/api/sync/google-sheets` (once daily).
+  - The cron declaration is in `vercel.json` at `0 22 * * *` for
+  `/api/sync/google-sheets` (06:00 WITA daily).
 - Confirm the selected Vercel plan permits the declared function duration and
   cron frequency before activation.
 - The cron endpoint requires the server-only `CRON_SECRET`, uses a lease, and

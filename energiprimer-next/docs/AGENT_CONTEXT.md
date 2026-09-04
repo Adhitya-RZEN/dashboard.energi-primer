@@ -1,6 +1,6 @@
 # AGENT_CONTEXT.md — Energi Primer
 
-Last audited: 2026-09-02
+Last audited: 2026-09-04
 Purpose: single source of truth for AI coding agents working in this repository.
 Scope: current `energiprimer-next` worktree. Read the actual source after this document before changing anything.
 
@@ -11,6 +11,13 @@ Scope: current `energiprimer-next` worktree. Read the actual source after this d
 - **UNKNOWN** means this repository-only audit cannot prove it.
 
 The application is not currently a clean release snapshot. It contains pre-existing untracked audit reports and generated artifacts. Supabase operator scripts remain for historical/operational context, but no Supabase authentication path is active in `src/`. Do not assume that an untracked file is release-ready or that an older report describes current behavior.
+
+Phase 6J is the current local implementation checkpoint. Its discovery change
+is source bootstrap -> lease -> registry snapshot -> pure preparation -> short
+atomic registry persistence -> sync run. The 60-second discovery transaction
+timeout is unchanged; P2028 is classified safely and is not retried. A
+disposable PostgreSQL target is required for write-capable acceptance tests; a
+Production database is never a test fixture.
 
 ## 1. Project Overview
 
@@ -31,7 +38,8 @@ Browser → Next.js App Router → Auth.js JWT + protected layout
                               → server services → Prisma → PostgreSQL
 
 Vercel Cron/operator → /api/sync/google-sheets
-                     → cron secret → discovery/lease
+                     → cron secret → metadata → source bootstrap → lease
+                     → registry snapshot/preparation/persistence
                      → Google Sheets reader/parser/validation
                      → import plan → PostgreSQL + sync provenance
 ```
@@ -147,7 +155,7 @@ Supabase RLS/policies are UNKNOWN and must be verified before any browser Supaba
 | PostgreSQL | Auth, dashboard, reports, normalized import, sync registry | Server-only Prisma; never expose `DATABASE_URL` |
 | Google Sheets API v4 | Workbook discovery/read/import | Service-account JSON or env credential mode; private key is server-only |
 | Auth.js | Credential/JWT session | `AUTH_SECRET` and standard Auth.js env must be deployment-managed |
-| Vercel | Intended hosting and cron | `vercel.json` runs sync every 15 minutes; verify environment isolation |
+| Vercel | Intended hosting and cron | `vercel.json` runs sync at `0 22 * * *` (06:00 WITA daily); verify environment isolation |
 | Supabase | Operator/migration work | Not active application authentication; browser access is not enabled |
 
 No secret values may be copied into commits, docs, logs, issue text, or agent responses. Local credential files were detected during the audit; treat them as sensitive.
@@ -171,6 +179,14 @@ URL/cookie filters
 
 ### Import
 
+For the sync route, discovery is ordered as Google metadata read -> source
+bootstrap -> source lease -> registry snapshot -> pure preparation -> short
+atomic registry persistence -> `syncRun.create` -> worksheet processing. The
+lease is held across discovery and the existing sync flow, and is released on
+failure paths. Registry current rows are persisted set-oriented; missing keys
+use one homogeneous update. A failed discovery transaction must not create a
+sync run.
+
 ```text
 Google ranges → raw grid → anchors/tables → typed semantic records
              → locale/date normalization → validation/confidence
@@ -185,6 +201,12 @@ Keep missing values as `null` unless the source explicitly contains zero. Verify
 The dynamic pipeline uses metadata discovery, worksheet resolution, an `A1:ZZ500` scan, heuristic structure/table detection, semantic parsers, validators, confidence/warnings, and a plan gate. Automatic sync prefers a canonical July 2026 BB worksheet schema and sends changed schemas to review.
 
 The plan recognizes typed records for biomass receipts/consumption, coal receipts/consumption/stock, solar receipts/consumption, HOP, annual target, cumulative snapshots, and staging. It requires the approved `70,020` ton annual target, the seven-supplier biomass receipt schema, required daily paths, and no blocking parser ambiguity.
+
+The required monthly BB source set is exactly `Januari26-BB`,
+`Februari26-BB`, `Maret26-BB`, `April26-BB`, `Mei26-BB`, `Juni26-BB`, and
+`Juli26-BB`. Google metadata discovery may register 199 worksheets, but that
+inventory is not the seven-source business requirement; non-required tabs are
+retained and are not deleted or implicitly imported.
 
 The commit resolves exactly Unit 1/2/3, uses unique-key upserts, and wraps normalized writes in a Prisma transaction. Manual commit mode is restricted to loopback database host plus database name `dashboard_pln`; the sync route overrides that restriction only after its deployment gate. The importer models coal stock only as closing/consumed, while the database also has opening/received fields—verify the source contract before assuming full stock reconciliation.
 
@@ -223,7 +245,11 @@ of the active browser contract. `DASHBOARD_DATA_SOURCE`, `NODE_ENV`, and
 
 ## 15. Deployment
 
-`vercel.json` schedules `/api/sync/google-sheets` with `*/15 * * * *`. The route is Node-based and allows up to 300 seconds. Actual Vercel project settings, environment values, deployed commit, and production database state are UNKNOWN.
+`vercel.json` schedules `/api/sync/google-sheets` with `0 22 * * *` (06:00
+WITA daily). The route is Node-based and allows up to 300 seconds. Actual
+Vercel project settings, environment values, deployed commit, and production
+database state are UNKNOWN from this repository. The user deploys manually;
+the agent does not deploy or change the Cron schedule.
 
 The deployment policy in `src/lib/deployment-environment.ts` is production/local development allowed and preview/unknown denied for sync, and is wired into the route before cron authentication and the write-capable sync engine. A preview must never have production database/Google credentials or a production cron secret.
 
@@ -242,6 +268,13 @@ Current local results:
 - Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; live credential E2E remains unavailable.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Live database, Google, Vercel, and browser E2E: NOT VERIFIED.
+
+Phase 6J focused static/pure checks additionally cover source-lease ordering,
+new/rename/missing/empty/recovery preparation, exact seven-source admission,
+set-oriented registry persistence, and P2028 diagnostic mapping. Write-capable
+discovery/idempotency/atomicity/concurrency/performance cases require a
+disposable PostgreSQL fixture and must be reported BLOCKED if that fixture is
+unavailable; the Production database cannot substitute for it.
 
 ## 17. Known Risks
 

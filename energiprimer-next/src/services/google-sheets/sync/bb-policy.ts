@@ -14,6 +14,31 @@ import {
 export const BB_CANONICAL_PERIOD = { month: 7, year: 2026 } as const;
 export const BB_CANONICAL_MAPPING_PROFILE = "BB_CANONICAL_V1" as const;
 export const BB_CANONICAL_MAPPING_VERSION = 1 as const;
+/**
+ * The currently required monthly BB source set. This policy is intentionally
+ * separate from discovery: discovery may register every Google worksheet,
+ * while business validation and required-source checks use only these seven.
+ */
+export const BB_REQUIRED_MONTHLY_WORKSHEETS = [
+  "Januari26-BB",
+  "Februari26-BB",
+  "Maret26-BB",
+  "April26-BB",
+  "Mei26-BB",
+  "Juni26-BB",
+  "Juli26-BB",
+] as const;
+
+export function missingRequiredMonthlyBBWorksheets(
+  availableNames: readonly string[],
+) {
+  const available = new Set(
+    availableNames.map((name) => name.trim().toLocaleLowerCase("en-US")),
+  );
+  return BB_REQUIRED_MONTHLY_WORKSHEETS.filter(
+    (name) => !available.has(name.toLocaleLowerCase("en-US")),
+  );
+}
 
 export type AutomaticWorksheetGate =
   | "APPROVED"

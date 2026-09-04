@@ -1,5 +1,10 @@
 # Controlled Import Report — Juli26-BB
 
+> **HISTORICAL / SUPERSEDED FOR SYNC ARCHITECTURE:** This controlled import
+> report is a record of the 2026-08-30 Juli26-BB operation. Its statement about
+> the old discovery/selection boundary must not be used as the current Phase
+> 6J transaction contract.
+
 Tanggal pelaksanaan: 30 Agustus 2026  
 Status akhir: **PASS** (dengan warning non-blocking dari parser existing)
 

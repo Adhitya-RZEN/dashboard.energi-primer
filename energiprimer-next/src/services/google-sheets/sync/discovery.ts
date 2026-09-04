@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 
 import {
   getGoogleSheetsConfig,
@@ -16,7 +17,12 @@ import {
   emitSyncDiagnostic,
   type SyncDiagnosticContext,
 } from "./diagnostic-core";
-import { safeSyncErrorDetails } from "./diagnostics";
+import { safeSyncErrorDetails, withSyncDiagnostic } from "./diagnostics";
+import {
+  acquireSyncSourceLease,
+  ensureSyncSourceForDiscovery,
+  releaseSyncSourceLease,
+} from "./lease";
 
 export const SYNC_WORKSHEET_STATUSES = [
   "DISCOVERED",
@@ -120,9 +126,33 @@ function statusForExistingWorksheet(status: string | undefined): SyncWorksheetSt
   return "DISCOVERED";
 }
 
-export async function discoverGoogleSheetsWorksheets(
+export type PreparedGoogleSheetsDiscovery = {
+  sourceKey: string;
+  externalId: string;
+  current: readonly GoogleSheetsWorksheetMetadata[];
+  now: Date;
+};
+
+type PreparedCurrentWorksheet = {
+  worksheetKey: string;
+  worksheetTitle: string;
+  normalizedTitle: string;
+  status: SyncWorksheetStatus;
+  rowCount: number;
+};
+
+export type PreparedWorksheetDiscovery = {
+  sourceId: bigint;
+  sourceKey: string;
+  current: readonly PreparedCurrentWorksheet[];
+  missingKeys: readonly string[];
+  diff: WorksheetDiscoveryDiff;
+  now: Date;
+};
+
+export async function prepareGoogleSheetsWorksheetDiscovery(
   context?: SyncDiagnosticContext,
-) {
+): Promise<PreparedGoogleSheetsDiscovery> {
   const configStartedAt = diagnosticNow();
   let config: GoogleSheetsConfig;
   try {
@@ -147,94 +177,229 @@ export async function discoverGoogleSheetsWorksheets(
     }
     throw error;
   }
+
   // The metadata request is deliberately completed before any database write.
   const current = await listGoogleSheetsWorksheets({
     config,
     diagnostic: context,
   });
-  const now = new Date();
-  const sourceKey = stableGoogleSheetsSourceKey(config.spreadsheetId);
+  return {
+    sourceKey: stableGoogleSheetsSourceKey(config.spreadsheetId),
+    externalId: config.spreadsheetId,
+    current,
+    now: new Date(),
+  };
+}
 
-  const transactionStartedAt = diagnosticNow();
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const source = await tx.syncSource.upsert({
-        where: { sourceKey },
-        create: {
-          sourceKey,
-          provider: "google_sheets",
-          externalId: config.spreadsheetId,
-          status: "ACTIVE",
-          lastDiscoveredAt: now,
-        },
-        update: {
-          externalId: config.spreadsheetId,
-          status: "ACTIVE",
-          lastDiscoveredAt: now,
-        },
-        select: { id: true },
-      });
-      const previous = await tx.syncWorksheet.findMany({
-        where: { sourceId: source.id },
+export function prepareWorksheetDiscovery(
+  previous: readonly ExistingWorksheetSnapshot[],
+  current: readonly GoogleSheetsWorksheetMetadata[],
+  sourceId: bigint,
+  sourceKey: string,
+  now: Date,
+): PreparedWorksheetDiscovery {
+  const currentKeys = new Set<string>();
+  for (const worksheet of current) {
+    if (currentKeys.has(worksheet.sheetId)) {
+      throw new Error("Duplicate worksheet stable key in current metadata.");
+    }
+    currentKeys.add(worksheet.sheetId);
+  }
+
+  const previousByKey = new Map(
+    previous.map((worksheet) => [worksheet.worksheetKey, worksheet]),
+  );
+  const diff = classifyWorksheetDiscovery(previous, current);
+  const preparedCurrent = current.map((worksheet) => {
+    const existing = previousByKey.get(worksheet.sheetId);
+    return {
+      worksheetKey: worksheet.sheetId,
+      worksheetTitle: worksheet.title,
+      normalizedTitle: normalizeWorksheetName(worksheet.title),
+      status: statusForExistingWorksheet(existing?.status),
+      rowCount: worksheet.rowCount ?? 0,
+    };
+  });
+  const missingKeys = previous
+    .filter((worksheet) => !currentKeys.has(worksheet.worksheetKey))
+    .map((worksheet) => worksheet.worksheetKey);
+
+  return {
+    sourceId,
+    sourceKey,
+    current: preparedCurrent,
+    missingKeys,
+    diff,
+    now,
+  };
+}
+
+async function persistCurrentWorksheets(
+  tx: Prisma.TransactionClient,
+  input: PreparedWorksheetDiscovery,
+) {
+  if (input.current.length === 0) return;
+  const values = input.current.map((worksheet) =>
+    Prisma.sql`(
+      ${input.sourceId},
+      ${worksheet.worksheetKey},
+      ${worksheet.worksheetTitle},
+      ${worksheet.normalizedTitle},
+      ${worksheet.status},
+      ${input.now},
+      ${input.now},
+      ${worksheet.rowCount},
+      ${input.now}
+    )`,
+  );
+
+  await tx.$executeRaw`
+    INSERT INTO "sync_worksheets" (
+      "source_id",
+      "worksheet_key",
+      "worksheet_title",
+      "normalized_title",
+      "status",
+      "first_seen_at",
+      "last_seen_at",
+      "row_count",
+      "updated_at"
+    )
+    VALUES ${Prisma.join(values)}
+    ON CONFLICT ("source_id", "worksheet_key")
+    DO UPDATE SET
+      "worksheet_title" = EXCLUDED."worksheet_title",
+      "normalized_title" = EXCLUDED."normalized_title",
+      "status" = EXCLUDED."status",
+      "last_seen_at" = EXCLUDED."last_seen_at",
+      "row_count" = EXCLUDED."row_count",
+      "updated_at" = EXCLUDED."updated_at"
+  `;
+}
+
+export async function persistGoogleSheetsWorksheetDiscovery(
+  prepared: PreparedGoogleSheetsDiscovery,
+  sourceId: bigint,
+  context?: SyncDiagnosticContext,
+) {
+  const registryRead = await withSyncDiagnostic(
+    context,
+    "discovery_registry_read",
+    () =>
+      prisma.syncWorksheet.findMany({
+        where: { sourceId },
         select: {
           worksheetKey: true,
           worksheetTitle: true,
           status: true,
         },
-      });
-      const diff = classifyWorksheetDiscovery(previous, current);
-      const previousByKey = new Map(
-        previous.map((worksheet) => [worksheet.worksheetKey, worksheet]),
-      );
+      }),
+  );
 
-      for (const worksheet of current) {
-        const existing = previousByKey.get(worksheet.sheetId);
-        await tx.syncWorksheet.upsert({
-          where: {
-            sourceId_worksheetKey: {
-              sourceId: source.id,
-              worksheetKey: worksheet.sheetId,
-            },
-          },
-          create: {
-            sourceId: source.id,
-            worksheetKey: worksheet.sheetId,
-            worksheetTitle: worksheet.title,
-            normalizedTitle: normalizeWorksheetName(worksheet.title),
-            status: "DISCOVERED",
-            firstSeenAt: now,
-            lastSeenAt: now,
-            rowCount: worksheet.rowCount ?? 0,
-          },
-          update: {
-            worksheetTitle: worksheet.title,
-            normalizedTitle: normalizeWorksheetName(worksheet.title),
-            status: statusForExistingWorksheet(existing?.status),
-            lastSeenAt: now,
-            rowCount: worksheet.rowCount ?? 0,
-          },
-        });
+  const preparationStartedAt = diagnosticNow();
+  let input: PreparedWorksheetDiscovery;
+  try {
+    input = prepareWorksheetDiscovery(
+      registryRead,
+      prepared.current,
+      sourceId,
+      prepared.sourceKey,
+      prepared.now,
+    );
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "discovery_preparation",
+        status: "PASS",
+        durationMs: diagnosticDurationMs(preparationStartedAt),
+      });
+    }
+  } catch (error) {
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "discovery_preparation",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(preparationStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+    }
+    throw error;
+  }
+
+  const transactionStartedAt = diagnosticNow();
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.syncSource.update({
+        where: { id: sourceId },
+        data: {
+          externalId: prepared.externalId,
+          status: "ACTIVE",
+          lastDiscoveredAt: prepared.now,
+        },
+      });
+
+      const currentStartedAt = diagnosticNow();
+      try {
+        await persistCurrentWorksheets(tx, input);
+        if (context) {
+          emitSyncDiagnostic({
+            context,
+            stage: "discovery_current_persistence",
+            status: "PASS",
+            durationMs: diagnosticDurationMs(currentStartedAt),
+          });
+        }
+      } catch (error) {
+        if (context) {
+          emitSyncDiagnostic({
+            context,
+            stage: "discovery_current_persistence",
+            status: "FAIL",
+            durationMs: diagnosticDurationMs(currentStartedAt),
+            ...safeSyncErrorDetails(error),
+          });
+        }
+        throw error;
       }
 
-      for (const worksheet of previous) {
-        if (!current.some((item) => item.sheetId === worksheet.worksheetKey)) {
-          await tx.syncWorksheet.update({
+      const missingStartedAt = diagnosticNow();
+      try {
+        if (input.missingKeys.length > 0) {
+          await tx.syncWorksheet.updateMany({
             where: {
-              sourceId_worksheetKey: {
-                sourceId: source.id,
-                worksheetKey: worksheet.worksheetKey,
-              },
+              sourceId,
+              worksheetKey: { in: [...input.missingKeys] },
             },
             data: { status: "MISSING" },
           });
         }
+        if (context) {
+          emitSyncDiagnostic({
+            context,
+            stage: "discovery_missing_persistence",
+            status: "PASS",
+            durationMs: diagnosticDurationMs(missingStartedAt),
+          });
+        }
+      } catch (error) {
+        if (context) {
+          emitSyncDiagnostic({
+            context,
+            stage: "discovery_missing_persistence",
+            status: "FAIL",
+            durationMs: diagnosticDurationMs(missingStartedAt),
+            ...safeSyncErrorDetails(error),
+          });
+        }
+        throw error;
       }
 
       return {
-        sourceId: source.id.toString(),
-        sourceKey,
-        worksheetCount: current.length,
-        diff,
+        sourceId: sourceId.toString(),
+        sourceKey: prepared.sourceKey,
+        worksheetCount: prepared.current.length,
+        diff: input.diff,
       };
     }, { maxWait: 10_000, timeout: 60_000 });
 
@@ -254,6 +419,71 @@ export async function discoverGoogleSheetsWorksheets(
         stage: "discovery_transaction",
         status: "FAIL",
         durationMs: diagnosticDurationMs(transactionStartedAt),
+        ...safeSyncErrorDetails(error),
+      });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Compatibility entry point for the verification script. The incremental
+ * engine keeps the lease for the entire sync; this standalone discovery path
+ * acquires and releases it around registry persistence.
+ */
+export async function discoverGoogleSheetsWorksheets(
+  context?: SyncDiagnosticContext,
+) {
+  const totalStartedAt = diagnosticNow();
+  try {
+    const prepared = await prepareGoogleSheetsWorksheetDiscovery(context);
+    const sourceId = await ensureSyncSourceForDiscovery(
+      prepared.sourceKey,
+      prepared.externalId,
+      context,
+    );
+    const leaseStartedAt = diagnosticNow();
+    const lease = await acquireSyncSourceLease(sourceId);
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "source_lease",
+        status: lease ? "PASS" : "FAIL",
+        durationMs: diagnosticDurationMs(leaseStartedAt),
+        ...(lease
+          ? {}
+          : {
+              errorCategory: "CONCURRENCY",
+              errorCode: "NOT_ACQUIRED",
+            }),
+      });
+    }
+    if (!lease) throw new Error("Synchronization source lease was not acquired.");
+    try {
+      const result = await persistGoogleSheetsWorksheetDiscovery(
+        prepared,
+        sourceId,
+        context,
+      );
+      if (context) {
+        emitSyncDiagnostic({
+          context,
+          stage: "discovery_total",
+          status: "PASS",
+          durationMs: diagnosticDurationMs(totalStartedAt),
+        });
+      }
+      return result;
+    } finally {
+      await releaseSyncSourceLease(sourceId, lease.token);
+    }
+  } catch (error) {
+    if (context) {
+      emitSyncDiagnostic({
+        context,
+        stage: "discovery_total",
+        status: "FAIL",
+        durationMs: diagnosticDurationMs(totalStartedAt),
         ...safeSyncErrorDetails(error),
       });
     }

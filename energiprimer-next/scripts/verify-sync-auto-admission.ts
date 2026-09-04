@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 
 import {
+  BB_REQUIRED_MONTHLY_WORKSHEETS,
   BB_CANONICAL_MAPPING_PROFILE,
   BB_CANONICAL_MAPPING_VERSION,
   evaluateAutomaticWorksheet,
   isAfterCanonicalBBWorksheet,
   isAutomaticFutureBBWorksheet,
+  missingRequiredMonthlyBBWorksheets,
 } from "../src/services/google-sheets/sync/bb-policy";
 import type { SchemaColumnSnapshot, SchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
 
@@ -64,6 +66,23 @@ assert.equal(isAutomaticFutureBBWorksheet("Juli26-BB", asOfSeptember), false);
 assert.equal(isAutomaticFutureBBWorksheet("Agustus25-BB", asOfSeptember), false);
 assert.equal(isAutomaticFutureBBWorksheet("Agustus26-SOLAR", asOfSeptember), false);
 assert.equal(isAfterCanonicalBBWorksheet("agustus26-bb"), true);
+assert.deepEqual(BB_REQUIRED_MONTHLY_WORKSHEETS, [
+  "Januari26-BB",
+  "Februari26-BB",
+  "Maret26-BB",
+  "April26-BB",
+  "Mei26-BB",
+  "Juni26-BB",
+  "Juli26-BB",
+]);
+assert.deepEqual(
+  missingRequiredMonthlyBBWorksheets(BB_REQUIRED_MONTHLY_WORKSHEETS),
+  [],
+);
+assert.equal(
+  missingRequiredMonthlyBBWorksheets(["Januari26-BB", "Juli26-BB"]).length,
+  5,
+);
 
 const approved = evaluateAutomaticWorksheet("Agustus26-BB", canonical, {
   canonicalSchema: canonical,
@@ -106,6 +125,8 @@ console.log(
         "exact canonical schema is approved with BB_CANONICAL_V1",
         "schema changes are routed to review",
         "future-dated worksheets are not imported early",
+        "required monthly BB source of truth is exactly January-July 2026",
+        "non-required registry worksheets are not required by BB policy",
       ],
     },
     null,
