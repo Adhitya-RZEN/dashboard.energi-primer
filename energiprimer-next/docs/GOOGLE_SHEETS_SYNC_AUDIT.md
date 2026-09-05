@@ -1,5 +1,11 @@
 # Google Sheets Sync Audit, Recovery, and Concurrency
 
+> CURRENT PRODUCTION POINTER (Phase 6N, 2026-09-05): The Phase 6J
+> discovery/diagnostic implementation described here is retained as the
+> technical reference. Production deployment evidence is in Phase 6K and the
+> one controlled sync result is in Phase 6L; this document is not a sync
+> authorization.
+
 > **Phase 6J update (2026-09-04):** The discovery order and diagnostic rules
 > below reflect the implemented local hardening. The Phase 6J report records
 > which write-capable cases remain blocked without disposable PostgreSQL.

@@ -1,9 +1,20 @@
 # Google Sheets Production Readiness
 
+> CURRENT OPERATIONAL CONTRACT (2026-09-05): Google metadata read passed and
+> reported 199 worksheet records. That 199-item registry is inventory only;
+> the required monthly business source set is exactly
+> Januari26-BB, Februari26-BB, Maret26-BB, April26-BB, Mei26-BB, Juni26-BB,
+> and Juli26-BB. Google COPY is available through July 2026. Phase 6L
+> executed exactly one authorized controlled Production sync successfully
+> (HTTP 200, SUCCESS, syncRun ID 2, Google writes 0); P2028 was NOT OBSERVED.
+> Current documentation classification is PASS WITH LOW-PRIORITY HARDENING.
+
+## Historical source-code readiness snapshot (2026-08-28)
+
 Tanggal audit: 2026-08-28  
 Scope: audit konfigurasi dan boundary server-side untuk deployment Vercel.
 
-## Ringkasan
+## Historical source-code summary
 
 Integrasi target menggunakan service account dan Google Sheets REST API melalui implementasi native di `src/lib/google-sheets.ts`. Dependency `googleapis` tidak digunakan; tidak ada alasan teknis untuk menambahkannya pada Phase 10.
 
@@ -100,6 +111,6 @@ Setelah konfigurasi production disediakan secara manual, lakukan read-only verif
 
 Saat ini integration test production: **BLOCKED** karena konfigurasi deployment belum tersedia.
 
-## Status
+## Historical status at audit date
 
 **READY WITH WARNINGS untuk kode; BLOCKED untuk koneksi production** sampai credential provisioning dan permission production dikonfigurasi manual.

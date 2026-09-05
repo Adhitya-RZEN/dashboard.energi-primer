@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 import { UserMenu, type AuthenticatedUser } from "@/components/auth/UserMenu";
 
@@ -21,12 +20,14 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
           aria-label="Buka dashboard monitoring"
         >
           <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
-            <Image
+            {/* The local SVG uses intrinsic dimensions; a native image keeps
+                the header free of next/image's generated color style attr. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/images/Logo_PLN.svg"
               alt="Logo PLN"
               width={36}
               height={36}
-              unoptimized
               className="size-9 object-contain"
             />
           </span>

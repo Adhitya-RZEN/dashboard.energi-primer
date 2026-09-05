@@ -6,7 +6,6 @@ import {
   Line,
   LineChart,
   ReferenceLine,
-  Tooltip,
   XAxis,
   YAxis,
   type MouseHandlerDataParam,
@@ -58,6 +57,9 @@ export function EnergyConsumptionChart({
   if (!hasData) return <ChartEmptyState />;
 
   const visible = DATASETS.filter((dataset) => !hidden.has(dataset.key));
+  const hovered = hoveredDate
+    ? series.find((point) => point.date === hoveredDate)
+    : null;
   const selected = selectedDate
     ? series.find((point) => point.date === selectedDate)
     : null;
@@ -84,7 +86,22 @@ export function EnergyConsumptionChart({
           )
         }
       />
-      <ChartFrame label="Grafik konsumsi energi primer harian">
+      <ChartFrame
+        label="Grafik konsumsi energi primer harian"
+        overlay={
+          <DashboardChartTooltip
+            active={Boolean(hovered)}
+            label={hovered?.date}
+            unit="ton"
+            entries={visible.map((dataset) => ({
+              dataKey: dataset.key,
+              name: dataset.label,
+              value: hovered?.[dataset.key as "coal" | "biomass"],
+              color: dataset.color,
+            }))}
+          />
+        }
+      >
         <LineChart
           width={CHART_WIDTH_FALLBACK}
           height={CHART_HEIGHT}
@@ -111,12 +128,6 @@ export function EnergyConsumptionChart({
             tickLine={false}
             axisLine={{ stroke: "#cbd5e1" }}
             width={54}
-          />
-          <Tooltip
-            content={<DashboardChartTooltip unit="ton" accentColor="#2563eb" />}
-            cursor={{ stroke: "#94a3b8", strokeDasharray: "4 4" }}
-            filterNull
-            isAnimationActive={false}
           />
           {hoveredDate ? (
             <ReferenceLine

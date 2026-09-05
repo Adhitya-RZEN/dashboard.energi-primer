@@ -1,5 +1,11 @@
 # Production Preparation Report
 
+> HISTORICAL / SUPERSEDED FOR CURRENT PRODUCTION STATE (2026-09-05):
+> This Phase 20 / Phase 6C preparation report preserves its original
+> evidence. Current deployment and controlled-sync evidence is in Phase 6K and
+> Phase 6L; current hardening classification is in Phase 6M and documentation
+> closure is in Phase 6N.
+
 > HISTORICAL BASELINE (Phase 6C, 2026-09-02): Password-recovery/mail entries
 > below describe the pre-remediation implementation only.
 

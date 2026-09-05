@@ -1,5 +1,15 @@
 # Google Sheets Sync Hardening
 
+> CURRENT REFERENCE (Phase 6N, 2026-09-05): Production deployment and the
+> one controlled Production sync are evidenced by Phase 6K and Phase 6L.
+> This document retains the Phase 6J implementation and hardening details;
+> it is not a deployment or sync authorization. Phase 6O records a separate
+> CSP static audit, Phase 6Q public local runtime validation, Phase 6R
+> production-like local runtime validation, and Phase 6S CSP remediation;
+> none changed the sync path, source-selection policy, or Production security
+> headers. Phase 6T independently revalidated the local CSP candidate in two
+> fresh disposable runs; it also did not touch the sync path or Production.
+
 > **Phase 6J implementation update (2026-09-04):** The discovery transaction
 > hardening is implemented locally. Production deployment and Production sync
 > remain outside this phase; see the Phase 6J implementation report.
@@ -122,3 +132,36 @@ credential and database validation remain a deployment-stage manual check. The
 Phase 6J write-capable discovery matrix requires disposable PostgreSQL; an
 unavailable disposable target is a BLOCKED result, never a Production
 substitute.
+
+## Phase 6S non-interference
+
+Phase 6S changed only local CSP presentation/runtime verification concerns. It
+did not change Google metadata discovery, the 199-row worksheet registry, the
+exact seven admitted `[Bulan]26-BB` worksheets, lease or `syncRun` behavior,
+retry policy, the `0 22 * * *` Cron schedule, PostgreSQL schemas/migrations,
+credentials, or the Production sync path. The CSP candidate remains a
+loopback-only Report-Only test boundary; evidence is recorded in
+`docs/PHASE6S_CSP_REMEDIATION_2026-09-05.md`.
+Phase 6T confirms the same non-interference boundary with two fresh local
+runs. Its evidence is recorded in
+`docs/PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md`.
+
+## Phase 6U non-interference and CSP policy
+
+Phase 6U is a read-only CSP production-readiness review. Browser CSP governs
+the rendered application; it does not govern the server-side Next.js to Google
+Sheets or PostgreSQL connection. No Google metadata discovery, worksheet
+import, Cron execution, credential, registry row, migration, or Production
+setting was changed or executed by this phase. The required monthly business
+source remains exactly `Januari26-BB` through `Juli26-BB`; the 199-row metadata
+registry is inventory and is not a 199-source import plan.
+
+Future server-only sync changes and ordinary source/month worksheet changes
+normally do not require CSP changes, although worksheet admission and source
+contract review still apply. A browser-facing Google integration, external
+resource, iframe/widget, analytics endpoint, WebSocket, DOM/CSS/JavaScript
+change, or framework/dependency upgrade requires CSP review and local runtime
+regression. Do not broaden CSP with `unsafe-inline`, `unsafe-eval`, wildcard
+sources, or an unreviewed external origin. Phase 6U leaves Production CSP OFF
+and records the detailed readiness and rollout boundary in
+`docs/PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md`.

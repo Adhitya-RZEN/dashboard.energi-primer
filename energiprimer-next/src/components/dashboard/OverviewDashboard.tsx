@@ -81,10 +81,12 @@ function TargetPanel({ data }: { data: OverviewData }) {
           {formatNumber(progress, 1)}% tercapai
         </span>
       </div>
-      <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
-        <span
-          className="block h-full rounded-full bg-violet-600"
-          style={{ width: `${progress}%` }}
+      <div className="mt-5">
+        <progress
+          aria-label="Progress target biomassa"
+          className="dashboard-progress"
+          max={100}
+          value={progress}
         />
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">

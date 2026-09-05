@@ -1,5 +1,10 @@
 # Google Sheets Incremental Sync
 
+> CURRENT PRODUCTION POINTER (Phase 6N, 2026-09-05): The incremental and
+> idempotency design below is the current technical reference. Deployment and
+> one controlled Production execution are evidenced by Phase 6K and Phase 6L.
+> No additional sync is authorized by this document.
+
 > **Phase 6J update (2026-09-04):** Discovery now uses the lease-guarded,
 > set-oriented preparation/persistence path described below. The Phase 6J
 > implementation report is the authoritative gate record.

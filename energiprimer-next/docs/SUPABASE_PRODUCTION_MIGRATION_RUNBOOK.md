@@ -1,11 +1,19 @@
 # Supabase Production Migration Runbook
 
+> CURRENT PRODUCTION MIGRATION STATE (2026-09-05): Read-only migration
+> status and preflight PASS. The canonical production history is
+> prisma/production/ with baseline 20260901130000_production_schema_baseline;
+> there are no pending migrations, drift, checksum mismatch, unfinished
+> migrations, or schema diff. Runtime uses the pooler on port 6543; migration
+> checks use the direct TLS connection on port 5432. No migration deploy or
+> resolve is authorized by this documentation closure.
+
 > Phase 21 status (2026-09-01): **BLOCKED at Gate B0**. The read-only
 > preflight detected both target URL variables, but Direct Connection and
 > Transaction Pooler authentication failed before metadata could be read. See
 > [the execution report](./SUPABASE_MIGRATION_EXECUTION_REPORT_2026-09-01.md).
 
-Status: **PREPARED ONLY — NOT EXECUTED**
+Historical Phase 21/6B status: **PREPARED ONLY — NOT EXECUTED**
 
 This runbook describes the governed schema migration workflow for the current
 Supabase PostgreSQL target. Phase 6B does not execute a migration, resolve a

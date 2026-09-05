@@ -1,6 +1,6 @@
 # Project Map — Energi Primer
 
-Audit date: 2026-09-02
+Audit date: 2026-09-05
 Scope: `energiprimer-next` application and its repository-level configuration, scripts, migrations, documentation, and current worktree artifacts.
 Mutation policy: this audit did not write to the database, Google Sheets, mail provider, or production source code.
 
@@ -8,6 +8,25 @@ Phase 6J update: local application source, verification scripts, and
 documentation may be changed by the implementation checkpoint; no Production
 database, Google Sheets, Vercel, environment, secret, migration, or deployment
 operation is authorized here.
+
+Phase 6N closure: documentation is aligned with the current Phase 6K
+deployment and Phase 6L controlled-sync evidence. Current classification is
+DOCUMENTATION OPERATIONALLY ALIGNED; overall readiness remains PRODUCTION
+READY WITH LOW-PRIORITY HARDENING. The only current public auth page is
+/login; public forgot/reset recovery is decommissioned.
+
+Phase 6O static CSP status was followed by Phase 6Q public-runtime validation,
+Phase 6R production-like discovery, and Phase 6S remediation. Phase 6S used a
+disposable loopback PostgreSQL/admin fixture and covered request-time `/login`
+nonce matching, Auth.js Credentials login/session/logout, protected redirect,
+all six dashboard routes, Recharts, and the six known dynamic-style locations.
+The local Report-Only candidate gate passed with zero
+`script-src-elem`/`style-src-attr` violations. Production CSP remains absent;
+no Production header or enforcement change was made.
+Phase 6T independently reproduced this result after a clean build in two
+fresh disposable loopback runs with 10/10 nonce matching and uniqueness per
+run; the no-flag control preceded each candidate run. Production CSP remains
+absent and no remote boundary was accessed.
 
 ## Evidence convention
 
@@ -24,7 +43,7 @@ The active product is a Next.js App Router dashboard for PLN Jeranjang energy da
 ```text
 Browser
   │
-  ├── Public Next.js routes: login, forgot password, reset password
+  ├── Public Next.js routes: /login only; recovery routes decommissioned
   │       └── Auth.js Credentials → users / cache / password_reset_tokens
   │
   └── Protected route group
@@ -60,7 +79,7 @@ authentication architecture.
 | `energiprimer-next/src/services/` | Dashboard reads, reports, importer, dynamic parser, sync engine | Business and data orchestration | High risk for data correctness |
 | `energiprimer-next/src/lib/` | Prisma, Google API, mail, auth security, throttling, environment helpers | Shared infrastructure | Changes can affect every request |
 | `energiprimer-next/prisma/` | Main schema plus incremental history and separate production baseline | Database contract and deployment history | Migration strategy needs explicit governance |
-| `energiprimer-next/scripts/` | Verification, import, sync, database/operator commands | Operational surface | Some scripts can mutate external/local data |
+| `energiprimer-next/scripts/` | Verification, import, sync, database/operator commands, CSP dependency patching, and local runtime harness | Operational surface | Some scripts can mutate external/local data; Phase 6S harness is loopback/disposable-only |
 | `energiprimer-next/docs/` | Current and older audit/deployment reports | Human/agent context | Several documents are stale or describe planned work |
 | root `docs/` | Older architecture/UI material, including Laravel references | Historical repository documentation | Do not use as current runtime truth without source verification |
 | root `graphify-out/` | Untracked generated graph containing old Laravel paths | Generated analysis artifact | Stale/untrusted; preserve, do not execute as architecture evidence |
@@ -77,17 +96,18 @@ authentication architecture.
 | Styling/charts | Tailwind CSS 4/PostCSS, Recharts | VERIFIED |
 | Package manager | npm, `package-lock.json`, npm scripts | VERIFIED |
 | ORM/query layer | Prisma `6.19.3` and `@prisma/client` | VERIFIED |
-| Database | PostgreSQL through `DATABASE_URL` | VERIFIED from Prisma provider and imports; live target UNKNOWN |
+| Database | PostgreSQL through `DATABASE_URL` | VERIFIED in Phase 6K read-only Production checks; runtime pooler and direct migration endpoints separated |
 | Authentication | Auth.js/NextAuth v5 beta Credentials provider, JWT session, bcrypt | VERIFIED |
 | Google integration | Google Sheets API v4 called with a manually created JWT service-account flow | VERIFIED |
 | Mail | No active application mail provider | DECOMMISSIONED in Phase 6C |
-| Hosting | `vercel.json` cron configuration; Vercel is intended deployment | VERIFIED configuration; deployed project state UNKNOWN |
-| Testing | No test script, test config, or tracked unit/E2E spec discovered | VERIFIED |
+| Hosting | `vercel.json` cron configuration; Vercel Production deployment verified in Phase 6K | VERIFIED: READY Production deployment dpl_Gj1BecPeA6N7dZkeHE7LmnwbNRRX; deployed SHA equals audited HEAD |
+| Testing | No general test suite/config; Phase 6S local CSP harness and `@playwright/test` dependency are available for production-like local verification | VERIFIED |
 | Supabase | No active application helper; operator scripts/reports remain | VERIFIED not active application auth |
 
 The package manifest does not require browser Supabase packages for the active
-application. `@playwright/test` and `playwright` are also not installed as
-project dependencies.
+application. `@playwright/test` is available as the local Phase 6S browser
+harness dependency; no separate `playwright` package or browser package is
+required by the Production runtime.
 
 ## 4. Directory and responsibility map
 
@@ -366,7 +386,7 @@ There is no request-body schema because the route uses GET/POST only as a trigge
 
 ### Error handling
 
-The sync route returns generic `500` JSON on uncaught errors. The sync engine classifies Google/database errors, retries selected transient failures, marks worksheet/run states, and stores safe summaries. Dashboard pages catch service failures and render a generic overview error state. The custom reset flow deliberately suppresses mail delivery details from the user, which protects enumeration but can hide operational delivery failures.
+The sync route returns generic `500` JSON on uncaught errors. The sync engine classifies Google/database errors, retries selected transient failures, marks worksheet/run states, and stores safe summaries. Dashboard pages catch service failures and render a generic overview error state. Public recovery/mail behavior is decommissioned; password-change behavior remains authenticated and server-side.
 
 ## 10. Authentication and authorization map
 
@@ -394,7 +414,7 @@ The sync API is a separate machine-to-machine boundary: deployment gate, bearer 
 | Google Sheets API v4 | Source workbook discovery, reads, import/sync, optional direct overview | Service-account JSON path or email/private key plus spreadsheet ID | `src/lib/google-sheets.ts`, dynamic reader, overview adapter | 15s read timeout, classified API/auth/rate-limit/malformed errors, bounded fallback in overview path |
 | Auth.js | Credential authentication and JWT session | `AUTH_SECRET`, optional auth URL/trust settings via standard env | `src/auth.ts`, auth route, protected layout | Generic auth errors and redirects |
 | Supabase | Operator/migration context only | Values belong to separate operator scripts/environments | No active application route | Not enabled by the application |
-| Vercel | Intended hosting and scheduled trigger | `vercel.json`, Vercel environment variables | Cron route | Actual project/environment wiring UNKNOWN |
+| Vercel | Verified Production hosting and scheduled trigger | `vercel.json`, Vercel environment variables | Cron route | READY deployment and source SHA verified in Phase 6K |
 
 No persistent user-upload storage or email/analytics integration beyond the above was verified.
 
@@ -450,10 +470,10 @@ The manual import commit guard only allows loopback `DATABASE_URL` with database
 There is no current `.github` CI workflow evidence. Local TypeScript/lint/build
 and read-only migration/preflight results are release gates, but a disposable
 PostgreSQL write fixture is required for the Phase 6J discovery acceptance
-matrix. Migration deployment status, Vercel project settings, production
-environment variables, and actual production database state are **UNKNOWN**
-from this repository audit. The user deploys manually; the agent does not
-deploy or trigger Production sync.
+matrix remains a separate Phase 6J acceptance concern. Phase 6K verified the
+Production deployment and Phase 6L verified exactly one authorized Production
+sync. The user deploys manually; the agent does not deploy or trigger another
+Production sync.
 
 ## 15. Business-rule map
 
@@ -513,3 +533,36 @@ Do not change without first tracing callers and running an appropriate verificat
 - `.env*`, `vercel.json`, `next.config.ts`, `package.json`, and operator scripts — runtime and security configuration.
 
 The companion `AGENT_CONTEXT.md` expands these safety rules for day-to-day coding agents. The companion `PROJECT_AUDIT.md` records the findings, evidence, impact, and recommended order of work.
+
+## 19. CSP and nonce runtime map
+
+Phase 6S keeps the CSP candidate outside Production. The request-time `/login`
+route is dynamically rendered so the framework-generated nonce can be compared
+with the response nonce on every request. Dashboard dynamic presentation uses
+finite CSS classes, while the six dashboard routes retain Recharts wrappers,
+surfaces, tooltip behavior, and interactions.
+
+The local lifecycle patch in `scripts/patch-csp-dependencies.mjs` makes the
+pinned Next.js route announcer and Recharts wrapper/surface/measurement paths
+class-based without changing the Production dependency contract at runtime.
+The disposable verification harness in `scripts/phase6s-local-runtime.mjs`
+starts `next start` with a loopback PostgreSQL fixture, exercises Auth.js and
+all dashboards, checks bounded CSP violations, and removes its temporary
+resources. Evidence is recorded in
+`docs/PHASE6S_CSP_REMEDIATION_2026-09-05.md`.
+Independent Phase 6T evidence is recorded in
+`docs/PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md`.
+
+Phase 6U reviews the candidate as technically stable with low-priority
+operational findings: Production CSP remains OFF, deployment commit signature
+is unverified, and the local Phase 6S/6T candidate is not asserted to be in
+the deployed artifact. The current Production evidence remains the Phase
+6K/6N record; no live Production header request is made in Phase 6U.
+
+The CSP change policy is: server-only and data/source changes normally need
+no CSP review; adding a monthly Google worksheet still requires source/import
+policy review but not CSP modification; browser-facing DOM/CSS/JS, external
+resources, WebSocket, analytics, iframe, or framework/dependency changes
+require CSP regression. The active source set remains exactly seven worksheets
+from Januari26-BB through Juli26-BB, while the 199-row registry is metadata
+inventory rather than 199 required monthly imports.

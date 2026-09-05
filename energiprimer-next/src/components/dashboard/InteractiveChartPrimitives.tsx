@@ -11,7 +11,6 @@ import {
 } from "react";
 import type {
   MouseHandlerDataParam,
-  TooltipPayloadEntry,
 } from "recharts";
 
 export type ChartDataset = {
@@ -19,6 +18,50 @@ export type ChartDataset = {
   label: string;
   color: string;
 };
+
+type ChartColorToken =
+  | "blue"
+  | "green"
+  | "green-bright"
+  | "green-soft"
+  | "blue-bright"
+  | "blue-soft"
+  | "indigo"
+  | "amber"
+  | "amber-soft"
+  | "violet"
+  | "slate"
+  | "slate-soft";
+
+// Dashboard series colors are a finite application-level palette. Keeping the
+// palette in the stylesheet removes React style attributes while preserving
+// the existing color contract for legends and tooltips.
+const CHART_COLOR_TOKENS: Record<string, ChartColorToken> = {
+  "#2563eb": "blue",
+  "#16a34a": "green",
+  "#22c55e": "green-bright",
+  "#86efac": "green-soft",
+  "#3b82f6": "blue-bright",
+  "#93c5fd": "blue-soft",
+  "#4f46e5": "indigo",
+  "#f59e0b": "amber",
+  "#fde68a": "amber-soft",
+  "#7c3aed": "violet",
+  "#e2e8f0": "slate",
+  "#cbd5e1": "slate-soft",
+};
+
+function chartColorToken(color: string | null | undefined): ChartColorToken {
+  return CHART_COLOR_TOKENS[color?.trim().toLowerCase() ?? ""] ?? "blue";
+}
+
+export function chartColorClass(color: string | null | undefined) {
+  return `chart-color-${chartColorToken(color)}`;
+}
+
+export function chartBorderTopClass(color: string | null | undefined) {
+  return `chart-border-top-${chartColorToken(color)}`;
+}
 
 // Recharts uses these values as a safe first render while ResponsiveContainer
 // is measuring the actual parent. The measured responsive dimensions still
@@ -33,13 +76,22 @@ type SizedChartProps = {
 
 type ChartTooltipProps = {
   active?: boolean;
-  payload?: ReadonlyArray<TooltipPayloadEntry>;
+  entries?: ReadonlyArray<ChartTooltipEntry>;
   label?: ReactNode;
   unit: string;
   accentColor?: string;
   showTotal?: boolean;
   totalSeriesCount?: number;
   totalLabel?: string;
+};
+
+export type ChartTooltipEntry = {
+  dataKey?: string | number;
+  name?: ReactNode;
+  value?: unknown;
+  color?: string;
+  unit?: string;
+  hide?: boolean;
 };
 
 export function formatChartValue(value: unknown, maximumFractionDigits = 1) {
@@ -85,11 +137,13 @@ export function ChartFrame({
   label,
   height = CHART_HEIGHT,
   initialWidth = CHART_WIDTH_FALLBACK,
+  overlay,
 }: {
   children: ReactNode;
   label: string;
   height?: number;
   initialWidth?: number;
+  overlay?: ReactNode;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(initialWidth);
@@ -122,15 +176,18 @@ export function ChartFrame({
       })
     : children;
 
+  const heightClass =
+    height === 256 ? "chart-frame-height-256" : "chart-frame-height-320";
+
   return (
     <div
       ref={frameRef}
       role="group"
       aria-label={label}
-      className="w-full min-w-0"
-      style={{ height, minHeight: height }}
+      className={`relative w-full min-w-0 ${heightClass}`}
     >
       {sizedChildren}
+      {overlay}
     </div>
   );
 }
@@ -163,8 +220,7 @@ export function ChartLegend({
           >
             <i
               aria-hidden="true"
-              className="size-2 rounded-full"
-              style={{ backgroundColor: isHidden ? "#cbd5e1" : dataset.color }}
+              className={`size-2 rounded-full ${chartColorClass(isHidden ? "#cbd5e1" : dataset.color)}`}
             />
             {dataset.label}
           </button>
@@ -190,7 +246,7 @@ export function toggleChartSeries(
 
 export function DashboardChartTooltip({
   active,
-  payload,
+  entries: payload,
   label,
   unit,
   accentColor = "#2563eb",
@@ -218,8 +274,7 @@ export function DashboardChartTooltip({
   return (
     <div
       role="tooltip"
-      className="pointer-events-none max-w-[18rem] rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur-sm"
-      style={{ borderTopColor: accentColor }}
+      className={`pointer-events-none max-w-[18rem] rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur-sm ${chartBorderTopClass(accentColor)}`}
     >
       <p className="font-bold text-slate-950">{formatChartDate(label)}</p>
       <dl className="mt-2 space-y-1.5">
@@ -231,8 +286,7 @@ export function DashboardChartTooltip({
             <dt className="flex min-w-0 items-center gap-2 text-slate-600">
               <i
                 aria-hidden="true"
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: entry.color ?? accentColor }}
+                className={`size-2 shrink-0 rounded-full ${chartColorClass(entry.color ?? accentColor)}`}
               />
               <span className="truncate">
                 {String(entry.name ?? entry.dataKey ?? "Nilai")}

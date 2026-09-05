@@ -1,5 +1,10 @@
 # Google Sheets Vercel Readiness
 
+> CURRENT PRODUCTION POINTER (2026-09-05): Phase 6K verified the Vercel
+> deployment and Phase 6L verified one authorized controlled sync. The
+> server-only Google credential boundary and exact source policy remain current;
+> the provisioning-blocked status below is a historical 2026-08-28 snapshot.
+
 Tanggal: 2026-08-28  
 Scope: compatibility and secret-boundary audit tanpa provisioning credential.
 
@@ -57,6 +62,6 @@ Provisioning credential, perubahan Google Cloud project, dan rotasi credential t
 - Error log Google tidak mencetak response credential.
 - Credential file lokal tidak tracked.
 
-## Status
+## Historical status at audit date
 
 **PASS WITH WARNINGS untuk source boundary; BLOCKED untuk production credential provisioning.**

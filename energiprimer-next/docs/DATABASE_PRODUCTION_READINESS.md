@@ -1,9 +1,21 @@
 # Database Production Readiness
 
+> CURRENT PRODUCTION DATABASE CONTRACT (2026-09-05): Runtime application
+> traffic uses DATABASE_URL through the Supabase pooler on port 6543.
+> Production migration status/preflight use SUPABASE_DIRECT_URL on direct
+> PostgreSQL port 5432 with TLS. The canonical production history is
+> prisma/production/ with baseline
+> 20260901130000_production_schema_baseline. Status and preflight passed with
+> no pending migration, drift, or schema diff. Migration is not part of the
+> build, deployment, request, or Cron path. The root migration history remains
+> legacy/local-only. See Phase 6K-A, Phase 6L, and Phase 6N.
+
+## Historical audit snapshot (2026-08-28)
+
 Tanggal audit: 2026-08-28  
 Scope: audit read-only untuk deployment Next.js ke Vercel.
 
-## Ringkasan
+## Historical audit summary
 
 Target menggunakan PostgreSQL existing melalui Prisma 6.19.3. Schema Prisma dan database tidak diubah pada Phase 10. Tidak ada `prisma migrate`, `prisma db push`, `INSERT`, `UPDATE`, atau `DELETE` yang dijalankan.
 
@@ -73,6 +85,6 @@ Rekomendasi manual: gunakan pooler yang disediakan operator PostgreSQL atau prov
 - Kebijakan backup, failover, statement timeout, dan observability database belum tersedia di repository.
 - Beban query production dan batas koneksi belum diukur.
 
-## Status
+## Historical status at audit date
 
 **BLOCKED / NOT READY untuk deployment database production.** Implementasi aplikasi dan schema tetap tidak diubah. Blocker ini dapat diselesaikan melalui konfigurasi infrastructure dan environment secara manual tanpa migration database.

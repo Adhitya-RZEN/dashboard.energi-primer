@@ -1,13 +1,30 @@
 # Vercel Configuration Readiness
 
-> Historical snapshot from 2026-08-28. The current repository now contains
+> CURRENT CONFIGURATION STATE (2026-09-05): The Next.js Production deployment
+> is active and was verified in Phase 6K. The only Cron is
+> 0 22 * * * (06:00 WITA daily). No migration runs in build, deployment,
+> request, or Cron. Runtime traffic uses the pooler database URL; direct
+> PostgreSQL is reserved for the production migration workflow. Authentication
+> is Auth.js Credentials with Prisma. Preview and Production remain separate,
+> and Phase 6L verified one authorized Production sync. Phase 6O did not add
+> CSP to Production. Phase 6R validated a production-like runtime and Phase
+> 6S remediated the request-time nonce and six dynamic-style locations on
+> loopback with a disposable database/admin fixture. Auth.js, dashboard,
+> Recharts, tooltip/interaction behavior, and the Report-Only CSP candidate
+> passed with zero `script-src-elem`/`style-src-attr` violations. Production
+> CSP remains absent and unchanged.
+> Phase 6T independently revalidated the local candidate after a clean build
+> with two fresh disposable loopback runs and 10/10 nonce match/uniqueness per
+> run. Production CSP remains absent and unchanged.
+
+> HISTORICAL / SUPERSEDED SNAPSHOT (2026-08-28). The current repository now contains
 > `vercel.json` for the Google Sheets sync cron; the Phase 6B governance report
 > is the authoritative migration/build separation document.
 
 Tanggal: 2026-08-28  
 Target: Vercel, tanpa project mutation atau deployment.
 
-## Recommended configuration
+## Historical configuration recommendations (2026-08-28)
 
 | Item              | Recommendation                                                     | Status                        |
 | ----------------- | ------------------------------------------------------------------ | ----------------------------- |
@@ -74,6 +91,50 @@ No persistent upload/storage, queue worker, scheduler, or background job require
 5. Verify Auth.js login/logout with an isolated non-production account.
 6. Check build logs, function errors, Web Vitals, and client bundle.
 
-## Status
+## Historical status at audit date
 
 **READY FOR MANUAL CONFIGURATION, NOT READY FOR DEPLOYMENT.**
+
+## Phase 6S local CSP boundary
+
+The Phase 6S candidate is generated only in the local production-like harness
+with `CSP_REPORT_ONLY=true` and loopback origins. The dependency lifecycle patch
+is applied locally for the pinned Next.js/Recharts versions so generated
+wrapper, surface, measurement, and route-announcer markup does not add
+unreviewed inline styles.
+
+No Vercel project, environment variable, secret, Cron, database, Google Sheets
+credential, migration, or Production security-header setting was changed by
+Phase 6S. The candidate remains Report-Only; CSP enforcement requires a separate
+review and authorization. See
+`docs/PHASE6S_CSP_REMEDIATION_2026-09-05.md`.
+
+Phase 6T independently reproduced the candidate with no-flag control before
+each Report-Only run. This remains local evidence only; no Vercel or remote
+header was tested or changed. See
+`docs/PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md`.
+
+## Phase 6U CSP readiness boundary
+
+Phase 6U classifies the local CSP candidate as `PASS WITH FINDINGS`: the
+request nonce, dynamic `/login`, six dashboard surfaces, Recharts output,
+external-origin boundary, and no-flag behavior are technically stable in the
+two fresh Phase 6T runs. Production CSP remains OFF. The Phase 6S/6T candidate
+is still a working-tree change and is not asserted to be present in the
+recorded Production artifact; the deployment identity is documented by
+Phase6K/6N, while commit-signature verification remains unverified.
+
+Any future CSP rollout must first verify the exact deployed commit/artifact and
+the application/deployment rollback target. The designed sequence is
+Report-Only, observe, review reports, confirm that no legitimate dependency is
+blocked, enforce, monitor, and keep a tested application/deployment rollback
+path. This review did not inspect or change a Vercel header.
+
+Future CSP review is required for browser-facing DOM/CSS/JavaScript changes,
+new external resources or browser connections, iframes/widgets/analytics,
+WebSockets, and framework or dependency upgrades. Server-only changes and
+ordinary data/source/month worksheet changes normally do not change CSP, but a
+browser-facing integration still requires the review. Do not resolve a future
+violation by adding `unsafe-inline`, `unsafe-eval`, wildcard sources, or an
+unreviewed external origin. Evidence:
+`docs/PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md`.

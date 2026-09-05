@@ -11,11 +11,9 @@ import {
   Pie,
   PieChart,
   ReferenceLine,
-  Tooltip,
   XAxis,
   YAxis,
   type MouseHandlerDataParam,
-  type TooltipPayloadEntry,
 } from "recharts";
 
 import type { OverviewDailyPoint } from "@/types/overview";
@@ -27,6 +25,7 @@ import {
   ChartLegend,
   DashboardChartTooltip,
   chartDateFromState,
+  chartColorClass,
   formatChartDate,
   formatChartValue,
   toggleChartSeries,
@@ -160,6 +159,9 @@ export function DetailLineChart({
   const selected = selectedDate
     ? series.find((point) => point.date === selectedDate)
     : null;
+  const hovered = hoveredDate
+    ? series.find((point) => point.date === hoveredDate)
+    : null;
 
   function handleMove(state: MouseHandlerDataParam) {
     setHoveredDate(chartDateFromState(state, series));
@@ -177,12 +179,29 @@ export function DetailLineChart({
       <div className="mb-2 flex items-center justify-end gap-2 px-2 text-xs text-slate-600">
         <i
           aria-hidden="true"
-          className="size-2 rounded-full"
-          style={{ backgroundColor: color }}
+          className={`size-2 rounded-full ${chartColorClass(color)}`}
         />
         {label}
       </div>
-      <ChartFrame label={`Grafik ${label}`}>
+      <ChartFrame
+        label={`Grafik ${label}`}
+        overlay={
+          <DashboardChartTooltip
+            active={Boolean(hovered)}
+            label={hovered?.date}
+            unit={unit}
+            accentColor={color}
+            entries={[
+              {
+                dataKey,
+                name: label,
+                value: hovered ? valueFor(hovered, dataKey) : null,
+                color,
+              },
+            ]}
+          />
+        }
+      >
         <LineChart
           width={CHART_WIDTH_FALLBACK}
           height={CHART_HEIGHT}
@@ -209,12 +228,6 @@ export function DetailLineChart({
             tickLine={false}
             axisLine={{ stroke: "#cbd5e1" }}
             width={54}
-          />
-          <Tooltip
-            content={<DashboardChartTooltip unit={unit} accentColor={color} />}
-            cursor={{ stroke: "#94a3b8", strokeDasharray: "4 4" }}
-            filterNull
-            isAnimationActive={false}
           />
           <ChartReferenceLines lines={referenceLines} />
           {hoveredDate ? (
@@ -271,6 +284,9 @@ export function DetailMultiLineChart({
   const selected = selectedDate
     ? series.find((point) => point.date === selectedDate)
     : null;
+  const hovered = hoveredDate
+    ? series.find((point) => point.date === hoveredDate)
+    : null;
   const accentColor = visible[0]?.color ?? "#4f46e5";
 
   function handleMove(state: MouseHandlerDataParam) {
@@ -295,7 +311,23 @@ export function DetailMultiLineChart({
           )
         }
       />
-      <ChartFrame label="Grafik multi-series">
+      <ChartFrame
+        label="Grafik multi-series"
+        overlay={
+          <DashboardChartTooltip
+            active={Boolean(hovered)}
+            label={hovered?.date}
+            unit={unit}
+            accentColor={accentColor}
+            entries={visible.map((dataset) => ({
+              dataKey: dataset.key,
+              name: dataset.label,
+              value: hovered ? valueFor(hovered, dataset.key) : null,
+              color: dataset.color,
+            }))}
+          />
+        }
+      >
         <LineChart
           width={CHART_WIDTH_FALLBACK}
           height={CHART_HEIGHT}
@@ -322,14 +354,6 @@ export function DetailMultiLineChart({
             tickLine={false}
             axisLine={{ stroke: "#cbd5e1" }}
             width={54}
-          />
-          <Tooltip
-            content={
-              <DashboardChartTooltip unit={unit} accentColor={accentColor} />
-            }
-            cursor={{ stroke: "#94a3b8", strokeDasharray: "4 4" }}
-            filterNull
-            isAnimationActive={false}
           />
           <ChartReferenceLines lines={referenceLines} />
           {hoveredDate ? (
@@ -403,6 +427,9 @@ export function DetailBarChart({
           0,
         )
       : null;
+  const hovered = hoveredDate
+    ? series.find((point) => point.date === hoveredDate)
+    : null;
 
   function handleMove(state: MouseHandlerDataParam) {
     setHoveredDate(chartDateFromState(state, series));
@@ -428,6 +455,22 @@ export function DetailBarChart({
       />
       <ChartFrame
         label={`Grafik ${datasets.map((dataset) => dataset.label).join(", ")}`}
+        overlay={
+          <DashboardChartTooltip
+            active={Boolean(hovered)}
+            label={hovered?.date}
+            unit={unit}
+            accentColor={accentColor}
+            showTotal={stacked}
+            totalSeriesCount={visible.length}
+            entries={visible.map((dataset) => ({
+              dataKey: dataset.key,
+              name: dataset.label,
+              value: hovered ? valueFor(hovered, dataset.key) : null,
+              color: dataset.color,
+            }))}
+          />
+        }
       >
         <BarChart
           width={CHART_WIDTH_FALLBACK}
@@ -457,20 +500,6 @@ export function DetailBarChart({
             tickLine={false}
             axisLine={{ stroke: "#cbd5e1" }}
             width={54}
-          />
-          <Tooltip
-            content={
-              <DashboardChartTooltip
-                unit={unit}
-                accentColor={accentColor}
-                showTotal={stacked}
-                totalSeriesCount={visible.length}
-              />
-            }
-            cursor={{ fill: "#f8fafc" }}
-            filterNull
-            shared
-            isAnimationActive={false}
           />
           {hoveredDate ? (
             <ReferenceLine
@@ -519,29 +548,8 @@ export function DetailBarChart({
   );
 }
 
-function TargetProgressTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: ReadonlyArray<TooltipPayloadEntry>;
-}) {
-  const entry = payload?.[0];
-  if (!active || !entry || typeof entry.value !== "number") return null;
-
-  return (
-    <div className="pointer-events-none rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-lg backdrop-blur-sm">
-      <p className="font-bold text-slate-950">
-        {String(entry.name ?? "Progress")}
-      </p>
-      <p className="mt-1 font-bold text-violet-700">
-        {formatChartValue(entry.value)}%
-      </p>
-    </div>
-  );
-}
-
 export function TargetProgressChart({ progress }: { progress: number }) {
+  const [tooltipActive, setTooltipActive] = useState(false);
   const safeProgress = Math.min(100, Math.max(0, progress));
   const progressColor =
     safeProgress >= 100
@@ -560,8 +568,32 @@ export function TargetProgressChart({ progress }: { progress: number }) {
       role="img"
       aria-label={`Progress target ${safeProgress.toLocaleString("id-ID", { maximumFractionDigits: 1 })} persen`}
     >
-      <ChartFrame label="Progress target biomassa" height={256} initialWidth={320}>
-        <PieChart width={320} height={256}>
+      <ChartFrame
+        label="Progress target biomassa"
+        height={256}
+        initialWidth={320}
+        overlay={
+          <DashboardChartTooltip
+            active={tooltipActive}
+            label="Target biomassa"
+            unit="%"
+            accentColor={progressColor}
+            entries={[
+              {
+                name: "Tercapai",
+                value: safeProgress,
+                color: progressColor,
+              },
+            ]}
+          />
+        }
+      >
+        <PieChart
+          width={320}
+          height={256}
+          onMouseEnter={() => setTooltipActive(true)}
+          onMouseLeave={() => setTooltipActive(false)}
+        >
           <Pie
             data={progressData}
             dataKey="value"
@@ -575,15 +607,13 @@ export function TargetProgressChart({ progress }: { progress: number }) {
             paddingAngle={0}
             stroke="none"
             isAnimationActive={false}
+            onMouseEnter={() => setTooltipActive(true)}
+            onMouseLeave={() => setTooltipActive(false)}
           >
             {progressData.map((entry) => (
               <Cell key={entry.name} fill={entry.color} />
             ))}
           </Pie>
-          <Tooltip
-            content={<TargetProgressTooltip />}
-            isAnimationActive={false}
-          />
         </PieChart>
       </ChartFrame>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">

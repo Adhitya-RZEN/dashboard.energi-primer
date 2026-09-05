@@ -1,6 +1,6 @@
 # AGENT_CONTEXT.md — Energi Primer
 
-Last audited: 2026-09-04
+Last audited: 2026-09-05
 Purpose: single source of truth for AI coding agents working in this repository.
 Scope: current `energiprimer-next` worktree. Read the actual source after this document before changing anything.
 
@@ -12,12 +12,36 @@ Scope: current `energiprimer-next` worktree. Read the actual source after this d
 
 The application is not currently a clean release snapshot. It contains pre-existing untracked audit reports and generated artifacts. Supabase operator scripts remain for historical/operational context, but no Supabase authentication path is active in `src/`. Do not assume that an untracked file is release-ready or that an older report describes current behavior.
 
-Phase 6J is the current local implementation checkpoint. Its discovery change
+Phase 6J is a historical local implementation checkpoint. Its discovery change
 is source bootstrap -> lease -> registry snapshot -> pure preparation -> short
 atomic registry persistence -> sync run. The 60-second discovery transaction
 timeout is unchanged; P2028 is classified safely and is not retried. A
 disposable PostgreSQL target is required for write-capable acceptance tests; a
 Production database is never a test fixture.
+
+Current operational closure is documented by Phase 6K, Phase 6L, Phase 6M,
+and Phase 6N. Production deployment, Auth.js Credentials, protected dashboard,
+database/migration gates, and Cron configuration were verified; exactly one
+authorized Production sync returned SUCCESS with syncRun ID 2 and P2028 was
+not observed. Public recovery is decommissioned; /login is the current public
+authentication page. Overall readiness is PRODUCTION READY WITH
+LOW-PRIORITY HARDENING.
+
+Phase 6Q followed the Phase 6O static audit with a local-only Report-Only
+runtime, Phase 6R completed the production-like loopback run, and Phase 6S
+remediated the request-time nonce and dashboard dynamic-style findings. A
+disposable PostgreSQL/admin fixture enabled Auth.js Credentials login,
+session/logout, protected redirect, all six dashboard routes, Recharts
+interaction, and the six known dynamic-style locations. The Phase 6S
+Report-Only candidate passed with matching request/DOM nonces, five distinct
+nonce requests, and zero `script-src-elem`/`style-src-attr` violations.
+Keep the result local-only: Production CSP remains absent and must not be
+enforced from this phase.
+
+Phase 6T independently reproduced the Phase 6S candidate after a clean build
+in two fresh local runs. Each run completed 10/10 request/DOM nonce matching
+and uniqueness, no-flag-first control, Auth.js/dashboard/Recharts checks,
+network-failure classification, and cleanup. Production remains unchanged.
 
 ## 1. Project Overview
 
@@ -71,7 +95,8 @@ Root `graphify-out/` is an untracked generated graph of an older Laravel tree. T
 - Tailwind CSS 4 and Recharts.
 - Sync API uses Node runtime and `maxDuration = 300`.
 - Production security headers are configured in `next.config.ts`; HSTS is enabled only when `NODE_ENV=production`.
-- The stabilization pass makes `tsc --noEmit --incremental false` and `npm run lint` pass. Live database availability remains environment-dependent.
+- The CSP candidate is generated only by the local Phase 6S harness with `CSP_REPORT_ONLY=true`; it is not a Production header or enforcement switch.
+- The stabilization pass makes `tsc --noEmit --incremental false` and `npm run lint` pass. Production database availability and migration gates were verified in Phase 6K; local environment availability remains environment-dependent.
 
 ## 5. Frontend
 
@@ -247,9 +272,9 @@ of the active browser contract. `DASHBOARD_DATA_SOURCE`, `NODE_ENV`, and
 
 `vercel.json` schedules `/api/sync/google-sheets` with `0 22 * * *` (06:00
 WITA daily). The route is Node-based and allows up to 300 seconds. Actual
-Vercel project settings, environment values, deployed commit, and production
-database state are UNKNOWN from this repository. The user deploys manually;
-the agent does not deploy or change the Cron schedule.
+Phase 6K verified the Vercel Production deployment and Phase 6L verified one
+authorized Production sync. The user deploys manually; the agent does not
+deploy or change the Cron schedule.
 
 The deployment policy in `src/lib/deployment-environment.ts` is production/local development allowed and preview/unknown denied for sync, and is wired into the route before cron authentication and the write-capable sync engine. A preview must never have production database/Google credentials or a production cron secret.
 
@@ -257,7 +282,11 @@ There is no verified `.github` CI workflow. Treat lint/type-check/build and migr
 
 ## 16. Testing
 
-No real test suite/config was found: no `test` script, Playwright package/config, unit test package, or tracked test/spec tree. Focused scripts exist for cron auth, retry, auto-admission, dynamic parsing, legacy mapping, and schema detection.
+No general unit/E2E test suite or tracked spec tree was found. Focused scripts exist
+for cron auth, retry, auto-admission, dynamic parsing, legacy mapping, and schema
+detection. Phase 6S adds a local-only production-like browser harness and a
+reproducible dependency patch script; these do not replace a general test suite
+and never target Production or a remote database.
 
 Current local results:
 
@@ -265,9 +294,17 @@ Current local results:
 - TypeScript: PASS after removing the inactive Supabase recovery path and correcting the root layout prop type.
 - Parser/mapping/schema/retry/cron static checks: PASS.
 - Preview write-safety check: PASS; Preview, unknown, and production-without-deployment-identity are denied before sync.
-- Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; live credential E2E remains unavailable.
+- Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; deployed admin-login E2E is recorded in Phase 6K, while no separate local credential fixture is assumed.
 - Environment preflight: PASS against the local environment without printing secret values.
-- Live database, Google, Vercel, and browser E2E: NOT VERIFIED.
+- Production deployment, Auth.js/dashboard, migration status, and Cron were
+  verified in Phase 6K; one controlled sync was verified in Phase 6L.
+- A general browser E2E suite remains a separate coverage limitation; Phase 6S
+  local browser coverage is recorded above and does not authorize another
+  Production sync.
+- Phase 6S local browser E2E: PASS against `next start` with `NODE_ENV=production`,
+  disposable loopback PostgreSQL/admin fixture, Auth.js lifecycle, protected
+  redirect, all six dashboards, Recharts interaction, nonce uniqueness/matching,
+  CSP Report-Only violation checks, and no-flag regression.
 
 Phase 6J focused static/pure checks additionally cover source-lease ordering,
 new/rename/missing/empty/recovery preparation, exact seven-source admission,
@@ -276,11 +313,12 @@ discovery/idempotency/atomicity/concurrency/performance cases require a
 disposable PostgreSQL fixture and must be reported BLOCKED if that fixture is
 unavailable; the Production database cannot substitute for it.
 
-## 17. Known Risks
+## 17. Remaining Risks After Release Verification
 
-Prioritize these before release:
+These are low-priority hardening or operational follow-up items after the
+critical release gates passed:
 
-1. Live database availability and incomplete end-to-end coverage.
+1. Runtime diagnostic coverage and incomplete non-admin/browser E2E coverage.
 2. Sensitive local credential/private-key material.
 3. Ambiguous migration history/deployment bootstrap.
 4. Source deletions/stale rows and incomplete stock fields.
@@ -345,3 +383,39 @@ Before changing any item below, read callers and consumers, identify the data/se
 8. Update these documents when architecture, source-of-truth, business rules, or safety constraints change.
 
 The initial audit that produced the historical snapshot was documentation-only. The subsequent stabilization pass made only scoped source, verifier, and documentation changes; it did not mutate a database, apply migrations, write to external APIs, rotate credentials, or delete user-owned reports/artifacts.
+
+## 21. Phase 6S CSP guardrails
+
+- Request-time `/login` is forced dynamic so the framework-generated nonce is
+  available to generated scripts and styles; static nonce assumptions are not
+  valid evidence.
+- The candidate policy stays Report-Only and loopback-only. No `unsafe-inline`,
+  `unsafe-eval`, wildcard, or broad `data`/`blob` source is accepted.
+- Dashboard dynamic presentation uses finite stylesheet classes and a native
+  progress element. Recharts wrapper/surface/measurement and the Next route
+  announcer receive deterministic class-based local patches through the pinned
+  lifecycle script.
+- Run `node scripts/phase6s-local-runtime.mjs` only with its disposable
+  database setup and cleanup path. Never substitute a Production database or
+  remote credentials, and never turn the candidate into enforced CSP without
+  a separately reviewed phase.
+- Evidence and known limits are recorded in
+  `docs/PHASE6S_CSP_REMEDIATION_2026-09-05.md`.
+- Independent revalidation is recorded in
+  `docs/PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md`.
+
+## 22. Phase 6U CSP production-readiness review
+
+Phase 6U classifies the local CSP candidate as PASS WITH FINDINGS: the
+technical nonce/style/browser gates are stable for a separately authorized
+enforcement review, while Production CSP remains OFF. Phase 6K/6N records the
+Production deployment identity and deployed SHA; commit-signature verification
+is unverified, and the current Phase 6S/6T working-tree candidate is not
+asserted to be deployed.
+
+CSP change policy: server-only or database/data/source changes normally do not
+require CSP review. Adding a monthly Google worksheet requires source/import
+policy review but not CSP modification. Browser-facing DOM/CSS/JS, external
+resources, iframe, WebSocket, analytics, or framework/dependency changes
+require CSP regression. Never solve a violation by blindly adding unsafe-inline,
+unsafe-eval, wildcard, or external origins.

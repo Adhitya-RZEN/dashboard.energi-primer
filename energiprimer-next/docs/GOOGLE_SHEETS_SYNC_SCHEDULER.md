@@ -1,11 +1,17 @@
 # Google Sheets Sync Scheduler
 
+> CURRENT PRODUCTION OPERATIONAL CONTRACT (2026-09-05): Phase 6K verified
+> the Production deployment and Phase 6L verified exactly one authorized
+> controlled sync with HTTP 200, status SUCCESS, syncRun ID 2, and no observed
+> P2028. The exact seven-source policy and the 22:00 UTC schedule below are
+> current. Phase 6J deployment-pending language is historical.
+
 > **Phase 6J update (2026-09-04):** The local sync path now acquires the
 > source lease before the worksheet registry snapshot and uses short,
 > set-oriented discovery persistence. The user deploys manually; no deployment
 > or Production sync is performed by the agent in Phase 6J.
 
-Status checkpoint: **Phase 6J local implementation; manual deployment verification pending**
+Historical Phase 6J checkpoint: **local implementation; manual deployment verification pending**
 
 ## Endpoint
 
@@ -113,11 +119,11 @@ tanpa opsi tersebut, worksheet registry yang valid diproses sebagai backfill
 manual. Scope `automatic` adalah kebijakan scheduler yang digunakan route
 terproteksi; jangan menjalankan backfill penuh sebagai pengganti cron.
 
-The route itself must be tested in a local server with a test-only `CRON_SECRET`
-before deployment. The current schedule is daily at 22:00 UTC (06:00 WITA),
-not the historical 15-minute schedule described by the Phase 17 checkpoint.
+For a future environment change, the route must be tested in a local server
+with a test-only `CRON_SECRET`. The current schedule is daily at 22:00
+UTC (06:00 WITA), not the historical 15-minute schedule described by Phase 17.
 
-## Phase 6J deployment and sync approval boundary
+## Historical Phase 6J deployment and sync approval boundary
 
 After local gates and disposable PostgreSQL write tests pass, the USER performs
 the reviewed Vercel deployment manually. The agent must not change
@@ -125,7 +131,12 @@ the reviewed Vercel deployment manually. The agent must not change
 does not authorize a Production sync: a new explicit Production sync approval
 is required, and post-deployment checks remain read-only until that approval.
 
-## Vercel configuration still required
+## Historical Vercel configuration checklist
+
+The current Production configuration was verified in Phase 6K and the
+controlled sync result was verified in Phase 6L. Any later change to
+environment variables, credentials, Cron, database endpoints, or source
+policy requires a separate reviewed approval and post-change verification.
 
 1. Set `CRON_SECRET` as an encrypted Vercel Environment Variable for the target
    environment.

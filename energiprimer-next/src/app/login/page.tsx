@@ -2,6 +2,11 @@ import { AuthShell } from "@/components/layout/AuthShell";
 
 import { LoginForm } from "./LoginForm";
 
+// The local CSP candidate carries a request-specific nonce. Force this route
+// through the App Router request-time renderer so Next.js can attach the same
+// nonce to its generated scripts and styles.
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   return (
     <AuthShell>

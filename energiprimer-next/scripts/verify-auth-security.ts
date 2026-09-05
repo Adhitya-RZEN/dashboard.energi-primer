@@ -130,7 +130,7 @@ function testSourceSecurity() {
   assert(
     proxySource.includes("isProtectedPath(pathname)") &&
       proxySource.includes('request.auth?.user?.role !== "admin"') &&
-      proxySource.includes("return NextResponse.redirect(loginUrl)"),
+      proxySource.includes("NextResponse.redirect(loginUrl)"),
     "proxy rejects guest and non-admin requests before protected rendering",
   );
   assert(

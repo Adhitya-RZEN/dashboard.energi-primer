@@ -1,6 +1,9 @@
-# Production Readiness — Phase 10A / Phase 20 Index
+# Production Readiness — Current Operational Index
 
-> **Current authoritative audit:** [Production Preparation Report — 2026-09-01](./PRODUCTION_PREPARATION_REPORT_2026-09-01.md). This file retains the historical Phase 10A evidence and is indexed here for continuity.
+> **Current CSP readiness review:** [Phase 6U — Final CSP Production Readiness Review](./PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md).
+> Phase 6N remains the operational documentation closure; this index preserves
+> dated Phase 10A/20 evidence below as historical continuity.
+> CSP follow-up: [Phase 6O CSP Report-Only Evaluation](./PHASE6O_CSP_REPORT_ONLY_EVALUATION_2026-09-05.md), [Phase 6Q](./PHASE6Q_LOCAL_CSP_RUNTIME_VALIDATION_2026-09-05.md), [Phase 6R](./PHASE6R_PRODUCTION_LIKE_CSP_RUNTIME_VALIDATION_2026-09-05.md), [Phase 6S](./PHASE6S_CSP_REMEDIATION_2026-09-05.md), and the independent [Phase 6T revalidation](./PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md).
 
 > **Phase 6K-A verification (2026-09-04):** The Phase 6J implementation
 > checkpoint remains historical and unchanged. Its disposable PostgreSQL
@@ -10,7 +13,62 @@
 > This verification does not authorize migration, deployment, or Production
 > sync. See [Phase 6K-A report](./PHASE6K-A_PRODUCTION_MIGRATION_METADATA_REPORT_2026-09-04.md).
 
-## Phase 20 current gate (historical)
+## Current Production State
+
+**PRODUCTION READY WITH LOW-PRIORITY HARDENING**
+
+Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N.
+
+- Production deployment, Auth.js authentication, admin authorization, and
+  dashboard behavior are verified.
+- Production database, schema, canonical migration history, and migration
+  preflight are verified.
+- Cron is configured as 0 22 * * * (22:00 UTC / 06:00 WITA).
+- One controlled Production sync succeeded in Phase 6L with HTTP 200, status
+  SUCCESS, syncRun ID 2, and no reproduced P2028.
+- The active Google business source is exactly seven worksheets from
+  Januari26-BB through Juli26-BB. The 199-row registry is metadata inventory,
+  not 199 required monthly imports.
+- Authentication remains Auth.js Credentials -> Prisma -> PostgreSQL -> JWT/
+  session -> admin authorization. Supabase Auth, Resend, and public password
+  recovery are not active runtime paths.
+- CSP remains absent in Production. Phase 6S completed the production-like
+  loopback remediation with a disposable PostgreSQL/admin fixture:
+  request-time `/login` nonce matching, Auth.js lifecycle, all six dashboard
+  routes, Recharts interaction, and the six dynamic-style locations passed
+  under Report-Only. The candidate produced zero `script-src-elem` and
+  `style-src-attr` violations. No Production CSP enforcement was attempted.
+- Runtime diagnostic timeline remains limited, and Git/Vercel commit signature
+  verification remains informational and unverified.
+
+Phase 6J remediation successfully passed one controlled Production execution in
+Phase 6L without reproducing P2028. This is not a permanent-fix claim.
+
+## Phase Evidence Chain
+
+| Phase | Current classification | Evidence |
+|---|---|---|
+| 6A | Historical/reference | Migration provenance and schema reconciliation |
+| 6B | Historical/reference | Migration governance and deployment separation |
+| 6C | Historical/reference | Secret hygiene and auth/recovery cleanup |
+| 6D | Historical/reference | Vercel live verification |
+| 6E | Historical/reference | Production sync incident investigation |
+| 6F | Historical/reference | Rollback/manual deployment verification |
+| 6G | Historical/reference | Authorized sync investigation |
+| 6H | Historical/reference | P2028 root-cause investigation |
+| 6I | Superseded design | Remediation design |
+| 6J | Historical implementation checkpoint | Discovery remediation implementation |
+| 6K | Current evidence | Manual Production deployment verification |
+| 6L | Current evidence | Controlled Production sync SUCCESS |
+| 6M | Current evidence | Production hardening and release closure |
+| 6N | Current evidence | Documentation and operational closure |
+| 6Q | Current evidence | Local CSP Report-Only runtime validation; authenticated coverage blocked |
+| 6R | Current evidence | Production-like local CSP runtime; Auth.js/dashboard/Recharts covered with findings |
+| 6S | Current evidence | CSP remediation; local production-like candidate gate PASS, Production enforcement remains disabled |
+| 6T | Current evidence | Independent local CSP Report-Only revalidation; two fresh runs PASS |
+| 6U | Current review | CSP candidate readiness review; Production CSP remains OFF |
+
+## Historical Phase 20 gate
 
 Phase 20 preparation-only audit: **PASS WITH REVIEW**. Architecture and local
 build checks are ready for manual production configuration, but Supabase,
@@ -19,7 +77,7 @@ distributed rate limiting, and dependency remediation remain external/manual
 gates. No deployment, Supabase write, migration execution, import, or
 production sync was performed.
 
-See the current runbooks:
+See the historical Phase 20 source documents and current operational runbooks:
 
 - [Production Preparation Report](./PRODUCTION_PREPARATION_REPORT_2026-09-01.md)
 - [Production Environment Matrix](./PRODUCTION_ENVIRONMENT_MATRIX.md)
@@ -32,13 +90,13 @@ Tanggal audit: 2026-08-28
 Target: `energiprimer-next` pada Vercel.  
 Scope: audit dan safe hardening; tidak ada deployment, database migration, atau perubahan pada Laravel.
 
-## Phase 10A Status
+## Historical Phase 10A Status
 
 **PASS WITH WARNINGS** untuk audit teknis dan safe fixes. Production deployment belum dilakukan dan belum dapat dianggap production-ready.
 
 Fondasi dan local build berhasil diverifikasi, tetapi production belum siap karena endpoint PostgreSQL lokal tidak reachable dari Vercel, credential Google Sheets masih berupa file lokal, konfigurasi sender/domain Resend production belum diverifikasi, dan audit dependency menemukan tiga advisory HIGH pada dependency Prisma. Phase 18 sudah menyediakan code integration Resend dengan status PASS WITH REVIEW.
 
-## Production Readiness
+## Historical Phase 10A Production Readiness
 
 | Area                 | Status                     |
 | -------------------- | -------------------------- |
@@ -59,7 +117,7 @@ Fondasi dan local build berhasil diverifikasi, tetapi production belum siap kare
 | Performance          | PASS WITH WARNINGS         |
 | Vercel Compatibility | NOT READY                  |
 
-## Phase 10A Matrix
+## Historical Phase 10A Matrix
 
 | Area                 | Status                         | Severity | Notes                                                                                     |
 | -------------------- | ------------------------------ | -------- | ----------------------------------------------------------------------------------------- |
@@ -128,7 +186,7 @@ Safe changes yang dilakukan:
 - [`energiprimer-next/.env.example`](../.env.example) — mengganti secret-looking value menjadi placeholder dan menambahkan nama `AUTH_URL` yang memang digunakan reset-password.
 - [`energiprimer-next/src/auth.ts`](../src/auth.ts) — menyimpan `sessionVersion` ke JWT agar perubahan password/reset dapat membatalkan session lama sesuai pemeriksaan session callback.
 - [`energiprimer-next/src/app/error.tsx`](../src/app/error.tsx) — tidak lagi merender error digest internal ke DOM.
-- [`energiprimer-next/src/app/forgot-password/actions.ts`](../src/app/forgot-password/actions.ts) — tidak lagi mencatat object error arbitrary pada server log.
+- Historical removed path src/app/forgot-password/actions.ts — retained only as evidence that the former recovery action was removed; it is not an active source path.
 - [`energiprimer-next/docs/ENVIRONMENT_VARIABLES.md`](./ENVIRONMENT_VARIABLES.md)
 - [`energiprimer-next/docs/DEPENDENCY_AUDIT.md`](./DEPENDENCY_AUDIT.md)
 - [`energiprimer-next/docs/DATABASE_PRODUCTION_READINESS.md`](./DATABASE_PRODUCTION_READINESS.md)
@@ -211,3 +269,51 @@ Perubahan otomatis dibatasi pada hardening yang tidak mengubah schema, API contr
 5. Putuskan remediation advisory Prisma dan jalankan ulang lint/typecheck/build/audit.
 6. Ukur preview dengan Web Vitals/Lighthouse; kemudian evaluasi form yang masih menyebabkan full document navigation.
 7. Setelah semua blocker selesai, ulangi checklist ini dan baru pertimbangkan Phase 11. Tidak ada deployment yang dilakukan pada Phase 10.
+
+## Phase 6S CSP remediation status
+
+Phase 6S is PASS for the local production-like Report-Only candidate.
+The login route is request-time dynamic, the response nonce matches the
+framework-generated DOM nonce, and five independent requests produced distinct
+nonces with non-cacheable responses. All six dashboards retain Recharts
+wrappers/surfaces, tooltip behavior, interaction, and stylesheet-backed
+dynamic presentation. Browser CSP violations were zero for script element,
+style attribute, unsafe-inline-related directives, and external origins.
+
+Production remains NO CSP ENFORCEMENT. This phase does not authorize
+deployment, Production configuration changes, or a policy switch from
+Report-Only to enforced CSP. See the
+[Phase 6S report](./PHASE6S_CSP_REMEDIATION_2026-09-05.md).
+
+## Phase 6T CSP Report-Only revalidation status
+
+Phase 6T independently reproduced the local production-like candidate after
+a clean build: two fresh disposable PostgreSQL/browser/server runs, 10/10
+nonce match and uniqueness in each run, Auth.js/dashboard/Recharts PASS, and
+zero main CSP violations. The no-flag control ran before each candidate run.
+Production CSP remains absent and no remote boundary was accessed. See the
+[Phase 6T report](./PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md).
+
+## Phase 6U CSP production-readiness review
+
+Phase 6U classifies the CSP candidate as **PASS WITH FINDINGS**: the
+request-time nonce, /login dynamic rendering, six dynamic-style remediations,
+dependency-generated-style controls, Auth.js, dashboards, Recharts, and local
+CSP gates are technically stable. The candidate is mature for a separately
+authorized enforcement review, but Production CSP remains OFF.
+
+The current Production deployment evidence is recorded in Phase 6K/6N:
+project dashboard-energi-primer, deployment
+dpl_Gj1BecPeA6N7dZkeHE7LmnwbNRRX, canonical alias, READY state, and deployed
+SHA matching the recorded local HEAD. Git/Vercel commit signature verification
+is still unverified, and the Phase 6S/6T CSP changes in this working tree are
+not asserted to be deployed. This is an operational provenance finding for a
+future authorized rollout.
+
+The active monthly source remains exactly seven worksheets—Januari26-BB through
+Juli26-BB. The 199-row registry remains metadata inventory, not 199 required
+monthly imports. Server-side Google Sheets sync does not require a browser CSP
+origin. Future browser-facing, DOM/CSS/JS, external-resource, analytics,
+iframe, WebSocket, or framework/dependency changes require CSP regression;
+server-only/data/source changes normally require source-policy review instead.
+See the [Phase 6U report](./PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md).

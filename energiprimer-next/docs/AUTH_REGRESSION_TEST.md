@@ -1,5 +1,12 @@
 # Auth.js Regression Test — Phase 10A
 
+> CURRENT AUTH VERIFICATION (2026-09-05): Phase 6K verified the deployed
+> Auth.js Credentials login/protected-dashboard boundary, and Phase 6L
+> post-checks retained the authenticated dashboard result. Only /login and
+> the Auth.js protocol are current public authentication surfaces;
+> forgot-password/reset-password recovery is decommissioned. The test table
+> and smoke notes below are retained as the historical Phase 10A plan/result.
+
 > PHASE 6C UPDATE (2026-09-02): The active regression boundary is Auth.js
 > Credentials → Prisma → PostgreSQL/Supabase. Any recovery/mail references
 > retained below are historical and are not executable application flows.
@@ -13,7 +20,7 @@ AUTH_TEST_* tersedia untuk script scripts/verify-auth.mjs, tetapi script tersebu
 
 Tidak ada credential, password, token, atau cookie value yang dicatat pada dokumen ini.
 
-## Hasil test
+## Historical Phase 10A test results (2026-08-28)
 
 | Test                           | Result        | Notes                                                                                                                               |
 | ------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,7 +41,7 @@ Tidak ada credential, password, token, atau cookie value yang dicatat pada dokum
 | Reset password update          | BLOCKED       | Akan mengubah password, remember token, updated timestamp, dan menghapus token.                                                     |
 | Reused token                   | PASS (static) | Token dihapus dalam transaction setelah berhasil sehingga tidak dapat digunakan ulang.                                              |
 
-## HTTP smoke check yang aman
+## Historical HTTP smoke check yang aman
 
 Server production lokal dijalankan dari hasil build pada port sementara. Request tanpa cookie ke route berikut diverifikasi:
 

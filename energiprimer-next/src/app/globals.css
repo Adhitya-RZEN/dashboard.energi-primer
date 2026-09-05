@@ -26,3 +26,174 @@ body {
   background: #dbeafe;
   color: #172554;
 }
+
+/* CSP-compatible dashboard presentation primitives. These classes cover the
+ * finite chart palette and the two chart frame sizes used by the app. */
+.chart-frame-height-320 {
+  min-height: 320px;
+  height: 320px;
+}
+
+.chart-frame-height-256 {
+  min-height: 256px;
+  height: 256px;
+}
+
+/* Recharts 3.10.1 normally writes these stable layout values as React style
+ * attributes. The CSP-safe dependency patch keeps the public wrapper/surface
+ * classes and lets the stylesheet provide the same presentation. */
+.recharts-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+
+.recharts-surface-csp {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Next's App Router announcer is kept accessible while its visually-hidden
+ * presentation is supplied by CSS instead of a client-created style attr. */
+.phase6s-route-announcer {
+  position: absolute;
+}
+
+.phase6s-route-announcer-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  word-wrap: normal;
+}
+
+.chart-color-blue {
+  background-color: #2563eb;
+}
+
+.chart-color-green {
+  background-color: #16a34a;
+}
+
+.chart-color-green-bright {
+  background-color: #22c55e;
+}
+
+.chart-color-green-soft {
+  background-color: #86efac;
+}
+
+.chart-color-blue-bright {
+  background-color: #3b82f6;
+}
+
+.chart-color-blue-soft {
+  background-color: #93c5fd;
+}
+
+.chart-color-indigo {
+  background-color: #4f46e5;
+}
+
+.chart-color-amber {
+  background-color: #f59e0b;
+}
+
+.chart-color-amber-soft {
+  background-color: #fde68a;
+}
+
+.chart-color-violet {
+  background-color: #7c3aed;
+}
+
+.chart-color-slate {
+  background-color: #e2e8f0;
+}
+
+.chart-color-slate-soft {
+  background-color: #cbd5e1;
+}
+
+.chart-border-top-blue {
+  border-top-color: #2563eb;
+}
+
+.chart-border-top-green {
+  border-top-color: #16a34a;
+}
+
+.chart-border-top-green-bright {
+  border-top-color: #22c55e;
+}
+
+.chart-border-top-green-soft {
+  border-top-color: #86efac;
+}
+
+.chart-border-top-blue-bright {
+  border-top-color: #3b82f6;
+}
+
+.chart-border-top-blue-soft {
+  border-top-color: #93c5fd;
+}
+
+.chart-border-top-indigo {
+  border-top-color: #4f46e5;
+}
+
+.chart-border-top-amber {
+  border-top-color: #f59e0b;
+}
+
+.chart-border-top-amber-soft {
+  border-top-color: #fde68a;
+}
+
+.chart-border-top-violet {
+  border-top-color: #7c3aed;
+}
+
+.chart-border-top-slate {
+  border-top-color: #e2e8f0;
+}
+
+.chart-border-top-slate-soft {
+  border-top-color: #cbd5e1;
+}
+
+.dashboard-progress {
+  display: block;
+  width: 100%;
+  height: 0.5rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #7c3aed;
+}
+
+.dashboard-progress::-webkit-progress-bar {
+  border-radius: 9999px;
+  background: #f1f5f9;
+}
+
+.dashboard-progress::-webkit-progress-value {
+  border-radius: 9999px;
+  background: #7c3aed;
+}
+
+.dashboard-progress::-moz-progress-bar {
+  border-radius: 9999px;
+  background: #7c3aed;
+}
