@@ -29,7 +29,7 @@ function applyReplacements(relativePath, replacements) {
           ". The pinned dependency source may have changed.",
       );
     }
-    source = source.replace(search, replacement);
+    source = source.replaceAll(search, replacement);
   }
 
   if (source !== original) writeFileSync(absolutePath, source);
@@ -202,7 +202,31 @@ for (const [relativePath, endMarker] of [
       " * Measure text with a canvas so chart measurement does not create " +
         "inline style attributes",
     ],
+    [
+      "measureTextWithDOM(text, style)",
+      "measureTextWithCanvas(text, style)",
+    ],
+    ["  // Measure using DOM", "  // Measure using canvas"],
   ]);
+}
+
+for (const relativePath of [
+  "node_modules/recharts/es6/util/DOMUtils.js",
+  "node_modules/recharts/lib/util/DOMUtils.js",
+]) {
+  const patchedSource = readFileSync(join(projectRoot, relativePath), "utf8");
+  if (patchedSource.includes("measureTextWithDOM(text, style)")) {
+    throw new Error(
+      "CSP dependency patch left an executable measureTextWithDOM call in " +
+        relativePath + ".",
+    );
+  }
+  if (!patchedSource.includes("measureTextWithCanvas(text, style)")) {
+    throw new Error(
+      "CSP dependency patch did not leave a measureTextWithCanvas call in " +
+        relativePath + ".",
+    );
+  }
 }
 
 for (const relativePath of [

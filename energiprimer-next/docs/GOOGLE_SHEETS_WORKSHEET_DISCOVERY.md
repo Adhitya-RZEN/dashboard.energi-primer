@@ -163,3 +163,25 @@ Phase 6J additionally verifies pure new/rename/missing/empty/recovery behavior,
 set-oriented current persistence, missing update batching, lease ordering, and
 sanitized diagnostics. Database-write acceptance remains pending a disposable
 PostgreSQL fixture.
+
+## Phase 6V — production source-policy verification (2026-09-06)
+
+Phase 6V did not execute Google Sheets discovery, authorized sync, retry, or
+Cron. The production source contract remains exactly the seven required
+worksheets:
+
+```text
+Januari26-BB
+Februari26-BB
+Maret26-BB
+April26-BB
+Mei26-BB
+Juni26-BB
+Juli26-BB
+```
+
+The observed 199 worksheet registry remains an inventory/metadata registry,
+not a requirement to import all 199 worksheets. If the source COPY has no
+August 2026 or later worksheet, that is expected source staleness rather than
+an importer failure. This policy was verified without changing the source
+configuration or writing to Google Sheets.

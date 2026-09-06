@@ -1,6 +1,8 @@
 # Production Readiness — Current Operational Index
 
-> **Current CSP readiness review:** [Phase 6U — Final CSP Production Readiness Review](./PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md).
+> **Current live deployment verification:** [Phase 6V — Production Deployment & CSP Artifact Verification](./PHASE6V_PRODUCTION_DEPLOYMENT_CSP_ARTIFACT_VERIFICATION_2026-09-05.md).
+> Phase 6U remains the preceding CSP readiness review and is preserved as
+> historical continuity.
 > Phase 6N remains the operational documentation closure; this index preserves
 > dated Phase 10A/20 evidence below as historical continuity.
 > CSP follow-up: [Phase 6O CSP Report-Only Evaluation](./PHASE6O_CSP_REPORT_ONLY_EVALUATION_2026-09-05.md), [Phase 6Q](./PHASE6Q_LOCAL_CSP_RUNTIME_VALIDATION_2026-09-05.md), [Phase 6R](./PHASE6R_PRODUCTION_LIKE_CSP_RUNTIME_VALIDATION_2026-09-05.md), [Phase 6S](./PHASE6S_CSP_REMEDIATION_2026-09-05.md), and the independent [Phase 6T revalidation](./PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md).
@@ -15,12 +17,13 @@
 
 ## Current Production State
 
-**PRODUCTION READY WITH LOW-PRIORITY HARDENING**
+**PHASE 6V FAIL; CANONICAL ARTIFACT MATCHED, BUT 5/6 DASHBOARDS CRASH IN THE BROWSER**
 
-Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N.
+Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N -> Phase 6V.
 
-- Production deployment, Auth.js authentication, admin authorization, and
-  dashboard behavior are verified.
+- The canonical Production artifact now matches the newest READY deployment
+  `dpl_4AV8aVmD31A2QUnFb5Fh18UN3e1H` and SHA `9de33b7...`. Public routes,
+  dynamic login behavior, and one normal Auth.js lifecycle pass.
 - Production database, schema, canonical migration history, and migration
   preflight are verified.
 - Cron is configured as 0 22 * * * (22:00 UTC / 06:00 WITA).
@@ -38,8 +41,18 @@ Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N.
   routes, Recharts interaction, and the six dynamic-style locations passed
   under Report-Only. The candidate produced zero `script-src-elem` and
   `style-src-attr` violations. No Production CSP enforcement was attempted.
-- Runtime diagnostic timeline remains limited, and Git/Vercel commit signature
-  verification remains informational and unverified.
+- Runtime diagnostic execution through an authorized sync remains intentionally
+  untested in Phase 6V, and Git/Vercel commit signature verification remains
+  informational and unverified.
+- Phase 6V repeat verification reconciled the canonical alias with the latest
+  artifact, but authenticated browser checks found
+  `ReferenceError: measureTextWithDOM is not defined` on five of six
+  dashboard routes. This is a client bundle/dashboard regression and blocks
+  Phase 6W.
+- Phase 6V-R locally confirmed the cause as an incomplete Recharts dependency
+  patch, fixed the missed call sites, and passed two clean disposable-browser
+  runs. Production is still awaiting operator deployment and a new Phase 6V;
+  the local PASS does not mark Production fixed.
 
 Phase 6J remediation successfully passed one controlled Production execution in
 Phase 6L without reproducing P2028. This is not a permanent-fix claim.
@@ -67,6 +80,8 @@ Phase 6L without reproducing P2028. This is not a permanent-fix claim.
 | 6S | Current evidence | CSP remediation; local production-like candidate gate PASS, Production enforcement remains disabled |
 | 6T | Current evidence | Independent local CSP Report-Only revalidation; two fresh runs PASS |
 | 6U | Current review | CSP candidate readiness review; Production CSP remains OFF |
+| 6V | Current verification | FAIL: canonical artifact matched; five authenticated dashboards crash in browser |
+| 6V-R | Current local remediation | PASS: Recharts patch fixed locally; Production deployment and new 6V verification pending |
 
 ## Historical Phase 20 gate
 
@@ -294,7 +309,7 @@ zero main CSP violations. The no-flag control ran before each candidate run.
 Production CSP remains absent and no remote boundary was accessed. See the
 [Phase 6T report](./PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md).
 
-## Phase 6U CSP production-readiness review
+## Phase 6U CSP production-readiness review (HISTORICAL)
 
 Phase 6U classifies the CSP candidate as **PASS WITH FINDINGS**: the
 request-time nonce, /login dynamic rendering, six dynamic-style remediations,
@@ -317,3 +332,28 @@ origin. Future browser-facing, DOM/CSS/JS, external-resource, analytics,
 iframe, WebSocket, or framework/dependency changes require CSP regression;
 server-only/data/source changes normally require source-policy review instead.
 See the [Phase 6U report](./PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md).
+
+## Phase 6V Production deployment and CSP artifact verification
+
+Phase 6V is the current live verification record. The latest READY Production
+deployment is traceable to commit `9de33b7...` and its direct deployment URL
+serves the Phase6S/6T-compatible `/login` artifact: private no-cache behavior,
+zero reviewed inline-style attributes, no browser/page errors, and no CSP or
+Report-Only header. The six protected dashboard routes return the expected
+unauthenticated redirect without credentials.
+
+The canonical `https://dashboard-energi-primer.vercel.app` domain now serves
+the same latest READY deployment and SHA. The alias/provenance discrepancy is
+resolved. However, authenticated browser checks fail on five of six dashboard
+routes with `ReferenceError: measureTextWithDOM is not defined`; the
+server-rendered HTML and `/dashboard/target` interaction pass. This is a
+client bundle regression, not a CSP failure. Production CSP remains OFF, and
+Phase6W must not begin until the bundle is fixed, redeployed by an authorized
+operator, and Phase6V passes.
+
+Phase 6V-R confirmed the local root cause: the dependency patch renamed the
+Recharts measurement definition but left executable call sites using
+`measureTextWithDOM`. The patch now replaces all call sites and asserts the
+canvas path. Two clean local production-like runs passed all six dashboards.
+This local result does not alter the Production FAIL classification or
+authorize deployment.

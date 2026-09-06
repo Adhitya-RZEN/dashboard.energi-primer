@@ -190,15 +190,44 @@ dashboards, Recharts, dynamic-style, CSP, and network-classification gates.
 The no-flag control was executed before each candidate run. Evidence:
 `docs/PHASE6T_CSP_REPORT_ONLY_REVALIDATION_2026-09-05.md`.
 
-## Phase 6U CSP readiness and rollout design
+## Phase 6V canonical deployment verification
+
+The latest READY Production deployment is traceable to commit `9de33b7...` at
+`dashboard-energi-primer-58bhpi82x-projek-rzen.vercel.app`. Its direct URL and
+the canonical `dashboard-energi-primer.vercel.app` now agree on the read-only
+artifact checks: dynamic private `/login`, zero reviewed inline-style
+attributes, protected-route redirects, and no CSP or Report-Only header. The
+previous alias discrepancy is resolved; no promotion or redeploy was done by
+the agent.
+
+Production CSP remains OFF. The repeated Auth.js Credentials E2E flow passed
+login, session, dashboard marker, logout, post-logout invalidation, and the
+protected redirect. Authenticated server HTML for all six dashboards passed,
+but browser runtime checks found `ReferenceError: measureTextWithDOM is not
+defined` on five routes; `/dashboard/target` passed Recharts interaction. This
+is a client bundle regression requiring a separately authorized fix and
+deployment. No authorized sync, Cron, migration, or database business write
+was performed in Phase6V.
+
+### Phase 6V-R local remediation handoff
+
+Phase 6V-R confirmed the Production browser failure came from an incomplete
+Recharts dependency patch: the declaration was changed to
+`measureTextWithCanvas`, while executable legacy call sites remained. The
+local patch now replaces all call sites and guards the result. Two clean
+disposable production-like browser runs passed all six dashboards and
+Recharts. Review and deploy this change only through the approved operator
+workflow, then run a new Phase6V. Do not treat the local PASS as a Production
+deployment or enable CSP.
+
+## Phase 6U CSP readiness and rollout design (HISTORICAL)
 
 Phase 6U records `PASS WITH FINDINGS` for the local candidate. The candidate
-is technically stable for a separately authorized Production enforcement
-review, but Production CSP remains OFF. The Phase 6S/6T implementation is an
-uncommitted working-tree change and is not claimed to be in the recorded
-Production deployment. Phase6K/6N provide the known project, alias,
-deployment-READY, and recorded-SHA evidence; the commit signature remains
-unverified and must be checked before rollout.
+was technically stable for a separately authorized Production enforcement
+review, but Production CSP remained OFF. The Phase 6S/6T implementation was a
+working-tree candidate at that review point. Phase6V is the current record for
+the later operator-managed deployment; its commit signature remains
+unverified and must not be assumed.
 
 The rollout design is:
 

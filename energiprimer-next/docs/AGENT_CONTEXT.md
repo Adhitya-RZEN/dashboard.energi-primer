@@ -294,7 +294,7 @@ Current local results:
 - TypeScript: PASS after removing the inactive Supabase recovery path and correcting the root layout prop type.
 - Parser/mapping/schema/retry/cron static checks: PASS.
 - Preview write-safety check: PASS; Preview, unknown, and production-without-deployment-identity are denied before sync.
-- Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; deployed admin-login E2E is recorded in Phase 6K, while no separate local credential fixture is assumed.
+- Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; a single valid Production Auth.js E2E is recorded in Phase 6V without exposing credential values.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Production deployment, Auth.js/dashboard, migration status, and Cron were
   verified in Phase 6K; one controlled sync was verified in Phase 6L.
@@ -419,3 +419,29 @@ policy review but not CSP modification. Browser-facing DOM/CSS/JS, external
 resources, iframe, WebSocket, analytics, or framework/dependency changes
 require CSP regression. Never solve a violation by blindly adding unsafe-inline,
 unsafe-eval, wildcard, or external origins.
+
+## 23. Phase 6V Production artifact boundary
+
+Phase 6V is verification-only. The latest READY Production deployment maps to
+the CSP commit `9de33b7...`, and the repeated HTTP/provenance check confirms
+that the canonical `dashboard-energi-primer.vercel.app` alias now serves the
+same deployment. Treat the prior alias mismatch as resolved, but keep Phase6W
+blocked because five of six authenticated dashboard routes crash in the
+browser with `ReferenceError: measureTextWithDOM is not defined`. Never
+resolve this by running deploy, promote, changing Vercel settings, sending
+credentials, invoking sync/Cron, running a migration, or changing Production
+CSP from the agent.
+
+Production CSP and Report-Only are absent. `/login` is dynamic/private/no-cache
+with zero reviewed style attributes on the canonical artifact. Auth.js HTTP
+login/logout and authenticated server HTML pass; `/dashboard/target` passes
+Recharts interaction, while the other five dashboards have the client bundle
+regression. A separately authorized code/deployment fix and a clean Phase6V
+rerun are required.
+
+Phase 6V-R is the local follow-up for this finding. It confirmed that the
+Recharts patch had renamed the measurement definition but left executable
+`measureTextWithDOM` calls. The patch script now replaces every call and
+asserts the `measureTextWithCanvas` path; two clean disposable browser runs
+passed. Production still requires operator deployment and a new Phase 6V
+verification, and Production CSP remains OFF.

@@ -566,3 +566,26 @@ resources, WebSocket, analytics, iframe, or framework/dependency changes
 require CSP regression. The active source set remains exactly seven worksheets
 from Januari26-BB through Juli26-BB, while the 199-row registry is metadata
 inventory rather than 199 required monthly imports.
+
+## 23. Phase 6V live CSP artifact verification
+
+Phase 6V verified the latest READY Production deployment at its direct Vercel
+URL against commit `9de33b7...`; `/login` is private/no-cache, the reviewed
+inline-style attributes are absent, public browser smoke has no errors, and
+CSP remains OFF. The repeated check confirms that the canonical
+`dashboard-energi-primer.vercel.app` alias now serves the same deployment.
+
+Authenticated server-rendered HTML passed for all six dashboards and the
+Auth.js lifecycle passed. Browser runtime verification nevertheless found
+`ReferenceError: measureTextWithDOM is not defined` on five dashboards;
+`/dashboard/target` passed Recharts tooltip/interaction. This client bundle
+regression fails Phase6V and blocks Phase6W. No alias promotion, deployment,
+sync, migration, or database write was performed. A separately authorized
+code/deployment fix followed by a clean Phase6V rerun is required.
+
+Phase 6V-R locally identified the incomplete Recharts patch as the root cause:
+the measurement function definition was renamed without renaming its
+executable call sites. The patch script now replaces all call sites and
+asserts the canvas implementation. Two clean disposable production-like runs
+passed all six dashboards. Production remains pending operator deployment and
+a new Phase6V verification; CSP remains OFF.

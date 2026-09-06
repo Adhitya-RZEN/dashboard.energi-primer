@@ -138,3 +138,25 @@ browser-facing integration still requires the review. Do not resolve a future
 violation by adding `unsafe-inline`, `unsafe-eval`, wildcard sources, or an
 unreviewed external origin. Evidence:
 `docs/PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.md`.
+
+## Phase 6V live deployment boundary
+
+The latest READY Production deployment is `dpl_4AV8aVmD31A2QUnFb5Fh18UN3e1H`
+and is traceable to the CSP commit `9de33b7...` at its direct deployment URL.
+The repeated Phase 6V check confirms that the canonical
+`dashboard-energi-primer.vercel.app` alias now resolves to that same
+deployment and SHA. The alias/provenance discrepancy from the first run is
+resolved; this repository agent did not promote or redeploy.
+
+Both sampled URLs have the baseline HSTS, nosniff, DENY, Referrer-Policy, and
+Permissions-Policy headers. Both have CSP and CSP Report-Only absent, as
+required. Phase 6V still FAILs because five of six authenticated dashboard
+routes crash in the browser with `measureTextWithDOM` undefined; the failure
+is a client bundle regression, not permission to enable CSP. Fix/redeploy
+through the approved operator workflow, then rerun the read-only verification.
+
+Phase 6V-R resolved the underlying Recharts patch defect locally by replacing
+all executable `measureTextWithDOM` calls with the canvas path and adding a
+patch assertion. Two clean local production-like runs passed. This is not a
+Vercel deployment: Production remains on the Phase 6V FAIL boundary until an
+operator deploys the reviewed change and a new Phase 6V verifies it.
