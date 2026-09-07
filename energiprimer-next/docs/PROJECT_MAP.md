@@ -569,23 +569,25 @@ inventory rather than 199 required monthly imports.
 
 ## 23. Phase 6V live CSP artifact verification
 
-Phase 6V verified the latest READY Production deployment at its direct Vercel
-URL against commit `9de33b7...`; `/login` is private/no-cache, the reviewed
-inline-style attributes are absent, public browser smoke has no errors, and
-CSP remains OFF. The repeated check confirms that the canonical
-`dashboard-energi-primer.vercel.app` alias now serves the same deployment.
+Phase 6V repeat verification (2026-09-06) confirms the latest READY Production
+deployment `dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2` against commit `7a67f6e...`;
+`/login` is private/no-cache, reviewed inline-style attributes are absent,
+public browser smoke has no errors, and CSP remains OFF. The canonical alias
+serves the same deployment.
 
-Authenticated server-rendered HTML passed for all six dashboards and the
-Auth.js lifecycle passed. Browser runtime verification nevertheless found
-`ReferenceError: measureTextWithDOM is not defined` on five dashboards;
-`/dashboard/target` passed Recharts tooltip/interaction. This client bundle
-regression fails Phase6V and blocks Phase6W. No alias promotion, deployment,
-sync, migration, or database write was performed. A separately authorized
-code/deployment fix followed by a clean Phase6V rerun is required.
+Authenticated server-rendered HTML, the Auth.js lifecycle, and browser runtime
+verification now pass for all six dashboards, including Recharts tooltip and
+interaction. The prior `measureTextWithDOM` client-bundle regression is
+resolved by the deployed Phase 6V-R patch. Direct Supabase 5432 migration
+status/preflight remains a verification finding because the endpoint was
+unreachable in the repeat environment; pooler 6543 runtime checks pass. No
+alias promotion, deployment, sync, migration, or database write was performed
+by the agent.
 
 Phase 6V-R locally identified the incomplete Recharts patch as the root cause:
 the measurement function definition was renamed without renaming its
 executable call sites. The patch script now replaces all call sites and
 asserts the canvas implementation. Two clean disposable production-like runs
-passed all six dashboards. Production remains pending operator deployment and
-a new Phase6V verification; CSP remains OFF.
+passed all six dashboards. Production deployment and the new Phase6V
+verification are complete; CSP remains OFF and Phase6W still requires
+separate operator approval.

@@ -1,16 +1,383 @@
 # PHASE 6V — PRODUCTION DEPLOYMENT & CSP ARTIFACT VERIFICATION
 
 Project: Energi Primer PLN Jeranjang  
-Review date: 2026-09-05  
-Verification continuation: 2026-09-06  
+Review date: 2026-09-06 (repeat)
+Original verification date: 2026-09-05
 Scope: verification-only after an operator-managed Production deployment.
 
-Follow-up: Phase 6V-R locally identified and remediated the incomplete
-Recharts measurement patch. That local PASS does not change this Production
-report's FAIL classification until an operator deploys the fix and a new
-Phase 6V verifies the canonical artifact.
+The authoritative repeat result is recorded in the dated section below. The
+original 2026-09-05 verification body is retained as historical evidence and
+is explicitly superseded by the repeat result.
+
+## Phase 6V repeat verification (2026-09-06) - AUTHORITATIVE
+
+The Direct Supabase 5432 follow-up is documented separately in
+[Phase 6V-MV — Direct Supabase 5432 Read-Only Verification](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md).
+That follow-up confirmed the runtime pooler remains healthy while Direct TCP
+5432 is not currently reachable; it does not alter the Production deployment
+or CSP result recorded below.
 
 ## Executive Summary
+
+The operator-managed Production deployment has been reverified after the
+Phase 6V-R local Recharts remediation. The canonical domain now serves the
+newest READY Production deployment, and its Vercel Git SHA matches local HEAD.
+The previous five-dashboard `measureTextWithDOM` browser failure is no longer
+reproduced: all six authenticated dashboard routes render and their Recharts
+interactions pass.
+
+Current classification is **PASS WITH FINDINGS**. The functional Production
+artifact, routes, Auth.js lifecycle, dashboard/Recharts behavior, security
+headers, pooler runtime data, Cron boundary, and static gates pass. The
+remaining finding is that the read-only migration status/preflight could not
+complete against the Direct Supabase endpoint on port 5432 from this
+verification environment; it reported a connection failure. The transaction
+pooler runtime on port 6543 passed. No migration or write was attempted.
+
+Production CSP remains OFF. Neither `Content-Security-Policy` nor
+`Content-Security-Policy-Report-Only` was observed. No authorized Google sync,
+retry, Cron invocation, database migration, secret/environment change,
+deployment, commit, or push was performed by the agent.
+
+## Deployment Provenance
+
+| Item | Result |
+| --- | --- |
+| Local branch | `NextJs` |
+| Local HEAD | `7a67f6e201c6629c5fcdc2da7b3b09f06416b4f5` |
+| Commit subject | `fix(csp): fix incomplete Recharts measurement patch` |
+| Vercel project | `dashboard-energi-primer` |
+| Vercel deployment ID | `dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2` |
+| Deployment state/target | `READY` / `Production` |
+| Deployment URL | `https://dashboard-energi-primer-524vd8hd3-projek-rzen.vercel.app` |
+| Canonical domain | `https://dashboard-energi-primer.vercel.app` |
+| Deployment source SHA/ref | `7a67f6e201c6629c5fcdc2da7b3b09f06416b4f5` / `NextJs` |
+| Created | `2026-09-06 10:21:42 WITA` |
+| Alias mapping | Canonical alias points to this deployment |
+
+Vercel metadata and local Git identify the same commit, so provenance is
+**matched** at deployment/SHA/ref level. Vercel reports Git commit verification
+as `unverified`; no cryptographic signature verification is claimed. The
+required source paths were present in the matched source tree:
+
+```text
+src/proxy.ts
+src/services/google-sheets/sync/discovery.ts
+src/services/google-sheets/sync/engine.ts
+src/services/google-sheets/sync/lease.ts
+src/services/google-sheets/sync/diagnostic-core.ts
+src/services/google-sheets/sync/diagnostics.ts
+src/services/google-sheets/sync/bb-policy.ts
+src/lib/google-sheets.ts
+package.json
+package-lock.json
+vercel.json
+```
+
+The source commit includes `export const dynamic = "force-dynamic"` on
+`/login` and the corrected Recharts patch. Local `.next` and Recharts runtime
+inspection found zero executable `measureTextWithDOM` call files and two
+`measureTextWithCanvas` call files. Production browser execution also found
+zero legacy-symbol errors. Exact remote JavaScript bytes were not downloaded;
+the artifact conclusion is based on matched Vercel provenance plus runtime
+behavior.
+
+## Production Routes
+
+Read-only requests used the canonical Production domain.
+
+| Route/check | Result |
+| --- | --- |
+| `GET /` | `200` |
+| `GET /login` | `200`; private/no-cache |
+| `GET /api/auth/providers` | `200`; only `credentials` provider |
+| `GET /dashboard` and five sections without session | `307` to `/login` |
+| `GET /password/reset` | `404` |
+| `GET /password/forgot` | `404` |
+| `POST /api/sync/google-sheets` missing bearer | `401` |
+| Same endpoint malformed bearer | `401` |
+| Same endpoint deliberately wrong bearer | `401` |
+
+The provider response contained only the Credentials provider. Supabase Auth,
+Resend, and public password recovery providers were absent. No valid Cron
+secret was used.
+
+## Login / Nonce Verification
+
+Five independent browser requests to `/login`, each with a unique cache buster
+and fresh browser context, returned `200`, displayed the login form, and had
+`private, no-cache, no-store, max-age=0, must-revalidate` behavior.
+
+| Check | Result |
+| --- | --- |
+| Request-time/dynamic cache signal | `5/5` |
+| Response nonce | `0/5`, not applicable while Production CSP is OFF |
+| DOM nonce | `0/5`, not applicable while Production CSP is OFF |
+| Nonce reuse/leak | No nonce was emitted; no reuse/leak observed |
+| Enforced CSP | `0/5` |
+| CSP Report-Only | `0/5` |
+| Reviewed login style attributes | `0` each |
+| Application/page errors | `0/5` |
+
+The loopback-only nonce mechanism remains available for local Report-Only
+validation. Its absence on Production is expected while CSP is disabled and
+is not a nonce failure.
+
+## Auth.js E2E
+
+One normal Credentials login/logout flow was completed against the canonical
+domain using the locally available `.env.e2e.local` credential without
+printing or requesting its value:
+
+1. `/login` loaded successfully.
+2. Login reached `/dashboard`.
+3. `/api/auth/session` returned `200` with a user.
+4. Dashboard access returned `200`.
+5. Logout returned to `/login`.
+6. Session became unauthenticated.
+7. Protected navigation after logout returned to `/login`.
+
+The expected Auth.js authentication-side `last_login_at` update may occur; no
+business-data write was performed.
+
+## Dashboard / Recharts Verification
+
+All six authenticated routes returned `200`, displayed their expected marker,
+rendered Recharts surfaces, accepted tooltip/interaction checks, and had zero
+reviewed inline style attributes and zero embedded objects.
+
+| Route | Recharts wrappers/surfaces | Tooltip | Interaction | Result |
+| --- | ---: | --- | --- | --- |
+| `/dashboard` | 1 / 1 | PASS | PASS | PASS |
+| `/dashboard/biomassa` | 2 / 2 | PASS | PASS | PASS |
+| `/dashboard/batubara` | 2 / 2 | PASS | PASS | PASS |
+| `/dashboard/solar` | 2 / 2 | PASS | PASS | PASS |
+| `/dashboard/stok` | 2 / 2 | PASS | PASS | PASS |
+| `/dashboard/target` | 1 / 1 | PASS | PASS | PASS |
+
+The browser recorded zero console application errors, zero page errors, and
+zero CSP violations. Two failed fetches were classified as aborted/cancelled
+after successful rendering, not application failures. The prior
+`ReferenceError: measureTextWithDOM is not defined` was not observed.
+
+## CSP Production State
+
+Production CSP enforcement is **OFF**. Both CSP headers were absent from the
+sampled responses and no browser CSP violations occurred. Phase 6V did not
+enable or modify CSP. The candidate policy remains a design candidate only;
+Phase 6W requires separate operator approval and action.
+
+No `unsafe-inline`, `unsafe-eval`, wildcard source, or Google browser origin
+was added.
+
+## Security Headers
+
+The canonical `/login` response retained:
+
+```text
+Strict-Transport-Security: max-age=31536000
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+No secret, credential, service-account material, `DATABASE_URL`, Prisma raw
+error, or stack-trace leakage was found in the inspected response headers or
+sanitized browser results.
+
+## Database Read-Only Verification
+
+The runtime pooler check passed using the application endpoint on port `6543`:
+
+```text
+database: postgres
+schema: public
+PostgreSQL: 17.6
+stable data rows: 2406
+application rows: 8956
+July 2026 overview: PASS
+January-July 2026 coverage: PASS
+active leases: 0
+```
+
+`db:verify` and `db:verify-import-data` also passed. Current SELECT-only
+metadata counts were 31 public tables (30 application tables), 278 public
+columns (270 application columns), 30 application primary keys, 19
+application foreign keys, and 70 application indexes. The sync-state check
+reported 199 registered worksheets, 7 active required worksheets, 2,409 row
+states, latest run `SUCCESS`, 0 open schema changes, and 0 active leases.
+
+The canonical local migration inventory contains exactly one schema-only
+migration, `20260901130000_production_schema_baseline`. An additional
+SELECT-only read through the runtime pooler found exactly one finished,
+non-rolled-back row with that migration name. This does not replace the
+required Direct-connection Prisma status/preflight check. The repeat's Direct
+Supabase checks could not reach the endpoint on port `5432`:
+
+```text
+supabase:production:migrate-status: FAIL (direct target unreachable)
+supabase:production:migration:preflight: BLOCKED (read-only target query failed)
+supabase:production:runtime:direct: FAIL (direct target unreachable)
+```
+
+These failures do not show migration drift; they mean the remote direct
+metadata/history could not be reverified from this environment. No migration,
+resolve, reset, seed, or write was run. This is the only database finding in
+this repeat. Runtime pooler verification remains PASS.
+
+## Google Source Policy
+
+No Google Sheets discovery, read, authorized sync, retry, or Google write was
+performed. The exact required business source set remains:
+
+```text
+Januari26-BB
+Februari26-BB
+Maret26-BB
+April26-BB
+Mei26-BB
+Juni26-BB
+Juli26-BB
+```
+
+The 199 worksheet registry is inventory/metadata, not a 199-worksheet import
+plan. The Google COPY remains current through July 2026; missing August or
+later is **EXPECTED SOURCE STALENESS**, not importer failure.
+
+## Cron Verification
+
+`vercel.json` and the deployed Vercel build metadata retain `0 22 * * *`,
+which is 22:00 UTC / 06:00 WITA on the following day. Missing, malformed, and
+deliberately wrong bearer requests each returned `401`. No valid
+`CRON_SECRET` was used and no Cron or authorized sync was triggered.
+
+## Sync Diagnostic Artifact
+
+The matched source artifact and static verifier retain the Phase 6E-E/6E-G/6J
+diagnostic contract:
+
+```text
+request_id, stage, status, duration_ms,
+errorCategory/error_category, safe_error_code/error_code,
+optional attempt, optional google_http_status
+```
+
+Static verification passed `SafeDiagnosticError.category -> errorCategory`,
+P2028 classification as `DATABASE` with `error_code=P2028`, and
+non-retryability. Authorized runtime diagnostic execution was not tested,
+because it would require a write-capable sync.
+
+## Regression Gates
+
+| Gate | Result |
+| --- | --- |
+| `npm.cmd run db:generate` | PASS |
+| `npm.cmd run db:validate` | PASS |
+| `npm.cmd run lint` | PASS |
+| `npx.cmd --no-install tsc --noEmit --incremental false` | PASS |
+| `npm.cmd run build` | PASS; `/login` and dashboards dynamic |
+| `npm.cmd run auth:security:verify` | PASS |
+| `npm.cmd run sync:verify-diagnostics` | PASS |
+| `npm.cmd run sync:verify-cron-auth` | PASS |
+| `npm.cmd run db:verify` | PASS |
+| `npm.cmd run db:verify-import-data` | PASS |
+| `npm.cmd run supabase:production:runtime:pooler` | PASS |
+| `npm.cmd run sync:verify-state` | PASS |
+| `npm.cmd run supabase:production:migrate-status` | BLOCKED/FAIL; direct 5432 unreachable |
+| `npm.cmd run supabase:production:migration:preflight` | BLOCKED; direct target query failed |
+| `git diff --check` | PASS |
+| Vercel provenance and browser artifact | PASS with signature unverified |
+| Auth.js E2E and six-dashboard browser matrix | PASS |
+| Production CSP state | PASS; enforcement/report-only OFF |
+
+The package has no `git:diff-check` script; `git diff --check` is the
+equivalent read-only gate.
+
+## Safety Counters
+
+| Operation | Count/result |
+| --- | ---: |
+| Production sync requests | 0 authorized; 3 unauthorized probes rejected |
+| Production sync retries | 0 |
+| Production business DB writes | 0 |
+| Google writes | 0 |
+| Migrations | 0 |
+| Migration resolves | 0 |
+| DB reset/seed | 0 |
+| Environment changes | 0 |
+| Secret changes | 0 |
+| Agent deployments/redeployments/promotions | 0 |
+| Agent commits | 0 in this Phase 6V repeat |
+| Agent pushes | 0 |
+| Normal Auth.js E2E flows | 1 |
+| Expected authentication-side write | `last_login_at` may update |
+
+## Findings
+
+| ID | Severity | Finding |
+| --- | --- | --- |
+| F-07 | REVIEW/BLOCKED | Direct Supabase `5432` was unreachable during the repeat, so remote migration status, history, checksum, and schema diff were not reverified in this run. |
+| F-08 | REVIEW | Vercel reports Git commit verification as unverified; no signature verification is claimed. |
+| F-09 | INFO | Production CSP remains OFF by design; nonce comparison is not applicable while CSP is disabled. |
+| F-10 | INFO | Authorized sync diagnostic runtime was not tested because doing so would be write-capable. |
+| F-01 to F-06 | HISTORICAL/SUPERSEDED | The prior alias and five-dashboard Recharts findings are retained below for history; the new deployment and browser repeat resolved them. |
+
+## Risk Classification
+
+The current Production artifact and browser behavior are healthy for the
+Phase 6S/6T change: provenance matches, all six dashboards pass, Auth.js
+passes, security headers are intact, and CSP remains safely disabled. The
+release is **PASS WITH FINDINGS**, not full PASS, because the required
+read-only Direct migration verification is unavailable from this environment.
+The finding is an infrastructure/access verification gap, not evidence of
+migration drift or a Production data mutation.
+
+## Documentation Updated
+
+This report is updated with the 2026-09-06 repeat. The following active
+documents were reviewed and updated to point to the current deployment and
+the resolved Recharts browser finding:
+
+- `docs/PRODUCTION_READINESS.md`
+- `docs/PROJECT_MAP.md`
+- `docs/AGENT_CONTEXT.md`
+- `docs/VERCEL_CONFIGURATION.md`
+- `docs/VERCEL_DEPLOYMENT_RUNBOOK.md`
+- `docs/GOOGLE_SHEETS_SYNC_HARDENING.md`
+- `docs/GOOGLE_SHEETS_WORKSHEET_DISCOVERY.md`
+- this Phase 6V report
+
+Historical Phase 6V evidence remains below; it was not deleted.
+
+## Final Classification
+
+# PHASE 6V - PASS WITH FINDINGS
+
+Production now serves the Phase 6V-R Recharts remediation and all six
+authenticated dashboards pass browser verification. Production CSP
+enforcement remains OFF. Direct migration verification must be retried as a
+read-only check when the Supabase 5432 endpoint is reachable.
+
+## Recommended Next Phase
+
+First resolve or provide read-only network access for the Direct Supabase
+5432 verification and rerun only the migration status/preflight gates. After
+that review, **PHASE 6W - PRODUCTION CSP REPORT-ONLY ROLLOUT** may be considered
+only with separate explicit operator approval/action. Do not enable CSP
+enforcement in Phase 6V.
+
+STOP. No deployment, sync, migration, secret/environment change, CSP
+enablement, commit, or push is authorized by this report.
+
+## Historical prior verification (preserved)
+
+The original Phase 6V verification body begins below. Its `FAIL`
+classification and five-dashboard `measureTextWithDOM` finding describe the
+previous deployment and are retained as historical evidence, superseded by
+the authoritative 2026-09-06 repeat above.
+
+## Historical Executive Summary
 
 **Final classification: FAIL.**
 

@@ -125,6 +125,22 @@ function parsedWithHeaders(paths: readonly HeaderPath[]): DynamicParserResult {
         dateColumn: null,
       },
     ],
+    dailyColumns: {
+      date: null,
+      coal: null,
+      biomassUnit1: null,
+      biomassUnit2: null,
+      biomassUnit3: null,
+      coalUnit1: null,
+      coalUnit2: null,
+      coalUnit3: null,
+      stock: null,
+      hop1: null,
+      hop2: null,
+      hop3: null,
+      solar: null,
+      solarReceipt: null,
+    },
     aggregates: {
       biomassSupplierReceiptMonthly: {
         value: null,

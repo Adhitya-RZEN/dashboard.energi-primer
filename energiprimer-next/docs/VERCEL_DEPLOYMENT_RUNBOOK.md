@@ -15,6 +15,11 @@
 > Phase 6T independently revalidated the same local candidate after a clean
 > build with two fresh disposable runs and 10/10 nonce match/uniqueness per run;
 > no-flag control preceded each candidate. Production CSP remains absent.
+> Phase 6V-MV separately rechecked the database boundary after this deployment:
+> the runtime pooler on 6543 passed, while Direct PostgreSQL TCP 5432 was not
+> reachable from the verification environment. This is a database-path
+> finding, not a deployment or Vercel artifact failure; see the [Phase 6V-MV
+> report](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md).
 
 > **Phase 6J update (2026-09-04):** This runbook is an operator procedure.
 > The USER performs deployment manually after the local and disposable-target
@@ -192,22 +197,19 @@ The no-flag control was executed before each candidate run. Evidence:
 
 ## Phase 6V canonical deployment verification
 
-The latest READY Production deployment is traceable to commit `9de33b7...` at
-`dashboard-energi-primer-58bhpi82x-projek-rzen.vercel.app`. Its direct URL and
-the canonical `dashboard-energi-primer.vercel.app` now agree on the read-only
+The latest READY Production deployment is traceable to commit `7a67f6e...` at
+`dashboard-energi-primer-524vd8hd3-projek-rzen.vercel.app`. Its direct URL and
+the canonical `dashboard-energi-primer.vercel.app` agree on the read-only
 artifact checks: dynamic private `/login`, zero reviewed inline-style
 attributes, protected-route redirects, and no CSP or Report-Only header. The
-previous alias discrepancy is resolved; no promotion or redeploy was done by
-the agent.
+previous alias discrepancy and Recharts client failure are resolved; no
+promotion or redeploy was done by the agent.
 
 Production CSP remains OFF. The repeated Auth.js Credentials E2E flow passed
 login, session, dashboard marker, logout, post-logout invalidation, and the
-protected redirect. Authenticated server HTML for all six dashboards passed,
-but browser runtime checks found `ReferenceError: measureTextWithDOM is not
-defined` on five routes; `/dashboard/target` passed Recharts interaction. This
-is a client bundle regression requiring a separately authorized fix and
-deployment. No authorized sync, Cron, migration, or database business write
-was performed in Phase6V.
+protected redirect. Authenticated server HTML and browser runtime checks pass
+for all six dashboards, including Recharts interaction. No authorized sync,
+Cron, migration, or database business write was performed in Phase6V.
 
 ### Phase 6V-R local remediation handoff
 
@@ -216,9 +218,9 @@ Recharts dependency patch: the declaration was changed to
 `measureTextWithCanvas`, while executable legacy call sites remained. The
 local patch now replaces all call sites and guards the result. Two clean
 disposable production-like browser runs passed all six dashboards and
-Recharts. Review and deploy this change only through the approved operator
-workflow, then run a new Phase6V. Do not treat the local PASS as a Production
-deployment or enable CSP.
+Recharts. The operator reviewed and deployed this change, and the new Phase6V
+repeat verified it in Production. Do not treat this as authorization to enable
+CSP.
 
 ## Phase 6U CSP readiness and rollout design (HISTORICAL)
 

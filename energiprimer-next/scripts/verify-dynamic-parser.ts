@@ -6,6 +6,7 @@ import {
   previousValidBBWorksheets,
   resolveBBWorksheet,
 } from "../src/services/google-sheets/dynamic/index";
+import { buildGoogleSheetsImportPlanFromReadResult } from "../src/services/google-sheets/import/plan";
 import type {
   DynamicSheetValue,
   LegacyBaseline,
@@ -140,6 +141,34 @@ function regressionFixture() {
   return rows;
 }
 
+function solarSelectionFixture() {
+  const rows = sheet(8, 20);
+  put(rows, 1, 1, "TANGGAL");
+  put(rows, 1, 13, "HSD TOTAL COUNTER");
+  put(rows, 1, 14, "HSD TOTAL");
+  put(rows, 2, 1, "28 Juli 2026");
+  put(rows, 2, 13, null);
+  put(rows, 2, 14, "854");
+  put(rows, 3, 1, "29 Juli 2026");
+  put(rows, 3, 13, null);
+  put(rows, 3, 14, "827");
+  put(rows, 4, 1, "TOTAL");
+  put(rows, 4, 13, null);
+  put(rows, 4, 14, "1681");
+  return rows;
+}
+
+function importReadResult(parsed: ReturnType<typeof parseDynamicWorksheet>) {
+  return {
+    requested: { month: 7, year: 2026, worksheet: "Juli26-BB" },
+    effective: { month: 7, year: 2026, worksheet: "Juli26-BB" },
+    isFallback: false,
+    fallbackIndex: 0,
+    attemptedWorksheets: ["Juli26-BB"],
+    parsed,
+  };
+}
+
 const baseline: LegacyBaseline = {
   biomassReceiptMonthly: 3223.46,
   biomassConsumptionMonthly: 3740.65,
@@ -238,6 +267,43 @@ function runStaticTests() {
   const regression = parseDynamicWorksheet(regressionFixture(), {
     worksheetName: "Juli26-BB",
   });
+  const regressionPlan = buildGoogleSheetsImportPlanFromReadResult(
+    importReadResult(regression),
+  );
+  const regressionSolar = regressionPlan.solarConsumptionRows[0];
+  assert.equal(regressionSolar?.readingDate.toISOString().slice(0, 10), "2026-07-28");
+  assert.equal(regressionSolar?.quantityLiter, 854);
+  assert.equal(regressionSolar?.source.cell, "M2");
+
+  const solarSelection = parseDynamicWorksheet(solarSelectionFixture(), {
+    worksheetName: "Juli26-BB",
+  });
+  assert.equal(solarSelection.dailyColumns.solar, 14);
+  assert.deepEqual(
+    solarSelection.normalized.series.map((record) => record.solar),
+    [854, 827],
+  );
+  const solarSelectionPlan = buildGoogleSheetsImportPlanFromReadResult(
+    importReadResult(solarSelection),
+  );
+  assert.deepEqual(
+    solarSelectionPlan.solarConsumptionRows.map((row) => ({
+      date: row.readingDate.toISOString().slice(0, 10),
+      quantityLiter: row.quantityLiter,
+      sourceCell: row.source.cell,
+    })),
+    [
+      { date: "2026-07-28", quantityLiter: 854, sourceCell: "N2" },
+      { date: "2026-07-29", quantityLiter: 827, sourceCell: "N3" },
+    ],
+  );
+  assert.equal(
+    solarSelectionPlan.solarConsumptionRows.reduce(
+      (total, row) => total + (row.quantityLiter ?? 0),
+      0,
+    ),
+    1681,
+  );
   const comparison = compareLegacyDynamic(regression, baseline);
   assert.equal(
     comparison.mismatchCount,

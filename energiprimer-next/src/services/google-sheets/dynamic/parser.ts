@@ -160,6 +160,7 @@ export function parseDynamicWorksheet(
     anchors,
     tables,
     structures: [structure],
+    dailyColumns: daily.columns,
     aggregates,
     normalized,
     diagnostics: {

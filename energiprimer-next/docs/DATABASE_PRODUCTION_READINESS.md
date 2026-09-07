@@ -1,14 +1,17 @@
 # Database Production Readiness
 
-> CURRENT PRODUCTION DATABASE CONTRACT (2026-09-05): Runtime application
-> traffic uses DATABASE_URL through the Supabase pooler on port 6543.
-> Production migration status/preflight use SUPABASE_DIRECT_URL on direct
-> PostgreSQL port 5432 with TLS. The canonical production history is
-> prisma/production/ with baseline
-> 20260901130000_production_schema_baseline. Status and preflight passed with
-> no pending migration, drift, or schema diff. Migration is not part of the
-> build, deployment, request, or Cron path. The root migration history remains
-> legacy/local-only. See Phase 6K-A, Phase 6L, and Phase 6N.
+> CURRENT PRODUCTION DATABASE CONTRACT (2026-09-06): Runtime application
+> traffic uses DATABASE_URL through the Supabase pooler on port 6543. The
+> migration contract remains SUPABASE_DIRECT_URL on direct PostgreSQL port
+> 5432 with TLS, but Phase 6V-MV could not establish Direct TCP reachability
+> from the current verification environment. The pooler runtime and read-only
+> schema/history corroboration pass; the Phase 6K-A Direct status/preflight
+> PASS is preserved as HISTORICAL evidence, not today's connectivity result.
+> The canonical production history remains prisma/production/ with baseline
+> 20260901130000_production_schema_baseline. See [Phase 6V-MV](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md),
+> Phase 6K-A, Phase 6L, and Phase 6N. Migration is not part of the build,
+> deployment, request, or Cron path; the root migration history remains
+> legacy/local-only.
 
 ## Historical audit snapshot (2026-08-28)
 

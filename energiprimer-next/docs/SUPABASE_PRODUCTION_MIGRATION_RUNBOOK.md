@@ -1,12 +1,13 @@
 # Supabase Production Migration Runbook
 
-> CURRENT PRODUCTION MIGRATION STATE (2026-09-05): Read-only migration
-> status and preflight PASS. The canonical production history is
-> prisma/production/ with baseline 20260901130000_production_schema_baseline;
-> there are no pending migrations, drift, checksum mismatch, unfinished
-> migrations, or schema diff. Runtime uses the pooler on port 6543; migration
-> checks use the direct TLS connection on port 5432. No migration deploy or
-> resolve is authorized by this documentation closure.
+> CURRENT PRODUCTION MIGRATION STATE (2026-09-06): Runtime uses the pooler
+> on port 6543 and its read-only validation passes. Phase 6V-MV rechecked the
+> Direct TLS endpoint on port 5432, but DNS-to-TCP diagnosis could not
+> establish the Direct path. Therefore current Direct migration status and
+> preflight were intentionally not rerun; the Phase 6K-A status/preflight PASS
+> remains HISTORICAL. See [Phase 6V-MV](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md).
+> No migration deploy, resolve, or schema change is authorized by this
+> documentation closure.
 
 > Phase 21 status (2026-09-01): **BLOCKED at Gate B0**. The read-only
 > preflight detected both target URL variables, but Direct Connection and

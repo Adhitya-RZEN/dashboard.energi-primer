@@ -141,22 +141,21 @@ unreviewed external origin. Evidence:
 
 ## Phase 6V live deployment boundary
 
-The latest READY Production deployment is `dpl_4AV8aVmD31A2QUnFb5Fh18UN3e1H`
-and is traceable to the CSP commit `9de33b7...` at its direct deployment URL.
-The repeated Phase 6V check confirms that the canonical
-`dashboard-energi-primer.vercel.app` alias now resolves to that same
-deployment and SHA. The alias/provenance discrepancy from the first run is
-resolved; this repository agent did not promote or redeploy.
+The latest READY Production deployment is `dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2`
+and is traceable to commit `7a67f6e...` at its direct deployment URL. The
+2026-09-06 Phase 6V repeat confirms that the canonical
+`dashboard-energi-primer.vercel.app` alias resolves to that same deployment
+and SHA. The alias/provenance discrepancy and the prior Recharts browser
+regression are resolved; this repository agent did not promote or redeploy.
 
-Both sampled URLs have the baseline HSTS, nosniff, DENY, Referrer-Policy, and
-Permissions-Policy headers. Both have CSP and CSP Report-Only absent, as
-required. Phase 6V still FAILs because five of six authenticated dashboard
-routes crash in the browser with `measureTextWithDOM` undefined; the failure
-is a client bundle regression, not permission to enable CSP. Fix/redeploy
-through the approved operator workflow, then rerun the read-only verification.
+The canonical response has the baseline HSTS, nosniff, DENY, Referrer-Policy,
+and Permissions-Policy headers. CSP and CSP Report-Only are absent, as
+required. The Phase 6V repeat passes all six authenticated dashboard routes in
+the browser; the prior `measureTextWithDOM` client-bundle failure is resolved.
+Production CSP remains OFF and Phase 6W still requires separate approval.
 
 Phase 6V-R resolved the underlying Recharts patch defect locally by replacing
 all executable `measureTextWithDOM` calls with the canvas path and adding a
-patch assertion. Two clean local production-like runs passed. This is not a
-Vercel deployment: Production remains on the Phase 6V FAIL boundary until an
-operator deploys the reviewed change and a new Phase 6V verifies it.
+patch assertion. Two clean local production-like runs passed. The operator
+deployment is now verified by the Phase 6V repeat. The local report remains
+the remediation record and does not authorize CSP enablement.

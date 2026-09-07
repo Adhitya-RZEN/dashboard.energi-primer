@@ -170,21 +170,18 @@ and records the detailed readiness and rollout boundary in
 
 Phase6V used Vercel metadata GETs, unauthenticated HTTP/browser GETs, and
 read-only PostgreSQL/Prisma verification. It did not call the authorized sync
-engine, Cron, or Google Sheets. The latest direct Production deployment is
-traceable to `9de33b7...`, and the repeated check confirms that the canonical
-domain serves the same deployment. The prior alias discrepancy is resolved.
-
-The repeat did find a browser client-bundle regression on five of six
-authenticated dashboards (`measureTextWithDOM` is undefined); this does not
-change the exact seven-worksheet policy or the interpretation of the 199-row
+engine, Cron, or Google Sheets. The 2026-09-06 repeat confirms the canonical
+domain serves deployment `dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2` from commit
+`7a67f6e...`; all six authenticated dashboards pass the browser check. The
+prior alias and Recharts bundle findings are resolved. This does not change
+the exact seven-worksheet policy or the interpretation of the 199-row
 metadata inventory. Server-side Google Sheets remains outside the browser CSP
-boundary. Production CSP remains OFF, and no Phase6W CSP step may begin until
-the dashboard bundle is fixed, redeployed through an authorized workflow, and
-Phase6V passes. No sync, migration, credential, or data operation is a remedy
-for the browser failure.
+boundary. Production CSP remains OFF, and no Phase6W CSP step may begin
+without separate approval. No sync, migration, credential, or data operation
+was used as a remedy.
 
 Phase 6V-R locally remediated the unrelated browser bundle defect in the
 Recharts CSP patch; it did not change the seven-worksheet source policy,
 Google client, sync engine, Cron, or database schema. Two disposable local
-runs passed. Production remains awaiting an authorized deployment and a new
-Phase6V verification, and no sync is authorized by this handoff.
+runs passed. Production deployment and the new Phase6V verification are
+complete; no sync is authorized by this documentation update.

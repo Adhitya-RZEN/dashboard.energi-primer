@@ -1,9 +1,10 @@
 # Google Sheets Worksheet Discovery — S2 / Phase 6J hardening
 
-> CURRENT PRODUCTION POINTER (Phase 6N, 2026-09-05): This document remains
+> CURRENT PRODUCTION POINTER (Phase 6V repeat, 2026-09-06): This document remains
 > the technical discovery reference. Phase 6K/6L contain the current
-> deployment and one controlled Production execution evidence; no further
-> sync is authorized here.
+> deployment and one controlled Production execution evidence. Phase 6V
+> confirms the current artifact and browser state; no further sync is
+> authorized here.
 
 > The S2 live evidence below remains a historical local baseline. The current
 > implementation and Phase 6J gate status are authoritative in

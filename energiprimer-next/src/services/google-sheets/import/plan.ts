@@ -126,10 +126,16 @@ function hopPath(structure: StructureAnalysis, unitNumber: UnitNumber) {
   );
 }
 
-function solarPath(structure: StructureAnalysis) {
+function solarPath(parsed: DynamicParserResult) {
+  const structure = parsed.structures[0];
+  const selectedColumn = parsed.dailyColumns.solar;
+  if (!structure || selectedColumn === null) return null;
   return (
     structure.headerPaths.find(
-      (path) => path.resource === "solar" && path.isTotal,
+      (path) =>
+        path.cell.column === selectedColumn &&
+        path.resource === "solar" &&
+        path.isTotal,
     ) ?? null
   );
 }
@@ -352,7 +358,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
     directPath(structure, "coal", unit as UnitNumber),
   );
   const hopPaths = [1, 2, 3].map((unit) => hopPath(structure, unit as UnitNumber));
-  const solarDailyPath = solarPath(structure);
+  const solarDailyPath = solarPath(parsed);
   const stock = stockPath(structure);
 
   for (const record of series) {
@@ -525,7 +531,7 @@ function validatePlan(input: ReturnType<typeof buildRows>, result: DynamicWorksh
     ...[1, 2, 3].map((unit) => directPath(input.structure, "coal", unit as UnitNumber)),
     ...[1, 2, 3].map((unit) => directPath(input.structure, "biomass", unit as UnitNumber)),
     ...[1, 2, 3].map((unit) => hopPath(input.structure, unit as UnitNumber)),
-    solarPath(input.structure),
+    solarPath(input.parsed),
     coalTotalPath(input.structure),
     stockPath(input.structure),
   ];

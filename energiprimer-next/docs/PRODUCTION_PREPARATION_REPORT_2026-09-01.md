@@ -9,6 +9,13 @@
 > HISTORICAL BASELINE (Phase 6C, 2026-09-02): Password-recovery/mail entries
 > below describe the pre-remediation implementation only.
 
+> LATEST READ-ONLY FOLLOW-UP (Phase 6V-MV, 2026-09-06): The runtime Supabase
+> pooler on port 6543 remains healthy, while the current verification
+> environment cannot establish TCP connectivity to the Direct PostgreSQL
+> endpoint on port 5432. The successful Phase 6K-A Direct migration check is
+> historical and remains unchanged. This preparation report is not evidence
+> of a current Direct migration failure; see the [Phase 6V-MV report](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md).
+
 Date: 2026-09-01  
 Project: `energiprimer-next`  
 Phase: 20 — Production Preparation  

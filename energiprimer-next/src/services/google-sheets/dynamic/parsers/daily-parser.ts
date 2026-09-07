@@ -6,6 +6,7 @@ import {
 import { orderedUnitPaths } from "../structure-analyzer";
 import type {
   DynamicDailyRecord,
+  DynamicDailyColumns,
   HeaderPath,
   ScannedCell,
   StructureAnalysis,
@@ -13,22 +14,7 @@ import type {
 
 export type DailyParseResult = {
   series: DynamicDailyRecord[];
-  columns: {
-    date: number | null;
-    coal: number | null;
-    biomassUnit1: number | null;
-    biomassUnit2: number | null;
-    biomassUnit3: number | null;
-    coalUnit1: number | null;
-    coalUnit2: number | null;
-    coalUnit3: number | null;
-    stock: number | null;
-    hop1: number | null;
-    hop2: number | null;
-    hop3: number | null;
-    solar: number | null;
-    solarReceipt: number | null;
-  };
+  columns: DynamicDailyColumns;
   warnings: string[];
 };
 

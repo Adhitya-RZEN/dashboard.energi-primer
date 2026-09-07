@@ -1,6 +1,7 @@
 # Production Readiness — Current Operational Index
 
 > **Current live deployment verification:** [Phase 6V — Production Deployment & CSP Artifact Verification](./PHASE6V_PRODUCTION_DEPLOYMENT_CSP_ARTIFACT_VERIFICATION_2026-09-05.md).
+> **Current Direct database follow-up:** [Phase 6V-MV — Direct Supabase 5432 Read-Only Verification](./PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md).
 > Phase 6U remains the preceding CSP readiness review and is preserved as
 > historical continuity.
 > Phase 6N remains the operational documentation closure; this index preserves
@@ -17,15 +18,21 @@
 
 ## Current Production State
 
-**PHASE 6V FAIL; CANONICAL ARTIFACT MATCHED, BUT 5/6 DASHBOARDS CRASH IN THE BROWSER**
+**PHASE 6V PASS WITH FINDINGS; ALL SIX DASHBOARDS PASS, DIRECT MIGRATION CHECK BLOCKED**
 
-Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N -> Phase 6V.
+Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N -> Phase 6V -> Phase 6V-MV.
 
 - The canonical Production artifact now matches the newest READY deployment
-  `dpl_4AV8aVmD31A2QUnFb5Fh18UN3e1H` and SHA `9de33b7...`. Public routes,
-  dynamic login behavior, and one normal Auth.js lifecycle pass.
-- Production database, schema, canonical migration history, and migration
-  preflight are verified.
+  `dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2` and SHA `7a67f6e...`. Public routes,
+  dynamic login behavior, one normal Auth.js lifecycle, and all six dashboard
+  browser flows pass.
+- Runtime database verification through the transaction pooler passes. The
+  repeat Direct 5432 migration status/preflight check was blocked by an
+  unreachable endpoint and must be retried read-only when reachable.
+- Phase 6V-MV narrowed the finding to the Direct 5432 network path: DNS
+  information was available, TCP 5432 failed, and the pooler 6543 comparison
+  passed. This is not evidence of migration drift; Phase 6K-A's successful
+  Direct status/preflight remains historical.
 - Cron is configured as 0 22 * * * (22:00 UTC / 06:00 WITA).
 - One controlled Production sync succeeded in Phase 6L with HTTP 200, status
   SUCCESS, syncRun ID 2, and no reproduced P2028.
@@ -44,15 +51,12 @@ Current evidence chain: Phase 6K -> Phase 6L -> Phase 6M -> Phase 6N -> Phase 6V
 - Runtime diagnostic execution through an authorized sync remains intentionally
   untested in Phase 6V, and Git/Vercel commit signature verification remains
   informational and unverified.
-- Phase 6V repeat verification reconciled the canonical alias with the latest
-  artifact, but authenticated browser checks found
-  `ReferenceError: measureTextWithDOM is not defined` on five of six
-  dashboard routes. This is a client bundle/dashboard regression and blocks
-  Phase 6W.
 - Phase 6V-R locally confirmed the cause as an incomplete Recharts dependency
-  patch, fixed the missed call sites, and passed two clean disposable-browser
-  runs. Production is still awaiting operator deployment and a new Phase 6V;
-  the local PASS does not mark Production fixed.
+  patch and fixed the missed call sites. The operator-managed deployment of
+  that commit is now verified by the repeated Phase 6V browser run: the legacy
+  `measureTextWithDOM` error is absent and all six dashboards pass.
+- Production CSP remains OFF. Phase 6W remains a separate, approval-gated
+  Report-Only step; it is not enabled by this verification.
 
 Phase 6J remediation successfully passed one controlled Production execution in
 Phase 6L without reproducing P2028. This is not a permanent-fix claim.
@@ -80,8 +84,9 @@ Phase 6L without reproducing P2028. This is not a permanent-fix claim.
 | 6S | Current evidence | CSP remediation; local production-like candidate gate PASS, Production enforcement remains disabled |
 | 6T | Current evidence | Independent local CSP Report-Only revalidation; two fresh runs PASS |
 | 6U | Current review | CSP candidate readiness review; Production CSP remains OFF |
-| 6V | Current verification | FAIL: canonical artifact matched; five authenticated dashboards crash in browser |
-| 6V-R | Current local remediation | PASS: Recharts patch fixed locally; Production deployment and new 6V verification pending |
+| 6V | Current verification | PASS WITH FINDINGS: new artifact and six authenticated dashboards pass; Direct 5432 check blocked |
+| 6V-MV | Current database follow-up | PASS WITH FINDINGS: pooler 6543 read-only runtime passes; Direct 5432 TCP path not re-verifiable |
+| 6V-R | Historical local remediation | PASS: Recharts patch fixed locally; verified in Production by the 2026-09-06 Phase 6V repeat |
 
 ## Historical Phase 20 gate
 
@@ -336,24 +341,23 @@ See the [Phase 6U report](./PHASE6U_CSP_PRODUCTION_READINESS_REVIEW_2026-09-05.m
 ## Phase 6V Production deployment and CSP artifact verification
 
 Phase 6V is the current live verification record. The latest READY Production
-deployment is traceable to commit `9de33b7...` and its direct deployment URL
-serves the Phase6S/6T-compatible `/login` artifact: private no-cache behavior,
-zero reviewed inline-style attributes, no browser/page errors, and no CSP or
+deployment is traceable to commit `7a67f6e...` and its canonical URL serves the
+Phase6S/6T-compatible `/login` artifact: private no-cache behavior, zero
+reviewed inline-style attributes, no browser/page errors, and no CSP or
 Report-Only header. The six protected dashboard routes return the expected
 unauthenticated redirect without credentials.
 
-The canonical `https://dashboard-energi-primer.vercel.app` domain now serves
-the same latest READY deployment and SHA. The alias/provenance discrepancy is
-resolved. However, authenticated browser checks fail on five of six dashboard
-routes with `ReferenceError: measureTextWithDOM is not defined`; the
-server-rendered HTML and `/dashboard/target` interaction pass. This is a
-client bundle regression, not a CSP failure. Production CSP remains OFF, and
-Phase6W must not begin until the bundle is fixed, redeployed by an authorized
-operator, and Phase6V passes.
+The canonical domain and Vercel deployment metadata agree on
+`dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2`. Authenticated browser verification now
+passes all six dashboard routes, Recharts, tooltip, and interaction checks;
+the prior `measureTextWithDOM` regression is resolved. Direct Supabase 5432
+migration status/preflight was unavailable from the repeat environment, while
+the runtime pooler 6543 check passed. Production CSP remains OFF.
 
 Phase 6V-R confirmed the local root cause: the dependency patch renamed the
 Recharts measurement definition but left executable call sites using
 `measureTextWithDOM`. The patch now replaces all call sites and asserts the
 canvas path. Two clean local production-like runs passed all six dashboards.
-This local result does not alter the Production FAIL classification or
-authorize deployment.
+The operator deployment and subsequent Phase 6V repeat verified this local
+result in Production. The local report remains a historical remediation record
+and does not authorize CSP enablement.

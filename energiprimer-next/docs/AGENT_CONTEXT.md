@@ -1,6 +1,6 @@
 # AGENT_CONTEXT.md — Energi Primer
 
-Last audited: 2026-09-05
+Last audited: 2026-09-06
 Purpose: single source of truth for AI coding agents working in this repository.
 Scope: current `energiprimer-next` worktree. Read the actual source after this document before changing anything.
 
@@ -42,6 +42,15 @@ Phase 6T independently reproduced the Phase 6S candidate after a clean build
 in two fresh local runs. Each run completed 10/10 request/DOM nonce matching
 and uniqueness, no-flag-first control, Auth.js/dashboard/Recharts checks,
 network-failure classification, and cleanup. Production remains unchanged.
+
+Phase 6V-MV (2026-09-06) is the current Direct Supabase database-path
+verification. `SUPABASE_DIRECT_URL` is present and has the approved Direct
+shape on port 5432 with TLS required, but DNS-to-TCP diagnostics could not
+establish a connection to that port from the current environment. The runtime
+pooler on port 6543 was rechecked read-only and passed with zero database
+writes. Do not interpret this as migration drift: the successful Phase 6K-A
+Direct status/preflight result is historical and preserved. See
+`docs/PHASE6V-MV_DIRECT_SUPABASE_5432_READ_ONLY_VERIFICATION_2026-09-06.md`.
 
 ## 1. Project Overview
 
@@ -423,25 +432,24 @@ unsafe-eval, wildcard, or external origins.
 ## 23. Phase 6V Production artifact boundary
 
 Phase 6V is verification-only. The latest READY Production deployment maps to
-the CSP commit `9de33b7...`, and the repeated HTTP/provenance check confirms
-that the canonical `dashboard-energi-primer.vercel.app` alias now serves the
-same deployment. Treat the prior alias mismatch as resolved, but keep Phase6W
-blocked because five of six authenticated dashboard routes crash in the
-browser with `ReferenceError: measureTextWithDOM is not defined`. Never
-resolve this by running deploy, promote, changing Vercel settings, sending
-credentials, invoking sync/Cron, running a migration, or changing Production
-CSP from the agent.
+commit `7a67f6e...` (`dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2`), and the repeat
+HTTP/provenance check confirms that the canonical alias serves the same
+deployment. The prior alias mismatch and five-dashboard
+`measureTextWithDOM` browser finding are resolved by the operator deployment
+of the Phase 6V-R patch. Never resolve a new finding by running deploy,
+promote, changing Vercel settings, sending credentials, invoking sync/Cron,
+running a migration, or changing Production CSP from the agent.
 
 Production CSP and Report-Only are absent. `/login` is dynamic/private/no-cache
-with zero reviewed style attributes on the canonical artifact. Auth.js HTTP
-login/logout and authenticated server HTML pass; `/dashboard/target` passes
-Recharts interaction, while the other five dashboards have the client bundle
-regression. A separately authorized code/deployment fix and a clean Phase6V
-rerun are required.
+with zero reviewed style attributes on the canonical artifact. Auth.js
+login/logout, authenticated server HTML, and all six dashboard browser
+Recharts/interaction checks pass. The repeat has one review finding: Direct
+Supabase 5432 migration status/preflight was unreachable, while pooler 6543
+runtime verification passed.
 
 Phase 6V-R is the local follow-up for this finding. It confirmed that the
 Recharts patch had renamed the measurement definition but left executable
 `measureTextWithDOM` calls. The patch script now replaces every call and
 asserts the `measureTextWithCanvas` path; two clean disposable browser runs
-passed. Production still requires operator deployment and a new Phase 6V
-verification, and Production CSP remains OFF.
+passed. Production deployment and the new Phase 6V verification are complete,
+and Production CSP remains OFF.

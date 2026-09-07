@@ -4,6 +4,11 @@ Project: Energi Primer PLN Jeranjang
 Date: 2026-09-06
 Scope: local investigation and local remediation only.
 
+Follow-up: the operator deployed the reviewed commit and the 2026-09-06
+Phase 6V repeat verified all six Production dashboards. The local remediation
+and its Production handoff are complete; see the Phase 6V report for the
+remaining Direct Supabase migration-verification finding.
+
 ## Executive Summary
 
 Phase 6V-R identified the root cause of the Phase 6V Production browser
@@ -428,6 +433,14 @@ patch was applied, the clean production build passed, the legacy executable
 call path was removed, and two independent disposable production-like browser
 runs passed all six dashboards and Recharts gates.
 
-PHASE 6V-R PASS does not equal Production fixed. Production remains awaiting
-operator deployment and a new Phase 6V verification. STOP here and wait for
-operator instruction.
+PHASE 6V-R PASS was the local result at the time of this report. The
+operator-managed deployment and the new Phase 6V verification subsequently
+completed; Production now passes the six-dashboard browser matrix. See the
+current Phase 6V report for the remaining Direct Supabase verification finding.
+
+## Follow-up after operator deployment
+
+The 2026-09-06 Phase 6V repeat verified deployment
+`dpl_8AwGQBDB6k9pXcihVgdJnfqfL9f2` from commit `7a67f6e...`. The former
+`measureTextWithDOM` browser regression was not reproduced. Production CSP
+remains OFF.

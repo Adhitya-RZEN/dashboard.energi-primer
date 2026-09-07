@@ -155,3 +155,57 @@ Target fallback `70.020` adalah policy value resmi yang sudah ada pada
 kontrak import. Karena fallback tidak memiliki source cell, setiap hasil
 fallback harus tetap terlihat sebagai `WARNING` pada audit/import report dan
 perlu dikonfirmasi sebelum historical bulk import.
+
+## Phase 2 — Solar Provenance Mapping Remediation
+
+### Objective
+
+Menyamakan source provenance `Pemakaian Solar Harian` dengan kolom yang benar-benar dipakai untuk membaca `quantity_liter`, tanpa mengubah schema, formula KPI, atau data historis.
+
+### Root Cause
+
+`daily-parser.ts` memilih kolom Solar melalui `choosePath(...)` berdasarkan coverage nilai numerik. Pada worksheet `Juni26-BB`, kandidat `CF` berlabel `TOTAL COUNTER` kosong pada baris harian, sedangkan `CJ` berlabel `TOTAL` berisi nilai Solar. Karena itu quantity harian berasal dari `CJ`.
+
+`plan.ts` sebelumnya melakukan discovery ulang dengan memilih kandidat Solar pertama yang `resource === "solar" && isTotal`, sehingga memilih `CF` untuk membentuk `source_cell`. `commit.ts` kemudian menyimpan quantity yang benar bersama provenance yang salah.
+
+### Changes
+
+- Metadata `dailyColumns` hasil keputusan parser sekarang diteruskan melalui `DynamicParserResult`.
+- Import plan menggunakan kolom Solar yang sama dari metadata parser saat membentuk `source` setiap baris.
+- Tidak ada hardcode baru terhadap `CJ`; fixture test menggunakan kolom dinamis yang berbeda dan tetap menghasilkan provenance yang konsisten.
+- `quantity_liter`, `reading_date`, formula KPI, receipt mapping, dan schema existing dipertahankan.
+
+### Files Affected
+
+- `src/services/google-sheets/dynamic/types.ts`
+- `src/services/google-sheets/dynamic/parser.ts`
+- `src/services/google-sheets/dynamic/parsers/daily-parser.ts`
+- `src/services/google-sheets/import/plan.ts`
+- `scripts/verify-dynamic-parser.ts`
+- `scripts/verify-bb-legacy-mapping.ts`
+
+### Validation
+
+| Check | Result |
+| --- | --- |
+| `npm.cmd run dynamic:verify` | PASS |
+| `npm.cmd run bb:mapping:test` | PASS — 27 assertions |
+| `npx.cmd tsc --noEmit` | PASS |
+| `npm.cmd run lint` | PASS |
+| `npm.cmd run db:verify-kpi:juni` | PASS — 30 Solar rows, 26.848 liter; read-only |
+| `npm.cmd run db:verify-overview` | PASS — July 24.274 liter; read-only |
+| Live Solar plan Januari–Juli 2026 | PASS — source cell mengikuti `CJ` pada setiap worksheet |
+
+### Status
+
+`PASS_WITH_REVIEW`: remediation code dan regression test lulus. Tidak ada migration, schema change, tabel baru, atau database write.
+
+### Known Issues
+
+Record historis pada `solar_consumptions` masih dapat memiliki `source_cell` lama `CF11:CF40` meskipun `quantity_liter` benar. Historical mutation tidak dilakukan pada Phase 2 karena strategi update dan audit trail belum disetujui.
+
+Status: `NEEDS VERIFICATION` untuk koreksi provenance historis.
+
+### Next Steps
+
+Sebelum import historis ulang atau backfill provenance, verifikasi strategi update yang hanya mengubah `source_cell`, mempertahankan `quantity_liter`, dan menyediakan hasil audit. Phase berikutnya dapat memverifikasi binding KPI/UI tanpa mengubah formula atau source.
