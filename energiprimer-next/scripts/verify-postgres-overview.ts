@@ -26,6 +26,13 @@ assertApproximately(data.metrics.biomassConsumptionMonthly.value, 3740.65);
 assertApproximately(data.metrics.coalReceiptMonthly.value, 30084.842);
 assertApproximately(data.metrics.solarConsumptionMonthly.value, 24274);
 assertApproximately(data.metrics.solarReceiptMonthly.value, 25000);
+assert.equal(data.metrics.solarConsumptionDaily.available, true);
+assert.equal(data.metrics.solarConsumptionDaily.unit, "liter");
+assert.equal(
+  data.metrics.solarConsumptionDaily.source,
+  "solar_consumptions.quantity_liter (tanggal fokus)",
+);
+assertApproximately(data.metrics.solarConsumptionDaily.value, 854);
 assertApproximately(data.metrics.biomassCumulative.value, 29103.77);
 assertApproximately(data.metrics.biomassTargetProgress.value, 41.564938588974584);
 assert.equal(data.target?.target, 70020);
@@ -45,6 +52,24 @@ assert.equal(data.series.length, 31);
 assert.equal(fallbackData.period.isFallback, true);
 assert.equal(fallbackData.period.monthLabel, "Juli 2026");
 assert.equal(fallbackData.metrics.biomassConsumptionMonthly.available, true);
+const focusPoint = data.series.find(
+  (point) => point.date === data.period.focusDate,
+);
+assert.ok(focusPoint, "focus date must be represented in the chart series");
+assertApproximately(focusPoint?.solar, 854);
+assert.equal(data.metrics.solarConsumptionDaily.value, focusPoint?.solar);
+const nullSolarData = await getPostgresOverviewData({
+  month: 7,
+  year: 2026,
+  day: 30,
+});
+const nullSolarPoint = nullSolarData.series.find(
+  (point) => point.date === "2026-07-30",
+);
+assert.equal(nullSolarData.period.focusDate, "2026-07-30");
+assert.equal(nullSolarPoint?.solar, null);
+assert.equal(nullSolarData.metrics.solarConsumptionDaily.value, null);
+assert.equal(nullSolarData.metrics.solarConsumptionDaily.available, false);
 assertApproximately(
   data.series.find((point) => point.date === "2026-07-28")?.biomass,
   183.6,
@@ -68,6 +93,7 @@ console.log(
         biomassReceiptMonthly: data.metrics.biomassReceiptMonthly.value,
         biomassConsumptionMonthly: data.metrics.biomassConsumptionMonthly.value,
         coalReceiptMonthly: data.metrics.coalReceiptMonthly.value,
+        solarConsumptionDaily: data.metrics.solarConsumptionDaily.value,
         solarConsumptionMonthly: data.metrics.solarConsumptionMonthly.value,
         solarReceiptMonthly: data.metrics.solarReceiptMonthly.value,
         biomassTarget: data.target?.target,
@@ -79,6 +105,8 @@ console.log(
         "dashboard service reads normalized PostgreSQL tables",
         "Unit 1, Unit 2, and Unit 3 are preserved",
         "July 2026 KPI values match imported baseline",
+        "daily Solar metric matches the focus-date chart point",
+        "missing daily Solar value remains null and unavailable",
         "daily series is populated for all 31 days",
       ],
     },

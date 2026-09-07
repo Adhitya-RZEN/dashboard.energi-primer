@@ -209,3 +209,146 @@ Status: `NEEDS VERIFICATION` untuk koreksi provenance historis.
 ### Next Steps
 
 Sebelum import historis ulang atau backfill provenance, verifikasi strategi update yang hanya mengubah `source_cell`, mempertahankan `quantity_liter`, dan menyediakan hasil audit. Phase berikutnya dapat memverifikasi binding KPI/UI tanpa mengubah formula atau source.
+
+## Phase 3 - Solar KPI UI / Data Binding Verification
+
+### Scope and decision
+
+Audit ini memverifikasi jalur data `Pemakaian Solar Harian` dari source asli
+sampai KPI dan chart. Tidak ada migration, perubahan schema, tabel baru,
+endpoint baru, perubahan UI, atau write ke database.
+
+Keputusan final: `REUSE_EXISTING_SOURCE`.
+
+### Source discovery
+
+Source asli yang tervalidasi adalah worksheet Google Sheets `Juni26-BB`.
+Header Solar harian berada pada kolom `CJ` (index relatif `86` terhadap range
+`B11:CO59`), dengan data harian pada row spreadsheet `11..40`. Total bulanan
+berada pada `CJ42`. Pada runtime dashboard yang aktif saat validasi, Google
+Sheets hanya menjadi source importer; page dan chart membaca PostgreSQL
+normalized.
+
+| Layer | Evidence | Mapping |
+| --- | --- | --- |
+| Worksheet/parser | `src/services/google-sheets/dynamic/parsers/daily-parser.ts`, `parseDailyTable` | memilih path `resource === "solar" && isTotal`; hasilnya `dailyColumns.solar`; tanggal berasal dari `structure.dateColumn` |
+| Import plan | `src/services/google-sheets/import/plan.ts`, `solarPath` dan `buildRows` | memakai kolom Solar yang sama dari parser; menyimpan `readingDate`, `quantityLiter`, dan source cell per row |
+| Normalized database | `prisma/schema.prisma`, model `SolarConsumption` | table `solar_consumptions`; `reading_date DATE`, `quantity_liter DECIMAL(18,3)`, `source_worksheet`, `source_cell`; unique `reading_date` |
+| PostgreSQL service | `src/services/overview-postgres.ts`, `loadOverviewRows` | membaca `readingDate` pada periode visible dan `quantityLiter`, terurut tanggal |
+| Shared contract | `src/types/overview.ts`, `OverviewMetric` dan `OverviewDailyPoint` | `solarConsumptionDaily` memakai unit `liter`; `series[].solar` memakai date key ISO |
+| Page | `src/app/(protected)/dashboard/page.tsx` dan `src/app/(protected)/dashboard/solar/page.tsx` | keduanya memanggil `getOverviewData` dan meneruskan `OverviewData` tanpa API/proxy tambahan |
+| KPI UI | `src/components/dashboard/OverviewDashboard.tsx` dan `DetailDashboard.tsx` | kartu `Pemakaian Solar Harian` membaca `data.metrics.solarConsumptionDaily` |
+| Chart UI | `src/components/dashboard/DetailDashboard.tsx` dan `DetailCharts.tsx` | `DetailLineChart` menerima `data.series` dengan `dataKey="solar"`; tidak melakukan fetch atau agregasi baru |
+
+### KPI formula and grain
+
+Formula PostgreSQL dashboard adalah:
+
+```text
+solarConsumptionMonthly = SUM(solar_consumptions.quantity_liter)
+  WHERE reading_date >= period_start
+    AND reading_date < visible_period_end
+
+solarConsumptionDaily = SUM(solar_consumptions.quantity_liter)
+  WHERE reading_date = focus_date
+```
+
+Implementasi `buildSeries` membentuk bucket berdasarkan `dateKey(readingDate)`
+dan mengisi `point.solar` dari `quantity_liter`; `focusPoint.solar` kemudian
+dijadikan `metrics.solarConsumptionDaily`. Karena tabel memiliki unique
+`reading_date`, grain hari bersifat deterministik. Tidak ada pembagian angka
+bulanan, estimasi, proxy KPI, atau interpolasi. Nilai kosong tetap `null` dan
+`available` menjadi `false`; nilai `0` tetap dianggap tersedia.
+
+Date mapping menggunakan `DATE` PostgreSQL yang dibaca sebagai UTC date-only
+dan dinormalisasi ke key `YYYY-MM-DD`. `defaultFocusDateForMonth` menerapkan
+query hari dan dashboard cutoff `Asia/Makassar`; pada query Juli 2026 dengan
+hari 28, focus date adalah `2026-07-28`.
+
+`solar_receipts.quantity_liter` tidak dipakai sebagai proxy. Receipt memiliki
+grain bulanan sendiri dan hanya mengisi `solarReceiptMonthly`.
+
+### Existing versus new table
+
+Pola terdekat adalah `biomass_consumptions` dan `coal_consumption`: keduanya
+menyimpan nilai konsumsi dengan tanggal operasional lalu service membentuk
+agregat harian berdasarkan tanggal. `solar_consumptions` memiliki pola yang
+sama, dengan perbedaan bahwa Solar tidak dipecah per unit dan memiliki satu
+baris unik per `reading_date`. Perbedaan ini tidak fundamental dan justru
+sesuai dengan grain source Solar.
+
+`solar_receipts` tidak cocok untuk KPI ini karena grain-nya satu row per
+periode/bulan. Menggunakannya sebagai pengganti atau membagi receipt bulanan
+menjadi hari akan melanggar definisi KPI. Oleh sebab itu tabel existing
+`solar_consumptions` dapat digunakan; proposal tabel baru tidak diperlukan.
+
+### Root cause classification
+
+Primary classification: `NO_CODE_BUG_FOUND`.
+
+Tidak ditemukan `UI_BINDING_BUG`, `SERVICE_MAPPING_BUG`,
+`DB_SOURCE_BUG`, `DATE_ALIGNMENT_BUG`, atau `FORMATTER_OR_NULL_BUG` pada
+jalur aktif. Temuan `PROVENANCE_MAPPING_BUG` dari Phase 2 sudah diperbaiki
+untuk import berikutnya: plan kini menggunakan kolom yang sama dengan parser
+untuk `source_cell`. Record historis yang masih menyimpan provenance `CF`
+belum diubah dan tetap berstatus `NEEDS VERIFICATION`; hal tersebut tidak
+mengubah `quantity_liter` yang dibaca service.
+
+### KPI and chart verification
+
+Read-only service verification pada PostgreSQL menghasilkan:
+
+| Check | Result |
+| --- | --- |
+| Effective source | `PostgreSQL normalized data` |
+| Focus date | `2026-07-28` |
+| `solarConsumptionDaily` | `854 liter` |
+| Focus chart point `series[date=2026-07-28].solar` | `854 liter` |
+| `solarConsumptionMonthly` | `24,274 liter` |
+| `solarReceiptMonthly` | `25,000 liter` dari `solar_receipts` |
+| Daily series length | `31` rows |
+| Missing-value behavior pada `2026-07-30` | metric `null`, `available=false`, chart point `solar=null` |
+
+Dengan demikian kartu KPI dan line chart mengonsumsi source/point yang sama;
+tidak ada source terpisah yang dapat menyebabkan angka kartu dan chart berbeda.
+
+### Implementation and validation
+
+Tidak ada perubahan runtime. Verifier read-only existing diperkuat di
+`scripts/verify-postgres-overview.ts` dengan assertion untuk:
+
+- metric harian, unit, dan source field;
+- kesamaan metric dengan focus-date chart point;
+- perilaku `null`/unavailable pada hari tanpa nilai;
+- output nilai `solarConsumptionDaily` pada report.
+
+Validation:
+
+| Command/check | Result |
+| --- | --- |
+| `npm.cmd run db:verify-overview` | PASS; service, daily metric, chart alignment, dan null semantics |
+| `npm.cmd run lint` | PASS |
+| `npx.cmd tsc --noEmit` | PASS |
+| `npm.cmd run build` | PASS; route `/dashboard/solar` terdaftar |
+| Local protected route check | `/dashboard/solar?...` -> `307 /login`; `/login` -> `200` |
+| Database writes | `0`; tidak ada migration/schema operation |
+
+Visual verification setelah login admin tidak dapat dijalankan karena tidak
+ada credential test admin pada environment. Karena itu status tidak dinaikkan
+menjadi `VERIFIED`.
+
+### Historical data and known issues
+
+Tidak ada historical mutation. `quantity_liter` dan record historis tetap
+dipertahankan. Koreksi `source_cell` historis `CF11:CF40` ke kolom Solar yang
+benar memerlukan strategi update dan audit trail terpisah.
+
+Known review item:
+
+1. lakukan authenticated manual visual check pada `/dashboard` dan
+   `/dashboard/solar` untuk memastikan label, angka `854 liter`, tanggal fokus,
+   dan line chart terlihat sesuai;
+2. bila diperlukan, lakukan remediation provenance historis terpisah dengan
+   approval, tanpa mengubah nilai kuantitas.
+
+Status Phase 3: `PASS_WITH_REVIEW`.
