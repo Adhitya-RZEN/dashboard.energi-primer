@@ -108,6 +108,14 @@ function testPresentationSurface() {
     "Reset Password dialog is action-integrated and hidden for the current user",
   );
   assert(
+    client.includes("changeRole") &&
+      client.includes('name="targetUserId"') &&
+      client.includes('name="newRole"') &&
+      client.includes("Updating...") &&
+      client.includes("Role updated successfully."),
+    "Change Role dialog is action-integrated with safe pending and success feedback",
+  );
+  assert(
     service.includes("requireAdminUser") &&
       service.includes("userListSelect") &&
       service.includes("prisma.user.findMany") &&
@@ -141,12 +149,15 @@ function testNoMutationOrSensitivePersistence() {
   for (const token of forbidden) {
     assert(!client.includes(token), `UI client does not use ${token}`);
   }
+  const roleDialogStart = client.indexOf("function ChangeRoleDialog");
+  const roleDialogEnd = client.indexOf("function UserStatusDialog");
+  const roleDialog = client.slice(roleDialogStart, roleDialogEnd);
   assert(
     client.includes("No changes were saved") &&
-      client.includes("No role was changed") &&
       client.includes("No status was changed") &&
+      !roleDialog.includes("presentation-only") &&
       !client.includes("No password was changed"),
-    "deferred presentation actions provide no fake mutation success feedback",
+    "remaining deferred presentation actions provide no fake mutation success feedback",
   );
 }
 

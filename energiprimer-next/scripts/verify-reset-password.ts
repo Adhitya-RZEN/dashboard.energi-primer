@@ -397,6 +397,12 @@ function testSourceBoundaries() {
     "Reset Password UI submits safely, prevents duplicate submission, and reports success",
   );
   assert(
+    !action.includes("export const initialCreateUserState") &&
+      !action.includes("export const initialResetPasswordState") &&
+      client.includes('const initialResetPasswordState = { status: "idle"'),
+    "client action state is not exported from the server-action module",
+  );
+  assert(
     !resetAction.includes("console.log") &&
       !resetAction.includes("console.error") &&
       !resetAction.includes("return { newPassword") &&

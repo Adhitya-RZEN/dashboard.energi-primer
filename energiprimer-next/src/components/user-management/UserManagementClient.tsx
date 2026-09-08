@@ -13,9 +13,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
+  changeRole,
   createUser,
-  initialCreateUserState,
-  initialResetPasswordState,
   resetPassword,
 } from "@/app/(protected)/pengaturan/users/actions";
 import {
@@ -42,6 +41,10 @@ type DialogName =
   | null;
 type StatusAction = "ENABLE_USER" | "DISABLE_USER";
 type RowAction = Exclude<DialogName, "add" | "status" | null> | "status";
+
+const initialCreateUserState = { status: "idle" as const };
+const initialResetPasswordState = { status: "idle" as const };
+const initialChangeRoleState = { status: "idle" as const };
 
 const inputClassName =
   "mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-slate-100";
@@ -736,44 +739,78 @@ function ResetPasswordDialog({
 function ChangeRoleDialog({
   user,
   onClose,
+  onCompleted,
 }: {
   user: UserManagementUser;
   onClose: () => void;
+  onCompleted: () => void;
 }) {
   const nextDefaultRole: UserManagementRole =
     user.role === "ADMIN" ? "USER" : "ADMIN";
   const [nextRole, setNextRole] = useState<UserManagementRole>(nextDefaultRole);
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    changeRole,
+    initialChangeRoleState,
+  );
   const protectedTarget = Boolean(
     user.isCurrentUser || user.isProtectedAdministrator,
   );
 
+  useEffect(() => {
+    if (state.status === "success") {
+      onCompleted();
+    }
+  }, [onCompleted, state.status]);
+
+  const displayNotice =
+    pending || state.status !== "error"
+      ? notice
+      : state.message ?? notice ?? "Unable to change user role.";
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+    if (pending) {
+      event.preventDefault();
+      return;
+    }
     if (protectedTarget) {
+      event.preventDefault();
       setNotice("This administrator target is protected by the security policy.");
       return;
     }
     if (nextRole === user.role) {
-      setNotice("Choose a different role to preview this transition.");
+      event.preventDefault();
+      setNotice("Choose a different role.");
       return;
     }
-    setNotice("No role was changed. Role mutation is deferred to a later phase.");
+    setNotice(null);
   }
 
   return (
     <DialogShell
       title="Change Role"
-      description="Review an access-level change before a future mutation phase."
+      description="Update this user's application role."
       onClose={onClose}
     >
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form
+        className="space-y-5"
+        action={formAction}
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <input type="hidden" name="targetUserId" value={user.id} />
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             User
           </p>
           <p className="mt-2 text-sm font-bold text-slate-900">{user.name}</p>
-          <p className="mt-1 text-xs text-slate-500">{user.email}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {user.username} · {user.email}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <RoleBadge role={user.role} />
+            <StatusBadge status={user.status} />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -791,9 +828,10 @@ function ChangeRoleDialog({
             </label>
             <select
               id="change-user-role"
+              name="newRole"
               className={selectClassName}
               value={nextRole}
-              disabled={protectedTarget}
+              disabled={pending || protectedTarget}
               onChange={(event) =>
                 setNextRole(event.target.value as UserManagementRole)
               }
@@ -812,19 +850,19 @@ function ChangeRoleDialog({
             offered by the UI.
           </p>
         ) : null}
-        {notice ? (
+        {displayNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
-            {notice}
+            {displayNotice}
           </p>
         ) : null}
-        <PhaseNotice>
-          this action only previews the transition. No role mutation will be
-          performed.
-        </PhaseNotice>
+        <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900">
+          The server rechecks authorization and the target&apos;s current role.
+          A successful role change invalidates the target&apos;s existing session.
+        </p>
         <DialogFooter
           onClose={onClose}
-          submitLabel="Change Role"
-          disabled={protectedTarget}
+          submitLabel={pending ? "Updating..." : "Change Role"}
+          disabled={pending || protectedTarget}
         />
       </form>
     </DialogShell>
@@ -1171,6 +1209,12 @@ export function UserManagementClient({
     router.refresh();
   }, [closeDialog, router]);
 
+  const handleRoleChanged = useCallback(() => {
+    closeDialog();
+    setFeedback("Role updated successfully.");
+    router.refresh();
+  }, [closeDialog, router]);
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -1245,7 +1289,7 @@ export function UserManagementClient({
               </p>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-              Read-only user profile fields
+              Role and status controls are server-authorized
             </p>
           </div>
         </div>
@@ -1325,7 +1369,11 @@ export function UserManagementClient({
         />
       ) : null}
       {activeDialog === "change-role" && selectedUser ? (
-        <ChangeRoleDialog user={selectedUser} onClose={closeDialog} />
+        <ChangeRoleDialog
+          user={selectedUser}
+          onClose={closeDialog}
+          onCompleted={handleRoleChanged}
+        />
       ) : null}
       {activeDialog === "status" && selectedUser && statusAction ? (
         <UserStatusDialog

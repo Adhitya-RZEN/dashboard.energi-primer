@@ -6,9 +6,11 @@ import {
 
 import {
   ADMIN_ROLE,
+  isDashboardRole,
   securityVersionUpdate,
   USER_ROLE,
 } from "./authorization-policy";
+import type { AuthorizationRole } from "./authorization-policy";
 import type { UserManagementTransaction } from "./authorization";
 import { UserManagementDuplicateError } from "./user-management-errors";
 import type { NormalizedCreateUserInput } from "./user-management-validation";
@@ -42,6 +44,26 @@ export type CreatedUserRecord = {
 };
 
 export type ResetUserRecord = {
+  id: bigint;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  updatedAt: Date | null;
+};
+
+const roleChangeUserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+  updatedAt: true,
+} as const;
+
+export type RoleChangeUserRecord = {
   id: bigint;
   username: string;
   name: string;
@@ -146,6 +168,48 @@ export async function resetUserPasswordAndAudit(
       targetUserId: updatedUser.id,
       action: UserAuditAction.PASSWORD_RESET,
       metadata: {},
+    },
+    select: { id: true },
+  });
+
+  return updatedUser;
+}
+
+/**
+ * Update only the locked target role/security version and write the matching
+ * ROLE_CHANGED audit row in the caller's transaction.
+ */
+export async function changeUserRoleAndAudit(
+  tx: UserManagementTransaction,
+  actorUserId: bigint,
+  targetUserId: bigint,
+  fromRole: UserRole,
+  nextRole: AuthorizationRole,
+  now = new Date(),
+): Promise<RoleChangeUserRecord> {
+  if (!isDashboardRole(fromRole) || fromRole === nextRole) {
+    throw new Error("Invalid role transition");
+  }
+
+  const role = nextRole === ADMIN_ROLE ? UserRole.ADMIN : UserRole.USER;
+  const updatedUser = await tx.user.update({
+    where: { id: targetUserId },
+    data: {
+      role,
+      ...securityVersionUpdate(now),
+    },
+    select: roleChangeUserSelect,
+  });
+
+  await tx.userAuditLog.create({
+    data: {
+      actorUserId,
+      targetUserId: updatedUser.id,
+      action: UserAuditAction.ROLE_CHANGED,
+      metadata: {
+        fromRole,
+        toRole: updatedUser.role,
+      },
     },
     select: { id: true },
   });

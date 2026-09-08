@@ -21,6 +21,7 @@ export type AuthorizationErrorCode =
   | "FORBIDDEN"
   | "INVALID_TARGET"
   | "INVALID_TRANSITION"
+  | "NO_CHANGE"
   | "SELF_ROLE_CHANGE"
   | "SELF_DISABLE"
   | "SELF_PASSWORD_RESET"
@@ -196,6 +197,12 @@ export function assertCanChangeRole(
     throw new AuthorizationPolicyError(
       "SELF_ROLE_CHANGE",
       "Changing your own role is not permitted.",
+    );
+  }
+  if (target.role === nextRole) {
+    throw new AuthorizationPolicyError(
+      "NO_CHANGE",
+      "The user already has this role.",
     );
   }
   if (nextRole === USER_ROLE) {

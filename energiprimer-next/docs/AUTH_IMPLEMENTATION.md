@@ -17,6 +17,9 @@
 >
 > Phase 6 Reset Password update (2026-09-08): see
 > [`PHASE6_RESET_PASSWORD_2026-09-08.md`](./PHASE6_RESET_PASSWORD_2026-09-08.md).
+>
+> Phase 7 Role Management update (2026-09-08): see
+> [`PHASE7_ROLE_MANAGEMENT_2026-09-08.md`](./PHASE7_ROLE_MANAGEMENT_2026-09-08.md).
 
 ## Status
 
@@ -81,14 +84,17 @@ Auth.js adapter.
 User Management files are:
 
 - `src/app/(protected)/pengaturan/users/*` — ADMIN-only User Management route,
-  route loading state, safe error boundary, and Add User server action.
-- `src/components/user-management/*` — presentation-only table, filters,
-  action menu, dialogs, safe UI types, and accessible modal primitives.
-- `src/lib/user-management-validation.ts` — pure Add User normalization and
-  server/client-safe validation.
+  route loading state, safe error boundary, and Add User/Reset Password/Change
+  Role server actions.
+- `src/components/user-management/*` — user table, filters, server-backed
+  role-change/reset/add dialogs, safe UI types, and accessible modal
+  primitives.
+- `src/lib/user-management-validation.ts` — pure Add User/password-reset
+  validation and canonical user-ID/role input checks.
 - `src/lib/user-management-errors.ts` — safe duplicate-constraint mapping.
-- `src/lib/user-management-mutation.ts` — transaction-scoped user creation and
-  password-reset mutations with `USER_CREATED`/`PASSWORD_RESET` audit writers.
+- `src/lib/user-management-mutation.ts` — transaction-scoped user creation,
+  role-change, and password-reset mutations with
+  `USER_CREATED`/`ROLE_CHANGED`/`PASSWORD_RESET` audit writers.
 - `src/services/user-management.ts` — ADMIN-guarded, allowlisted user-list
   query.
 - `scripts/verify-user-management-ui.ts` — zero-write static UI boundary
@@ -98,6 +104,16 @@ User Management files are:
 - `scripts/verify-reset-password.ts` — zero-database-write Reset Password
   policy, hashing, session-version, audit, rollback, and source-boundary
   verification.
+- `scripts/verify-reset-password-disposable.mjs` — disposable PostgreSQL
+  transaction and rollback verification.
+- `scripts/verify-reset-password-e2e.mjs` — isolated Auth.js/Playwright
+  browser lifecycle verification; it never loads `.env.local` credentials.
+- `scripts/verify-role-management.ts` — zero-write role policy, mutation,
+  audit, rollback, and source-boundary verification.
+- `scripts/verify-role-management-disposable.mjs` — disposable PostgreSQL
+  role transaction, rollback, and concurrency verification.
+- `scripts/verify-role-management-e2e.mjs` — isolated Auth.js/Playwright role
+  lifecycle verification; it never loads `.env.local` credentials.
 
 ## Phase 3 authorization policy
 
@@ -133,10 +149,10 @@ server-only `listUsersAfterAdminGuard()` query and an allowlisted selection;
 the pending Phase 2 migration is still an operator-approved deployment step.
 The query and UI contain no password, token, or secret fields.
 
-Edit User, Change Role, and Enable/Disable remain deferred. Phase 6 connects
-Reset Password to the server-side mutation boundary described below. See the
-Phase 4 report for the historical presentation baseline and the Phase 5 report
-for the implemented Add User boundary.
+Edit User and Enable/Disable remain deferred. Phase 6 connects Reset Password
+to the server-side mutation boundary described below, and Phase 7 connects
+Change Role. See the Phase 4 report for the historical presentation baseline,
+the Phase 5 report for Add User, and the Phase 7 report for role mutation.
 
 ## Phase 5 Add User
 
@@ -196,7 +212,45 @@ The Reset Password dialog is now a real Server Action form with target
 presentation fields, client/server validation, pending duplicate-submission
 protection, safe errors, cleared password state, and success refresh. It is
 hidden for the current administrator in the row menu; the server self-target
-policy remains mandatory.
+policy remains mandatory. The client-owned initial action states stay outside
+the module-level `"use server"` file so they are serialized as values rather
+than mistaken for server references by the production bundle.
+
+## Phase 6R runtime verification
+
+The earlier Windows `pg_ctl` restricted-token error was isolated to the
+`pg_ctl start` path. Phase 6R starts PostgreSQL 18.4 directly with
+`postgres.exe`, applies the existing production schema to a temporary loopback
+database, and removes the cluster after the run. The disposable transaction
+verifier and the Playwright Auth.js lifecycle both pass. The browser run
+confirmed active-target reset/session invalidation, disabled-target rejection,
+stale-admin rejection, empty `PASSWORD_RESET` metadata, and last-admin
+preservation. No Production endpoint, credential, account, session, or write
+was used. Details are in
+[`PHASE6_RESET_PASSWORD_2026-09-08.md`](./PHASE6_RESET_PASSWORD_2026-09-08.md).
+
+## Phase 7 Role Management
+
+Change Role is an ADMIN-only server action that accepts only `targetUserId` and
+the canonical `newRole` value `ADMIN` or `USER`. The actor always comes from the
+authenticated session. The target, current role, current status, and active
+administrator count are re-read inside the existing serializable transaction;
+the actor and target plus all active-admin rows are locked with `FOR UPDATE`.
+
+The pure policy rejects self-role changes, no-op changes, non-admin/disabled
+actors, invalid targets/roles, and any demotion that would remove the last
+ACTIVE ADMIN. A DISABLED target may change role, but the mutation never changes
+its status, so a DISABLED ADMIN remains unable to log in. Successful changes
+update only `role` and `updatedAt` through `securityVersionUpdate()`, then write
+one `ROLE_CHANGED` audit row with `fromRole` and `toRole` metadata in the same
+transaction. Audit failure rolls the role and session-version update back.
+
+The Change Role dialog now submits through `useActionState`, disables duplicate
+submission, reports safe errors, closes after success, refreshes the user list,
+and hides the action for the current administrator and the only active admin.
+The server remains authoritative regardless of UI visibility. The existing
+Auth.js JWT/session-version revalidation invalidates stale USER/ADMIN sessions
+after a role change; no new authentication or session architecture was added.
 
 ## Laravel behavior mapping
 
@@ -266,13 +320,24 @@ and authorization matrix, self-target policy, disabled-target preservation,
 bcrypt hashing, `updatedAt` security-version update, `PASSWORD_RESET` audit
 contents, rollback on audit/update failure, target/actor lock wiring, and UI
 source boundaries. It uses synthetic transaction doubles and performs zero
-database writes and zero network requests. Live Auth.js session E2E is not run
-when an isolated environment is unavailable.
+database writes and zero network requests. The disposable and browser runtime
+checks are available through `user-management:reset-password:verify:disposable`
+and `user-management:reset-password:verify:e2e`; both use only temporary local
+fixtures and clean up after completion.
+
+`user-management:role-management:verify` covers the role policy matrix,
+canonical input validation, no-op behavior, role/security-version mutation,
+`ROLE_CHANGED` metadata, rollback, and UI/server source boundaries without
+database writes or network requests. The disposable and browser runtime checks
+are available through `user-management:role-management:verify:disposable` and
+`user-management:role-management:verify:e2e`; both use only temporary local
+fixtures and clean up after completion.
 
 The Phase 4 report retains its historical fixture-backed findings. The Phase 5
 report retains its Add User scope. The Phase 6 report distinguishes local
-implementation checks from live and production verification; neither report
-authorizes applying the pending migration or mutating a production account.
+implementation checks from isolated runtime verification and Production
+verification; neither report authorizes applying the pending migration or
+mutating a Production account.
 
 ## Phase 4A-R2 - Production CredentialsSignin Root-Cause Remediation
 

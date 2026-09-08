@@ -57,6 +57,22 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Parse the canonical decimal representation used by BigInt user IDs.
+ * Leading zeroes, zero, malformed values, and values outside BigInt are
+ * rejected before any database lookup is attempted.
+ */
+export function parseUserManagementUserId(value: unknown) {
+  const raw = stringValue(value);
+  if (!/^[1-9]\d*$/.test(raw)) return null;
+  try {
+    const parsed = BigInt(raw);
+    return parsed.toString() === raw ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeCreateUserInput(
   input: CreateUserInput,
 ): NormalizedCreateUserInput {

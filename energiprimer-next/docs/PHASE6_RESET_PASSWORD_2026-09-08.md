@@ -1,8 +1,17 @@
 # PHASE 6 RESULT
 
 **Date:** 2026-09-08 (Asia/Makassar)  
-**Status:** `BLOCKED`  
+**Status:** `VERIFIED`
 **Scope:** admin-initiated Reset Password for another user only
+
+Phase 6R supersedes the earlier `BLOCKED` runtime result. The original
+`pg_ctl` restricted-token error was resolved by starting the disposable
+PostgreSQL cluster directly with `postgres.exe`; no Production endpoint or
+credential was used.
+
+> Historical scope note: Phase 7 supersedes the Change Role deferral retained
+> in this report. Reset Password behavior is unchanged; see
+> `PHASE7_ROLE_MANAGEMENT_2026-09-08.md`.
 
 ## Implementation
 
@@ -161,18 +170,46 @@ The optional disposable verifier is:
 npm run user-management:reset-password:verify:disposable
 ```
 
-It was attempted against a temporary loopback PostgreSQL cluster. The local
-Windows runtime blocked `pg_ctl` with `could not create restricted token:
-error code 87`; the temporary directory was cleaned and no database remained.
-The result is `BLOCKED`, not a test pass.
+It passed against a temporary loopback PostgreSQL 18.4 cluster started with
+`postgres.exe` on a dynamically selected port. The existing
+`prisma/production/schema.prisma` was applied with `prisma db push` to that
+disposable database only. The transaction verified the disabled-target reset,
+hash/security-version update, empty audit metadata, and rollback after an
+audit foreign-key failure. The cluster, database, and temporary directory
+were removed after the run.
 
-## Live E2E
+## Phase 6R Runtime Revalidation
 
-**Status:** `NOT RUN`.
+Runtime environment:
 
-No isolated Auth.js browser environment was available after the disposable
-PostgreSQL runtime was blocked. The following lifecycle was therefore not
-claimed:
+- PostgreSQL 18.4, disposable loopback cluster on `127.0.0.1` and a dynamic
+  temporary port;
+- direct `postgres.exe` startup, because `pg_ctl start` raised Windows
+  restricted-token error 87 in this environment;
+- existing production schema applied only to the disposable database;
+- Next.js production server plus Playwright Chromium against the same
+  disposable database;
+- no `.env.local` database URL, Production account, Production session, or
+  Production write was used.
+
+| Case | Result | Evidence |
+|---|---|---|
+| A. Active target reset | PASS | Disposable Prisma transaction and browser UI E2E: bcrypt hash changed, old password rejected, new password accepted, role/status preserved, `updatedAt` advanced, `PASSWORD_RESET` audit metadata `{}`. |
+| B. Disabled target reset | PASS | Browser UI E2E: reset completed, target stayed `DISABLED` with unchanged role, and new-password login was rejected. |
+| C. Self reset | PASS | Focused policy verifier and source boundary: `SELF_PASSWORD_RESET`, no mutation/audit contract; current-user menu item hidden. |
+| D. USER actor | PASS | Focused policy matrix: `FORBIDDEN`; no authorized mutation path. |
+| E. Disabled actor | PASS | Focused policy matrix: `ACCOUNT_DISABLED`; no authorized mutation path. |
+| F. Missing target | PASS | Focused policy matrix and safe action contract: `INVALID_TARGET` / `User not found.` with no mutation. |
+| Atomicity | PASS | Disposable transaction rollback restored password/security version and wrote no reset audit after audit failure. |
+| Sensitive data | PASS | Empty reset audit metadata, no password/hash return or logging, and generic browser login errors. |
+| Stale privileged actor | PASS | Browser E2E changed the admin security version in the disposable DB; the existing admin session was rejected on the next protected request. |
+| Last-admin invariant | PASS | Browser E2E retained exactly one active administrator; reset did not alter role/status. |
+
+## Auth.js Browser E2E
+
+**Status:** `PASS`.
+
+The isolated browser lifecycle completed with Playwright Chromium:
 
 ```text
 target USER login
@@ -180,6 +217,10 @@ target USER login
   -> old target JWT rejected
   -> target logs in with new password
 ```
+
+The same run reset a disabled target and confirmed that the disabled account
+could not log in with its new password. It also confirmed stale privileged
+admin-session rejection and preserved the last active administrator.
 
 No Production credential, account, password, or session was used for testing.
 
@@ -212,6 +253,8 @@ The following local checks passed after the implementation:
 
 ```text
 user-management:reset-password:verify  PASS
+user-management:reset-password:verify:disposable PASS
+user-management:reset-password:verify:e2e         PASS
 user-management:ui:verify              PASS
 user-management:add-user:verify        PASS
 authz:security:verify                   PASS
@@ -223,8 +266,9 @@ ESLint                                  PASS
 Next.js production build                PASS
 ```
 
-The focused checks report zero database/network activity. They do not replace
-the blocked disposable transaction or live Auth.js E2E checks.
+The focused verifier reports zero database/network activity. The disposable
+and browser verifiers write only to their temporary local database and clean
+it up; they do not replace the separate Production migration gate.
 
 ## Documentation
 
@@ -234,6 +278,7 @@ Updated:
 - `docs/AGENT_CONTEXT.md`;
 - `docs/PHASE4_USER_MANAGEMENT_UI_2026-09-08.md` (historical integration note);
 - `docs/PHASE5_ADD_USER_2026-09-08.md` (historical scope note).
+- `scripts/verify-reset-password-e2e.mjs` (isolated Auth.js/browser runtime harness).
 
 Created:
 
@@ -241,14 +286,14 @@ Created:
 
 ## Limitations
 
-- The source implementation and synthetic transaction behavior are tested.
-- A disposable PostgreSQL transaction could not start in this Windows runtime
-  because `pg_ctl` could not create its restricted token.
-- Live Auth.js session invalidation E2E was not run.
-- Production migration state and production mutation behavior were not
+- Cases C-F are policy/source-boundary checks rather than browser UI mutation
+  attempts, because the UI intentionally hides self-reset and does not expose
+  non-admin mutation paths.
+- Production migration state and Production mutation behavior were not
   reverified in this phase.
-- The status is `BLOCKED` under the Phase 6 gate; this is not a claim that the
-  implementation failed.
+- The repository does not contain the referenced
+  `#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt`; existing project documentation
+  was used as the synchronization source.
 
 ## Deferred
 
@@ -259,8 +304,7 @@ disposable PostgreSQL/Auth.js environment before a release decision.
 
 ## Recommendation
 
-Keep the Reset Password feature behind review until an operator provides a
-working isolated PostgreSQL/Auth.js runtime. Run the disposable verifier and
-browser session lifecycle there, verify the approved Phase 2 migration on the
-intended target, then separately approve any production release. Never use
-Production accounts or the pending production database as a test fixture.
+The isolated runtime and browser gates are verified. Before any release,
+separately verify the approved Phase 2 migration on the intended target and
+obtain the normal Production release approval. Never use Production accounts
+or the pending Production database as a test fixture.

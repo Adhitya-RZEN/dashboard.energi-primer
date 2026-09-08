@@ -1,5 +1,5 @@
-import { execFile } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { dirname, join, resolve } from "node:path";
@@ -11,8 +11,9 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pgBin = "C:\\Program Files\\PostgreSQL\\18\\bin";
 const host = "127.0.0.1";
 const initdb = join(pgBin, "initdb.exe");
+const postgresExe = join(pgBin, "postgres.exe");
 const pgCtl = join(pgBin, "pg_ctl.exe");
-const psql = join(pgBin, "psql.exe");
+const pgIsReady = join(pgBin, "pg_isready.exe");
 const createdb = join(pgBin, "createdb.exe");
 const dropdb = join(pgBin, "dropdb.exe");
 
@@ -42,29 +43,76 @@ function postgresArgs(port, extra = []) {
   return ["-h", host, "-p", String(port), "-U", "postgres", ...extra];
 }
 
+async function waitForPostgres(child, port) {
+  let childError = null;
+  const onError = (error) => {
+    childError = error;
+  };
+  child.once("error", onError);
+  try {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (childError) throw childError;
+      if (child.exitCode !== null) throw new Error("POSTGRES_EXITED");
+      try {
+        await run(pgIsReady, ["-h", host, "-p", String(port), "-U", "postgres", "-t", "1"]);
+        return;
+      } catch {
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+      }
+    }
+    throw new Error("POSTGRES_READY_TIMEOUT");
+  } finally {
+    child.removeListener("error", onError);
+  }
+}
+
+async function stopPostgres(child, dataDir) {
+  if (dataDir && existsSync(join(dataDir, "postmaster.pid"))) {
+    await run(pgCtl, ["-D", dataDir, "stop", "-m", "immediate", "-w"]).catch(
+      () => {},
+    );
+  }
+  if (!child || child.exitCode !== null) return;
+  await new Promise((resolvePromise) => {
+    const timer = setTimeout(resolvePromise, 5_000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolvePromise();
+    });
+    child.kill();
+  });
+}
+
+async function removeDirectoryWithRetry(directory) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (!existsSync(directory)) return;
+    try {
+      rmSync(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === 19) throw error;
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
+  }
+}
+
 async function createDatabase() {
   const port = await freePort();
   const dataDir = mkdtempSync(join(tmpdir(), "phase6-reset-pg-"));
   const databaseName = `phase6_reset_${process.pid}`;
-  const logFile = join(dataDir, "postgres.log");
   const databaseUrl = `postgresql://postgres@${host}:${port}/${databaseName}?schema=public`;
-  let started = false;
+  let postgresProcess = null;
   let setupStage = "initdb";
 
   try {
     await run(initdb, ["-D", dataDir, "-A", "trust", "-U", "postgres", "--no-locale"]);
     setupStage = "start-postgres";
-    await run(pgCtl, [
-      "-D",
-      dataDir,
-      "-o",
-      `-p ${port} -h ${host}`,
-      "-l",
-      logFile,
-      "start",
-      "-w",
-    ]);
-    started = true;
+    postgresProcess = spawn(
+      postgresExe,
+      ["-D", dataDir, "-p", String(port), "-h", host],
+      { cwd: projectRoot, windowsHide: true, stdio: "ignore" },
+    );
+    await waitForPostgres(postgresProcess, port);
     setupStage = "create-database";
     await run(createdb, postgresArgs(port, [databaseName]));
 
@@ -83,9 +131,8 @@ async function createDatabase() {
       { env },
     );
 
-    return { dataDir, databaseName, databaseUrl, port, started };
+    return { dataDir, databaseName, databaseUrl, port, postgresProcess };
   } catch (error) {
-    let detail = "UNKNOWN";
     const errorText = [
       error instanceof Error ? error.message : "",
       error?.stdout,
@@ -93,22 +140,11 @@ async function createDatabase() {
     ]
       .filter(Boolean)
       .join(" ");
-    if (setupStage === "start-postgres" && existsSync(logFile)) {
-      const log = readFileSync(logFile, "utf8");
-      if (/could not bind|address already in use/i.test(log)) detail = "PORT";
-      else if (/permission denied|access is denied/i.test(log)) detail = "PERMISSION";
-      else if (/fatal|error/i.test(log)) detail = "SERVER";
-    }
-    if (/restricted token|error code 87/i.test(errorText)) {
-      detail = "WINDOWS_RESTRICTED_TOKEN";
-    }
-    if (started) {
-      await run(pgCtl, ["-D", dataDir, "-m", "immediate", "stop", "-w"]).catch(
-        () => {},
-      );
-    }
-    if (existsSync(dataDir)) rmSync(dataDir, { recursive: true, force: true });
-    throw new Error(`DISPOSABLE_SETUP_${setupStage}_${detail}`);
+    await stopPostgres(postgresProcess, dataDir);
+    await removeDirectoryWithRetry(dataDir);
+    throw new Error(
+      `DISPOSABLE_SETUP_${setupStage}_${errorText ? "FAILED" : "UNKNOWN"}`,
+    );
   }
 }
 
@@ -117,19 +153,8 @@ async function destroyDatabase(disposable) {
   await run(dropdb, postgresArgs(disposable.port, ["--if-exists", disposable.databaseName])).catch(
     () => {},
   );
-  if (disposable.started) {
-    await run(pgCtl, [
-      "-D",
-      disposable.dataDir,
-      "-m",
-      "immediate",
-      "stop",
-      "-w",
-    ]).catch(() => {});
-  }
-  if (existsSync(disposable.dataDir)) {
-    rmSync(disposable.dataDir, { recursive: true, force: true });
-  }
+  await stopPostgres(disposable.postgresProcess, disposable.dataDir);
+  await removeDirectoryWithRetry(disposable.dataDir);
 }
 
 let disposable;
@@ -137,7 +162,7 @@ let prisma;
 let stage = "startup";
 
 try {
-  if (![initdb, pgCtl, psql, createdb, dropdb].every(existsSync)) {
+  if (![initdb, postgresExe, pgIsReady, createdb, dropdb].every(existsSync)) {
     throw new Error("DISPOSABLE_POSTGRES_BINARIES_UNAVAILABLE");
   }
 
@@ -218,7 +243,7 @@ try {
     updatedTarget.role !== UserRole.USER ||
     updatedTarget.status !== UserStatus.DISABLED ||
     !updatedTarget.updatedAt ||
-    updatedTarget.updatedAt.getTime() < now.getTime()
+    (target.updatedAt && updatedTarget.updatedAt <= target.updatedAt)
   ) {
     throw new Error("TARGET_SECURITY_STATE_CHANGED");
   }

@@ -39,8 +39,30 @@ user. The server action validates only `targetUserId`, `newPassword`, and
 revalidates actor/target in the Phase 3 serializable transaction, updates only
 the password plus `updatedAt`, and writes `PASSWORD_RESET` atomically. Target
 role/status remain unchanged; the current administrator's reset menu item is
-hidden. Edit, role-change, and status-change remain presentation-only. See
+hidden. Edit and status-change remain presentation-only; Phase 7 later
+connects Change Role. See
 `docs/PHASE6_RESET_PASSWORD_2026-09-08.md`.
+
+Phase 6R (2026-09-08) resolved the Windows `pg_ctl` restricted-token blocker
+by starting PostgreSQL 18.4 directly with `postgres.exe` for an isolated
+loopback cluster. Disposable Prisma transaction verification and Playwright
+Auth.js lifecycle verification passed, including session invalidation,
+disabled-target rejection, stale-admin rejection, audit minimization, and
+last-admin preservation. The client action initial states are intentionally
+defined in the client component rather than exported from the `"use server"`
+module, preventing production Server Action serialization errors. No
+Production database, credential, account, session, or write was used. See
+`docs/PHASE6_RESET_PASSWORD_2026-09-08.md`.
+
+Phase 7 (2026-09-08) connects Change Role to the existing ADMIN policy and
+serializable user-management transaction. The action accepts only a canonical
+target ID and `ADMIN`/`USER`, re-locks and revalidates actor/target/active-admin
+rows, preserves the last ACTIVE ADMIN, updates role plus `updatedAt`, and writes
+`ROLE_CHANGED` atomically. Disabled targets remain disabled; self/no-op/invalid
+transitions are rejected. Focused, disposable PostgreSQL, concurrency, and
+isolated Auth.js/Playwright role-session verification are recorded in
+`docs/PHASE7_ROLE_MANAGEMENT_2026-09-08.md`. No Production database, account,
+credential, session, migration, or write was used.
 
 ## Evidence status
 
@@ -162,9 +184,8 @@ calls `requireAdminUser()` and reads safe fields through the allowlisted
 authenticated role from `AppShell` and hides the entry from `USER` accounts.
 The page uses a client component for local search/filter/dialog state, a
 horizontal-scroll table on narrow screens, and route-level loading/error
-states. Add User and Reset Password are connected to server actions; Edit,
-Change Role, and Enable/Disable remain explicitly deferred and
-presentation-only.
+states. Add User, Reset Password, and Change Role are connected to server
+actions; Edit and Enable/Disable remain explicitly deferred.
 
 `/data-batu-bara`, `/monitoring`, and `/laporan` are protected but not linked in the current navigation. Report/import/export/PDF controls are disabled placeholders. Do not interpret UI hiding or disabled buttons as backend authorization.
 
@@ -182,18 +203,26 @@ Important server modules:
 - `src/lib/authorization-policy.ts`: pure authorization and invariant policy.
 - `src/lib/authorization.ts`: server-only active/admin guards and the
   serializable user-mutation transaction boundary.
-- `src/app/(protected)/pengaturan/users/actions.ts`: ADMIN-guarded Add User
-  and Reset Password server actions with safe errors and revalidation.
+- `src/app/(protected)/pengaturan/users/actions.ts`: ADMIN-guarded Add User,
+  Reset Password, and Change Role server actions with safe errors and
+  revalidation.
 - `src/app/(protected)/pengaturan/users/page.tsx`: server-side ADMIN guard and
   allowlisted user-list handoff.
 - `src/components/user-management/UserManagementClient.tsx`: user table,
-  filters, action menu, Add User/Reset Password forms, deferred dialogs, and
-  accessible modal behavior.
+  filters, action menu, Add User/Reset Password/Change Role forms, deferred
+  dialogs, and accessible modal behavior.
 - `src/components/user-management/types.ts`: safe user-management UI shape.
-- `src/lib/user-management-validation.ts`: shared pure Add User and password
-  reset validation.
-- `src/lib/user-management-mutation.ts`: transaction-scoped user/audit and
-  password/security-version writer.
+- `src/lib/user-management-validation.ts`: shared pure Add User/password-reset
+  validation and canonical user-ID/role checks.
+- `src/lib/user-management-mutation.ts`: transaction-scoped user/audit,
+  role/security-version, and password/security-version writers.
+- `scripts/verify-reset-password-disposable.mjs` and
+  `scripts/verify-reset-password-e2e.mjs`: isolated PostgreSQL transaction and
+  Auth.js/Playwright runtime verifiers; both are disposable-only.
+- `scripts/verify-role-management.ts`,
+  `scripts/verify-role-management-disposable.mjs`, and
+  `scripts/verify-role-management-e2e.mjs`: focused, disposable transaction,
+  concurrency, and Auth.js/Playwright role verifiers.
 - `src/lib/user-management-errors.ts`: safe duplicate-constraint mapping.
 - `src/services/user-management.ts`: ADMIN-guarded allowlisted user query.
 - `src/services/overview.ts`: query normalization and data-source selection.
@@ -215,7 +244,7 @@ The sync route checks the deployment environment before `CRON_SECRET` and consta
 - Sync/provenance: `SyncSource`, `SyncWorksheet`, `SyncRun`, `SyncRowState`, `SyncSchemaChange`.
 - Normalized import: `SpreadsheetImportRun`, `SpreadsheetImportStaging`, `BiomassReceipt`, `CoalReceipt`, `BiomassConsumption`, `SolarReceipt`, `SolarConsumption`, `HopReading`, `BiomassTarget`, `BiomassCumulativeSnapshot`.
 
-Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Most domain statuses and entity types are strings rather than enums; the Phase 2 user role/status/audit fields are explicit PostgreSQL/Prisma enums. No views, triggers, or database functions were found in reviewed migrations. Phases 5 and 6 add no schema or migration; their user-list, Add User, and Reset Password paths require the pending Phase 2 migration in the target database.
+Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Most domain statuses and entity types are strings rather than enums; the Phase 2 user role/status/audit fields are explicit PostgreSQL/Prisma enums. No views, triggers, or database functions were found in reviewed migrations. Phases 5, 6, and 7 add no schema or migration; their user-list, Add User, Reset Password, and Change Role paths require the pending Phase 2 migration in the target database.
 
 There are two migration histories with a fixed policy: **SUPABASE
 PRODUCTION** uses `prisma/production/schema.prisma` and
@@ -268,6 +297,13 @@ self-targets with `SELF_PASSWORD_RESET`, locks/revalidates actor and target in
 the serializable transaction, updates only password plus `updatedAt`, and
 writes one `PASSWORD_RESET` audit atomically. It does not change target role or
 status; the client supplies no actor ID, role, status, or credential material.
+
+Change Role repeats the ADMIN check in the server action, accepts no actor or
+client display state, and revalidates the actor, target, role transition, and
+last-admin invariant inside the serializable row-lock transaction. Successful
+role changes update `updatedAt` and write `ROLE_CHANGED` atomically, so stale
+USER/ADMIN JWTs are rejected by the existing Auth.js session callback. A
+DISABLED target remains disabled after a role change.
 
 Supabase RLS/policies are UNKNOWN and must be verified before any browser Supabase access is enabled. No browser Supabase helper is part of the active application source.
 
@@ -406,6 +442,11 @@ Current local results:
   rollback, lock wiring, and UI boundaries are covered with synthetic
   transaction doubles and zero database/network activity. Live session E2E is
   NOT RUN.
+- Role Management focused verification: PASS; canonical input/policy matrix,
+  self/no-op/last-admin protection, atomic role/security-version mutation,
+  `ROLE_CHANGED` audit, rollback, and source boundaries are covered with zero
+  database/network activity. Disposable PostgreSQL concurrency and isolated
+  Auth.js/Playwright USER↔ADMIN session E2E also PASS.
 - Next.js production build: PASS after the Phase 3 policy integration.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Production deployment, Auth.js/dashboard, migration status, and Cron were

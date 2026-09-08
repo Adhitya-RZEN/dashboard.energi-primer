@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   assertAdminUser,
+  assertCanChangeRoleInTransaction,
   assertCanResetPasswordInTransaction,
   AuthorizationPolicyError,
   isAuthorizationPolicyError,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/authorization";
 import {
   assertUserCreationUnique,
+  changeUserRoleAndAudit,
   createUserAndAudit,
   resetUserPasswordAndAudit,
 } from "@/lib/user-management-mutation";
@@ -22,6 +24,8 @@ import {
   UserManagementDuplicateError,
 } from "@/lib/user-management-errors";
 import {
+  isAuthorizationRole,
+  parseUserManagementUserId,
   type PasswordResetFieldErrors,
   validateCreateUserInput,
   validatePasswordResetInput,
@@ -33,18 +37,20 @@ const SAFE_AUTHORIZATION_ERROR =
   "Your session is no longer authorized to perform this action.";
 const SAFE_GENERIC_ERROR = "Unable to create user.";
 const SAFE_RESET_ERROR = "Unable to reset password.";
+const SAFE_ROLE_ERROR = "Unable to change user role.";
 const SAFE_TARGET_NOT_FOUND = "User not found.";
 const SAFE_SELF_RESET_ERROR =
   "You cannot reset your own password from User Management.";
+const SAFE_SELF_ROLE_ERROR =
+  "You cannot change your own role from User Management.";
+const SAFE_NO_ROLE_CHANGE = "The user already has this role.";
+const SAFE_LAST_ADMIN_ERROR =
+  "The last active administrator cannot be removed.";
 
 export type CreateUserState = {
   status: "idle" | "error" | "success";
   message?: string;
   fieldErrors?: CreateUserFieldErrors;
-};
-
-export const initialCreateUserState: CreateUserState = {
-  status: "idle",
 };
 
 export type ResetPasswordState = {
@@ -53,19 +59,10 @@ export type ResetPasswordState = {
   fieldErrors?: PasswordResetFieldErrors;
 };
 
-export const initialResetPasswordState: ResetPasswordState = {
-  status: "idle",
+export type ChangeRoleState = {
+  status: "idle" | "error" | "success";
+  message?: string;
 };
-
-function parseTargetUserId(value: unknown) {
-  const raw = typeof value === "string" ? value.trim() : "";
-  if (!/^\d+$/.test(raw)) return null;
-  try {
-    return BigInt(raw);
-  } catch {
-    return null;
-  }
-}
 
 async function assertAdminActorInTransaction(
   tx: Parameters<typeof createUserAndAudit>[0],
@@ -177,7 +174,9 @@ export async function resetPassword(
 ): Promise<ResetPasswordState> {
   try {
     const current = await requireAdminUser();
-    const targetUserId = parseTargetUserId(formData.get("targetUserId"));
+    const targetUserId = parseUserManagementUserId(
+      formData.get("targetUserId"),
+    );
     if (targetUserId === null) {
       return { status: "error", message: SAFE_TARGET_NOT_FOUND };
     }
@@ -231,5 +230,69 @@ export async function resetPassword(
     }
 
     return { status: "error", message: SAFE_RESET_ERROR };
+  }
+}
+
+export async function changeRole(
+  _previousState: ChangeRoleState,
+  formData: FormData,
+): Promise<ChangeRoleState> {
+  try {
+    const current = await requireAdminUser();
+    const targetUserId = parseUserManagementUserId(
+      formData.get("targetUserId"),
+    );
+    if (targetUserId === null) {
+      return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+    }
+
+    const requestedRole = formData.get("newRole");
+    if (
+      typeof requestedRole !== "string" ||
+      !isAuthorizationRole(requestedRole)
+    ) {
+      return { status: "error", message: "Invalid role." };
+    }
+
+    await withUserManagementTransaction(async (tx) => {
+      const context = await assertCanChangeRoleInTransaction(
+        tx,
+        current.user.id,
+        targetUserId,
+        requestedRole,
+      );
+      await changeUserRoleAndAudit(
+        tx,
+        current.user.id,
+        context.target.id,
+        context.target.role,
+        requestedRole,
+        new Date(),
+      );
+    });
+
+    revalidatePath("/pengaturan/users");
+    return {
+      status: "success",
+      message: "Role updated successfully.",
+    };
+  } catch (error) {
+    if (isAuthorizationPolicyError(error)) {
+      if (error.code === "SELF_ROLE_CHANGE") {
+        return { status: "error", message: SAFE_SELF_ROLE_ERROR };
+      }
+      if (error.code === "NO_CHANGE") {
+        return { status: "error", message: SAFE_NO_ROLE_CHANGE };
+      }
+      if (error.code === "LAST_ADMIN") {
+        return { status: "error", message: SAFE_LAST_ADMIN_ERROR };
+      }
+      if (error.code === "INVALID_TARGET") {
+        return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+      }
+      return { status: "error", message: SAFE_AUTHORIZATION_ERROR };
+    }
+
+    return { status: "error", message: SAFE_ROLE_ERROR };
   }
 }
