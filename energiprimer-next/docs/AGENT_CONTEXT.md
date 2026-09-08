@@ -11,11 +11,11 @@ migration is prepared and read-only preflight verified with zero writes, but it
 is pending operator-approved deployment. See
 `docs/PHASE2_DATABASE_DATA_MODEL_2026-09-08.md`.
 
-Phase 3 (2026-09-08) adds the active account/session boundary and reusable
+Phase 3 (2026-09-08) added the active account/session boundary and reusable
 authorization policy. Active `ADMIN` and `USER` accounts can access the
 dashboard; User Management is ADMIN-only by policy; `DISABLED` accounts are
-rejected at login and JWT revalidation. No User Management mutation or audit
-writer exists yet. See
+rejected at login and JWT revalidation. The Phase 3 baseline had no User
+Management mutation or audit writer. See
 `docs/PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md`.
 
 Phase 4 (2026-09-08) adds the presentation-only User Management UI at
@@ -24,6 +24,14 @@ the navigation entry is role-aware, but no user-management mutation or audit
 writer exists. Its table uses an explicitly labeled isolated UI fixture until a
 safe read-only user query is introduced after the pending Phase 2 migration.
 See `docs/PHASE4_USER_MANAGEMENT_UI_2026-09-08.md`.
+
+Phase 5 (2026-09-08) replaces the Phase 4 fixture with an ADMIN-guarded,
+allowlisted user-list query and implements Add User end-to-end. The server
+action validates and canonicalizes input, hashes with `bcryptjs`, forces
+`ACTIVE`, and creates the user plus `USER_CREATED` audit row in the Phase 3
+serializable transaction boundary. Edit, reset-password, role-change, and
+status-change dialogs remain presentation-only. See
+`docs/PHASE5_ADD_USER_2026-09-08.md`.
 
 ## Evidence status
 
@@ -139,13 +147,14 @@ Dashboard filter state uses month/year/day query parameters and HTTP-only
 cookies maintained by `src/proxy.ts`. Dashboard pages render loading/error
 states and typed KPI/series data.
 
-`/pengaturan/users` is an ADMIN-only presentation route. Its server page calls
-`requireAdminUser()`, while `NavigationMenu` receives the authenticated role
-from `AppShell` and hides the User Management entry from `USER` accounts. The
-page uses a client component for local search/filter/dialog state, a
+`/pengaturan/users` is an ADMIN-only User Management route. Its server page
+calls `requireAdminUser()` and reads safe fields through the allowlisted
+`src/services/user-management.ts` query, while `NavigationMenu` receives the
+authenticated role from `AppShell` and hides the entry from `USER` accounts.
+The page uses a client component for local search/filter/dialog state, a
 horizontal-scroll table on narrow screens, and route-level loading/error
-states. Current Phase 4 data is the labeled fixture in
-`src/components/user-management/fixture.ts`; it is not production data.
+states. Add User is connected to the server action; the other action dialogs
+remain explicitly deferred and presentation-only.
 
 `/data-batu-bara`, `/monitoring`, and `/laporan` are protected but not linked in the current navigation. Report/import/export/PDF controls are disabled placeholders. Do not interpret UI hiding or disabled buttons as backend authorization.
 
@@ -161,14 +170,20 @@ Important server modules:
 - `src/auth.ts`: Auth.js provider, throttle, bcrypt, JWT/session callbacks, and
   active role/status revalidation.
 - `src/lib/authorization-policy.ts`: pure authorization and invariant policy.
-- `src/lib/authorization.ts`: server-only active/admin guards and transaction-safe
-  future user-mutation guard path.
-- `src/components/user-management/UserManagementClient.tsx`: presentation-only
-  user table, filters, action menu, dialogs, and accessible modal behavior.
-- `src/components/user-management/fixture.ts`: isolated non-production UI
-  fixture; never add passwords, tokens, or secrets to it.
+- `src/lib/authorization.ts`: server-only active/admin guards and the
+  serializable user-mutation transaction boundary.
+- `src/app/(protected)/pengaturan/users/actions.ts`: ADMIN-guarded Add User
+  server action with safe errors and revalidation.
 - `src/app/(protected)/pengaturan/users/page.tsx`: server-side ADMIN guard and
-  fixture handoff; no mutation code.
+  allowlisted user-list handoff.
+- `src/components/user-management/UserManagementClient.tsx`: user table,
+  filters, action menu, Add User form, deferred dialogs, and accessible modal
+  behavior.
+- `src/components/user-management/types.ts`: safe user-management UI shape.
+- `src/lib/user-management-validation.ts`: shared pure Add User validation.
+- `src/lib/user-management-mutation.ts`: transaction-scoped user/audit writer.
+- `src/lib/user-management-errors.ts`: safe duplicate-constraint mapping.
+- `src/services/user-management.ts`: ADMIN-guarded allowlisted user query.
 - `src/services/overview.ts`: query normalization and data-source selection.
 - `src/services/overview-postgres.ts`: PostgreSQL KPI and series aggregation.
 - `src/services/google-sheets-overview.ts`: optional direct Sheets adapter.
@@ -188,7 +203,7 @@ The sync route checks the deployment environment before `CRON_SECRET` and consta
 - Sync/provenance: `SyncSource`, `SyncWorksheet`, `SyncRun`, `SyncRowState`, `SyncSchemaChange`.
 - Normalized import: `SpreadsheetImportRun`, `SpreadsheetImportStaging`, `BiomassReceipt`, `CoalReceipt`, `BiomassConsumption`, `SolarReceipt`, `SolarConsumption`, `HopReading`, `BiomassTarget`, `BiomassCumulativeSnapshot`.
 
-Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Most domain statuses and entity types are strings rather than enums; the Phase 2 user role/status/audit fields are explicit PostgreSQL/Prisma enums. No views, triggers, or database functions were found in reviewed migrations.
+Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Most domain statuses and entity types are strings rather than enums; the Phase 2 user role/status/audit fields are explicit PostgreSQL/Prisma enums. No views, triggers, or database functions were found in reviewed migrations. Phase 5 adds no schema or migration; its user-list and Add User paths require the pending Phase 2 migration in the target database.
 
 There are two migration histories with a fixed policy: **SUPABASE
 PRODUCTION** uses `prisma/production/schema.prisma` and
@@ -229,6 +244,12 @@ the User Management authorization boundary. The sync API is not user-session
 protected; its boundary is the deployment gate followed by `CRON_SECRET`.
 Production and explicit local development are allowed; Preview and unknown
 deployment identities are denied before authentication or sync execution.
+
+Add User repeats the ADMIN check inside the server action and rechecks/locks
+the actor in the serializable transaction. The client never supplies actor ID,
+status, or authorization decisions. The user row and `USER_CREATED` audit row
+are created atomically; no existing user, session, or role/status row is
+modified by Phase 5.
 
 Supabase RLS/policies are UNKNOWN and must be verified before any browser Supabase access is enabled. No browser Supabase helper is part of the active application source.
 
@@ -357,6 +378,10 @@ Current local results:
 - Authorization security check: PASS; active ADMIN/USER dashboard access,
   disabled-session rejection, self-target/last-admin guards, and transaction
   locking are covered without database writes or network requests.
+- Add User focused verification: PASS; normalization/validation, bcrypt hash
+  handling, forced ACTIVE status, audit actor/target/action, safe duplicate
+  mapping, rollback-on-audit-failure, and source boundaries are covered with
+  synthetic transaction doubles and zero database/network activity.
 - Next.js production build: PASS after the Phase 3 policy integration.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Production deployment, Auth.js/dashboard, migration status, and Cron were

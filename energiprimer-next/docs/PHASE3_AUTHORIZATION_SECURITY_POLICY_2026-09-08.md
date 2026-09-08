@@ -127,6 +127,31 @@ Completed checks:
 Production database migration/deployment was not run. Live credential E2E was
 not run because the required isolated test-account environment is unavailable.
 
+## Phase 3 Revalidation
+
+Re-run date: 2026-09-08, after the Phase 4 presentation layer was present.
+
+The Phase 3 contract remains intact:
+
+| Scenario | Result | Evidence |
+|---|---|---|
+| `ADMIN` → Dashboard | PASS | `canAccessDashboard(adminA)` and protected-layout/build checks |
+| `USER` → Dashboard | PASS | `canAccessDashboard(activeUser)` and auth/proxy source checks |
+| `ADMIN` → User Management | PASS | `canAccessUserManagement(adminA)` and Phase 4 server page guard |
+| `USER` → User Management | PASS | `canAccessUserManagement(activeUser)` rejects; page uses `requireAdminUser()` |
+| `DISABLED` → Login/session boundary | PASS | `assertActiveUser(disabledUser)` rejects; Auth.js selects `ACTIVE` only |
+| `ADMIN` → self role change | PASS | `SELF_ROLE_CHANGE` policy error |
+| `ADMIN` → self disable | PASS | `SELF_DISABLE` policy error |
+| Last `ADMIN` → `USER` | PASS | `LAST_ADMIN` policy error |
+| Last `ADMIN` → `DISABLED` | PASS | `LAST_ADMIN` status policy error |
+| Stale session after protected change | PASS | JWT `updatedAt` version and role/status revalidation source checks |
+
+The rerun passed `auth:security:verify`, `authz:security:verify`,
+`user-management:ui:verify`, lint, TypeScript, root/production Prisma
+validation, and production build. The User Management route is now present as
+Phase 4 UI, but its direct-request boundary is still the Phase 3
+`requireAdminUser()` server policy—not navigation visibility.
+
 ## Documentation
 
 Updated:

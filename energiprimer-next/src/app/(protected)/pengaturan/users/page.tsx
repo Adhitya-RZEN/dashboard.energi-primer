@@ -6,12 +6,13 @@ import {
   requireAdminUser,
 } from "@/lib/authorization";
 import { UserManagementClient } from "@/components/user-management/UserManagementClient";
-import { createUserManagementFixture } from "@/components/user-management/fixture";
+import { listUsersAfterAdminGuard } from "@/services/user-management";
 
 export default async function UserManagementPage() {
-  let current: Awaited<ReturnType<typeof requireAdminUser>>;
+  let users;
   try {
-    current = await requireAdminUser();
+    const current = await requireAdminUser();
+    users = await listUsersAfterAdminGuard(current.user.id);
   } catch (error) {
     if (isAuthorizationPolicyError(error)) {
       if (error.code === "UNAUTHENTICATED") {
@@ -23,11 +24,6 @@ export default async function UserManagementPage() {
   }
 
   return (
-    <UserManagementClient
-      users={createUserManagementFixture({
-        name: current.user.name,
-        email: current.user.email,
-      })}
-    />
+    <UserManagementClient users={users} />
   );
 }

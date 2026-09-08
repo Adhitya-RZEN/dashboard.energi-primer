@@ -7,15 +7,25 @@ import {
   useId,
   useRef,
   useState,
+  useActionState,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+import {
+  createUser,
+  initialCreateUserState,
+} from "@/app/(protected)/pengaturan/users/actions";
+import {
+  validateCreateUserInput,
+  type CreateUserFieldErrors,
+} from "@/lib/user-management-validation";
 
 import type {
   UserManagementRole,
   UserManagementStatus,
   UserManagementUser,
-} from "./fixture";
-import { USER_MANAGEMENT_FIXTURE_SOURCE } from "./fixture";
+} from "./types";
 
 type RoleFilter = "ALL" | UserManagementRole;
 type StatusFilter = "ALL" | UserManagementStatus;
@@ -78,6 +88,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 type TextFieldProps = {
   id: string;
+  name?: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -86,10 +97,12 @@ type TextFieldProps = {
   autoComplete?: string;
   error?: string;
   required?: boolean;
+  disabled?: boolean;
 };
 
 function TextField({
   id,
+  name,
   label,
   value,
   onChange,
@@ -98,6 +111,7 @@ function TextField({
   autoComplete,
   error,
   required = false,
+  disabled = false,
 }: TextFieldProps) {
   const errorId = `${id}-error`;
 
@@ -113,11 +127,13 @@ function TextField({
       </label>
       <input
         id={id}
+        name={name}
         type={type}
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete}
         required={required}
+        disabled={disabled}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className={`${inputClassName} ${error ? "border-red-400 focus:border-red-500 focus:ring-red-100" : ""}`}
@@ -295,7 +311,13 @@ type AddUserForm = {
   role: UserManagementRole;
 };
 
-function AddUserDialog({ onClose }: { onClose: () => void }) {
+function AddUserDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const [form, setForm] = useState<AddUserForm>({
     username: "",
     name: "",
@@ -304,10 +326,27 @@ function AddUserDialog({ onClose }: { onClose: () => void }) {
     confirmPassword: "",
     role: "USER",
   });
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof AddUserForm, string>>
-  >({});
+  const [errors, setErrors] = useState<CreateUserFieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    createUser,
+    initialCreateUserState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      onCreated();
+    }
+  }, [onCreated, state.status]);
+
+  const displayErrors = {
+    ...(pending || state.status !== "error" ? {} : state.fieldErrors),
+    ...errors,
+  };
+  const displayNotice =
+    pending || state.status !== "error"
+      ? notice
+      : state.message ?? notice ?? "Unable to create user.";
 
   function updateField<K extends keyof AddUserForm>(
     field: K,
@@ -319,85 +358,89 @@ function AddUserDialog({ onClose }: { onClose: () => void }) {
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextErrors: Partial<Record<keyof AddUserForm, string>> = {};
-    if (!form.username.trim()) nextErrors.username = "Username required";
-    if (!form.name.trim()) nextErrors.name = "Name required";
-    if (!validateEmail(form.email)) nextErrors.email = "Valid email required";
-    if (!form.password) nextErrors.password = "Password required";
-    if (!form.confirmPassword) {
-      nextErrors.confirmPassword = "Confirm password required";
-    } else if (form.password !== form.confirmPassword) {
-      nextErrors.confirmPassword = "Password mismatch";
+    if (pending) {
+      event.preventDefault();
+      return;
     }
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
 
-    setForm((current) => ({
-      ...current,
-      password: "",
-      confirmPassword: "",
-    }));
+    const validation = validateCreateUserInput(form);
+    setErrors(validation.fieldErrors);
     setNotice(
-      "No changes were saved. User creation is deferred to a later phase.",
+      validation.valid ? null : "Please correct the highlighted fields.",
     );
+    if (!validation.valid) event.preventDefault();
   }
 
   return (
     <DialogShell
       title="Add New User"
-      description="Prepare a new account profile for a future user-management flow."
+      description="Create an active application account for a new user."
       onClose={onClose}
       size="lg"
     >
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form
+        className="space-y-5"
+        action={formAction}
+        onSubmit={handleSubmit}
+        noValidate
+      >
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             id="add-user-username"
+            name="username"
             label="Username"
             value={form.username}
             onChange={(value) => updateField("username", value)}
-            error={errors.username}
+            error={displayErrors.username}
+            disabled={pending}
             required
           />
           <TextField
             id="add-user-name"
+            name="name"
             label="Name"
             value={form.name}
             onChange={(value) => updateField("name", value)}
-            error={errors.name}
+            error={displayErrors.name}
+            disabled={pending}
             required
           />
         </div>
         <TextField
           id="add-user-email"
+          name="email"
           label="Email"
           type="email"
           value={form.email}
           onChange={(value) => updateField("email", value)}
-          error={errors.email}
+          error={displayErrors.email}
           autoComplete="email"
+          disabled={pending}
           required
         />
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             id="add-user-password"
+            name="password"
             label="Password"
             type="password"
             value={form.password}
             onChange={(value) => updateField("password", value)}
-            error={errors.password}
+            error={displayErrors.password}
             autoComplete="new-password"
+            disabled={pending}
             required
           />
           <TextField
             id="add-user-confirm-password"
+            name="confirmPassword"
             label="Confirm Password"
             type="password"
             value={form.confirmPassword}
             onChange={(value) => updateField("confirmPassword", value)}
-            error={errors.confirmPassword}
+            error={displayErrors.confirmPassword}
             autoComplete="new-password"
+            disabled={pending}
             required
           />
         </div>
@@ -410,8 +453,10 @@ function AddUserDialog({ onClose }: { onClose: () => void }) {
           </label>
           <select
             id="add-user-role"
+            name="role"
             className={selectClassName}
             value={form.role}
+            disabled={pending}
             onChange={(event) =>
               updateField("role", event.target.value as UserManagementRole)
             }
@@ -420,16 +465,23 @@ function AddUserDialog({ onClose }: { onClose: () => void }) {
             <option value="ADMIN">ADMIN</option>
           </select>
         </div>
-        {notice ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
-            {notice}
+        {displayNotice ? (
+          <p
+            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900"
+            role="status"
+          >
+            {displayNotice}
           </p>
         ) : null}
         <PhaseNotice>
-          the fields stay in this form only. No account will be created in
-          Phase 4.
+          the server validates and normalizes these fields, hashes the
+          password, and records the creation audit event transactionally.
         </PhaseNotice>
-        <DialogFooter onClose={onClose} submitLabel="Create User" />
+        <DialogFooter
+          onClose={onClose}
+          submitLabel={pending ? "Creating..." : "Create User"}
+          disabled={pending}
+        />
       </form>
     </DialogShell>
   );
@@ -1033,6 +1085,8 @@ export function UserManagementClient({
   );
   const [activeDialog, setActiveDialog] = useState<DialogName>(null);
   const [statusAction, setStatusAction] = useState<StatusAction | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const router = useRouter();
 
   const closeDialog = useCallback(() => {
     setActiveDialog(null);
@@ -1047,6 +1101,7 @@ export function UserManagementClient({
   }, []);
 
   function openAddDialog() {
+    setFeedback(null);
     setSelectedUser(null);
     setStatusAction(null);
     setActiveDialog("add");
@@ -1061,6 +1116,12 @@ export function UserManagementClient({
     setStatusAction(action === "status" ? nextStatusAction ?? null : null);
     setActiveDialog(action);
   }
+
+  const handleUserCreated = useCallback(() => {
+    closeDialog();
+    setFeedback("User created successfully.");
+    router.refresh();
+  }, [closeDialog, router]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
@@ -1115,6 +1176,16 @@ export function UserManagementClient({
         </button>
       </header>
 
+      {feedback ? (
+        <div
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800"
+          role="status"
+          aria-live="polite"
+        >
+          {feedback}
+        </div>
+      ) : null}
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1125,8 +1196,8 @@ export function UserManagementClient({
                 {users.length === 1 ? "" : "s"} shown
               </p>
             </div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
-              {USER_MANAGEMENT_FIXTURE_SOURCE}
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              Read-only user profile fields
             </p>
           </div>
         </div>
@@ -1189,7 +1260,12 @@ export function UserManagementClient({
         />
       </section>
 
-      {activeDialog === "add" ? <AddUserDialog onClose={closeDialog} /> : null}
+      {activeDialog === "add" ? (
+        <AddUserDialog
+          onClose={closeDialog}
+          onCreated={handleUserCreated}
+        />
+      ) : null}
       {activeDialog === "edit" && selectedUser ? (
         <EditUserDialog user={selectedUser} onClose={closeDialog} />
       ) : null}

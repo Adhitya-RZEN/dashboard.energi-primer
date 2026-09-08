@@ -58,7 +58,7 @@ function testPresentationSurface() {
   const client = readSource(
     "src/components/user-management/UserManagementClient.tsx",
   );
-  const fixture = readSource("src/components/user-management/fixture.ts");
+  const service = readSource("src/services/user-management.ts");
   const loading = readSource(
     "src/app/(protected)/pengaturan/users/loading.tsx",
   );
@@ -99,10 +99,12 @@ function testPresentationSurface() {
     "table and combined search/filter state are implemented",
   );
   assert(
-    fixture.includes("UI DEVELOPMENT FIXTURE") &&
-      fixture.includes("NOT PRODUCTION DATA") &&
-      fixture.includes("example.invalid"),
-    "fixture source is isolated and contains no real credential data",
+    service.includes("requireAdminUser") &&
+      service.includes("userListSelect") &&
+      service.includes("prisma.user.findMany") &&
+      !service.includes("password: true") &&
+      !service.includes("rememberToken"),
+    "user list uses an ADMIN-guarded allowlisted read query",
   );
   assert(
     loading.includes('label="Loading users..."') &&
@@ -115,7 +117,6 @@ function testNoMutationOrSensitivePersistence() {
   const client = readSource(
     "src/components/user-management/UserManagementClient.tsx",
   );
-  const fixture = readSource("src/components/user-management/fixture.ts");
   const forbidden = [
     "prisma.",
     "fetch(",
@@ -131,12 +132,6 @@ function testNoMutationOrSensitivePersistence() {
   for (const token of forbidden) {
     assert(!client.includes(token), `UI client does not use ${token}`);
   }
-  assert(
-    !fixture.includes("password") &&
-      !fixture.includes("rememberToken") &&
-      !fixture.includes("resetToken"),
-    "fixture does not contain password, session, or reset-token fields",
-  );
   assert(
     client.includes("No changes were saved") &&
       client.includes("No password was changed"),

@@ -11,6 +11,9 @@
 >
 > Phase 4 User Management UI update (2026-09-08): see
 > [`PHASE4_USER_MANAGEMENT_UI_2026-09-08.md`](./PHASE4_USER_MANAGEMENT_UI_2026-09-08.md).
+>
+> Phase 5 Add User update (2026-09-08): see
+> [`PHASE5_ADD_USER_2026-09-08.md`](./PHASE5_ADD_USER_2026-09-08.md).
 
 ## Status
 
@@ -72,14 +75,23 @@ Auth.js adapter.
 - `src/lib/auth-security.ts` and `src/lib/login-throttle.ts` — redirect,
   email-validation, and persistent login-throttle helpers.
 
-Additional Phase 4 UI files are:
+User Management files are:
 
 - `src/app/(protected)/pengaturan/users/*` — ADMIN-only User Management route,
-  route loading state, and safe error boundary.
+  route loading state, safe error boundary, and Add User server action.
 - `src/components/user-management/*` — presentation-only table, filters,
-  action menu, dialogs, fixture boundary, and accessible modal primitives.
+  action menu, dialogs, safe UI types, and accessible modal primitives.
+- `src/lib/user-management-validation.ts` — pure Add User normalization and
+  server/client-safe validation.
+- `src/lib/user-management-errors.ts` — safe duplicate-constraint mapping.
+- `src/lib/user-management-mutation.ts` — transaction-scoped user creation and
+  `USER_CREATED` audit writer with allowlisted selections.
+- `src/services/user-management.ts` — ADMIN-guarded, allowlisted user-list
+  query.
 - `scripts/verify-user-management-ui.ts` — zero-write static UI boundary
   verification.
+- `scripts/verify-add-user.ts` — zero-database-write Add User validation,
+  hashing, audit, rollback, and source-boundary verification.
 
 ## Phase 3 authorization policy
 
@@ -102,23 +114,50 @@ role to navigation so the `User Management` entry is only shown to `ADMIN`.
 The page still has a server-side boundary; hiding the link is not treated as
 authorization.
 
-The page contains a responsive horizontal-scroll user table with Username,
+At the Phase 4 baseline, the page contained a responsive horizontal-scroll user table with Username,
 Name, Email, Role, Status, and Actions columns. Search covers username, name,
 and email; Role and Status filters can be combined. The action menu opens
 presentation-only Edit User, Reset Password, Change Role, and Enable/Disable
-dialogs. Add User includes client-side validation feedback, but no form submits
-to a server action or changes the database.
+dialogs. Phase 5 retained those deferred dialogs and connected Add User to the
+server action described below.
 
-The table currently uses an isolated UI development fixture because no safe
-read-only user-list service existed when Phase 4 was implemented and the Phase
-2 user migration remains an operator-approved deployment step. The fixture is
-explicitly labeled `UI DEVELOPMENT FIXTURE — NOT PRODUCTION DATA` and contains
-no password, token, or secret fields. The authorized current administrator's
-display name/email are used only to exercise the self-target presentation.
+Phase 4 used an isolated UI development fixture because no safe read-only
+user-list service existed at that point. Phase 5 replaces it with the
+server-only `listUsersAfterAdminGuard()` query and an allowlisted selection;
+the pending Phase 2 migration is still an operator-approved deployment step.
+The query and UI contain no password, token, or secret fields.
 
-All mutation behavior, audit-event writing, password reset delivery, and
-production user reads remain deferred. See the Phase 4 report for validation
-and limitations.
+Edit User, Reset Password, Change Role, and Enable/Disable remain deferred.
+See the Phase 4 report for the historical presentation baseline and the Phase 5
+report for the implemented Add User boundary.
+
+## Phase 5 Add User
+
+The ADMIN-only `/pengaturan/users` Add User form now submits to the server
+action in `src/app/(protected)/pengaturan/users/actions.ts`. The action calls
+`requireAdminUser()` before validation and again locks/rechecks the actor inside
+the Phase 3 serializable `withUserManagementTransaction()` boundary. It reads
+only username, name, email, password, confirmPassword, and role from the
+request; status and actor identity are server-controlled.
+
+Validation is shared between the client UX and server authority. Username and
+email are trimmed/lowercased, username has a canonical safe format, role must
+be exactly `ADMIN` or `USER`, and status is always `ACTIVE`. Passwords are
+hashed with `bcryptjs` using 12 rounds. The plaintext, hash, and confirmation
+value are never returned, logged, or included in audit metadata.
+
+The transaction creates the user and its `USER_CREATED` audit row atomically.
+The audit actor is the authenticated administrator and the target is the new
+user ID. Audit metadata is limited to the created username and role. Duplicate
+username/email preflight errors and final Prisma unique-constraint errors are
+mapped to safe field messages; raw database errors are not exposed.
+
+The route reads production user data only after the ADMIN guard and selects
+`id`, `username`, `name`, `email`, `role`, and `status`. No Phase 5 production
+migration or account mutation was executed. The implementation therefore
+requires the pending Phase 2 migration before the route can be enabled against
+a database that does not yet have the new columns/table. Local verification is
+recorded in `PHASE5_ADD_USER_2026-09-08.md`.
 
 ## Laravel behavior mapping
 
@@ -173,13 +212,19 @@ zero-write remediation.
 self-target guards, last-admin guards, session-version primitive, and the
 transaction-safe future mutation path without database writes.
 
-`user-management:ui:verify` covers the Phase 4 route guard, role-aware
-navigation wiring, table/filter/dialog surface, accessibility hooks, fixture
-boundary, and absence of UI database mutations. It performs no database or
-network work.
+`user-management:ui:verify` covers the route guard, role-aware navigation
+wiring, table/filter/dialog surface, accessibility hooks, and absence of UI
+database mutations. It performs no database or network work.
 
-Historical Phase 4/5 reports retain their original findings and must not be
-treated as the current authentication contract.
+`user-management:add-user:verify` covers pure input normalization and
+validation, bcrypt hashing, forced `ACTIVE` status, audit actor/target/action,
+safe duplicate mapping, rollback when audit creation fails, and source-boundary
+checks. It uses synthetic transaction doubles and performs zero database writes
+and zero network requests.
+
+The Phase 4 report retains its historical fixture-backed findings. The Phase 5
+report distinguishes local implementation checks from production verification;
+neither report authorizes applying the pending migration or mutating an account.
 
 ## Phase 4A-R2 - Production CredentialsSignin Root-Cause Remediation
 
