@@ -64,6 +64,18 @@ isolated Auth.js/Playwright role-session verification are recorded in
 `docs/PHASE7_ROLE_MANAGEMENT_2026-09-08.md`. No Production database, account,
 credential, session, migration, or write was used.
 
+Phase 8 (2026-09-08) connects Enable/Disable to the same ADMIN policy and
+serializable user-management transaction. The action accepts only a canonical
+target ID and `ACTIVE`/`DISABLED` desired status, re-locks and revalidates the
+actor/target/active-admin rows, preserves the last ACTIVE ADMIN, updates only
+status plus `updatedAt`, and writes `USER_ENABLED`/`USER_DISABLED` atomically.
+Roles remain unchanged; self/no-op/invalid transitions are rejected, disabled
+login is denied, and stale target sessions are invalidated by Auth.js version
+revalidation. Focused, disposable PostgreSQL, concurrency, and isolated
+Auth.js/Playwright status-session verification are recorded in
+`docs/PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md`. No Production database,
+account, credential, session, migration, or write was used.
+
 ## Evidence status
 
 - **VERIFIED** means source/configuration or a local command proves it.
@@ -184,8 +196,8 @@ calls `requireAdminUser()` and reads safe fields through the allowlisted
 authenticated role from `AppShell` and hides the entry from `USER` accounts.
 The page uses a client component for local search/filter/dialog state, a
 horizontal-scroll table on narrow screens, and route-level loading/error
-states. Add User, Reset Password, and Change Role are connected to server
-actions; Edit and Enable/Disable remain explicitly deferred.
+states. Add User, Reset Password, Change Role, and Enable/Disable are connected
+to server actions; Edit remains explicitly deferred.
 
 `/data-batu-bara`, `/monitoring`, and `/laporan` are protected but not linked in the current navigation. Report/import/export/PDF controls are disabled placeholders. Do not interpret UI hiding or disabled buttons as backend authorization.
 
@@ -204,7 +216,7 @@ Important server modules:
 - `src/lib/authorization.ts`: server-only active/admin guards and the
   serializable user-mutation transaction boundary.
 - `src/app/(protected)/pengaturan/users/actions.ts`: ADMIN-guarded Add User,
-  Reset Password, and Change Role server actions with safe errors and
+  Reset Password, Change Role, and Enable/Disable server actions with safe errors and
   revalidation.
 - `src/app/(protected)/pengaturan/users/page.tsx`: server-side ADMIN guard and
   allowlisted user-list handoff.
@@ -447,6 +459,12 @@ Current local results:
   `ROLE_CHANGED` audit, rollback, and source boundaries are covered with zero
   database/network activity. Disposable PostgreSQL concurrency and isolated
   Auth.js/Playwright USER↔ADMIN session E2E also PASS.
+- Account Status focused verification: PASS; ACTIVE/DISABLED policy matrix,
+  self/no-op/last-admin protection, role-preserving status/security-version
+  mutation, `USER_ENABLED`/`USER_DISABLED` audits, rollback, and source
+  boundaries are covered with zero database/network activity. Disposable
+  PostgreSQL concurrency and isolated Auth.js/Playwright disable/enable session
+  E2E also PASS.
 - Next.js production build: PASS after the Phase 3 policy integration.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Production deployment, Auth.js/dashboard, migration status, and Cron were
@@ -597,3 +615,42 @@ Recharts patch had renamed the measurement definition but left executable
 asserts the `measureTextWithCanvas` path; two clean disposable browser runs
 passed. Production deployment and the new Phase 6V verification are complete,
 and Production CSP remains OFF.
+
+## 24. Phase 9 Audit Log and session-security boundary
+
+- Audit Log is a separate read-only route at `/pengaturan/audit-log`, guarded
+  by ACTIVE ADMIN server authorization. It is not folded into the existing
+  `/pengaturan/users` mutation UI.
+- `src/services/audit-log.ts` uses an explicit safe select, nested actor/target
+  username/name/status only, fixed `createdAt DESC, id DESC` ordering, bounded
+  default-25/max-100 pagination, and validated action/search/date filters.
+  `src/lib/audit-log-validation.ts` is the no-runtime-auth query parser.
+- No raw audit JSON is rendered. Only the allowlisted metadata fields for
+  `USER_CREATED`, `PASSWORD_RESET`, `ROLE_CHANGED`, `USER_ENABLED`, and
+  `USER_DISABLED` are presented. Legacy `USER_UPDATED` is generic/read-only.
+- The Phase 5-8 mutation helpers remain transaction-owned and must produce
+  exactly one matching audit row on success and zero rows on rejection/no-op.
+  Audit failure must roll back the user mutation. Audit relations retain
+  `ON DELETE RESTRICT`; no retention/export/delete path exists.
+- Auth.js Credentials/JWT, `updatedAt`/`sessionVersion`, current status/role
+  revalidation, two-hour JWT max age, and existing `signOut` remain the only
+  session architecture. Do not activate the legacy Prisma `Session` model or
+  add a second cookie/session/JWT system.
+- Phase 9 focused, disposable PostgreSQL, and local Playwright verification
+  passed. Production migration, mutation, and audit read were not performed.
+- The referenced `#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt` remains absent and
+  must be restored or explicitly retired by the project owner.
+
+## 25. Phase 10 full validation and production-readiness gate
+
+- Phase 10 is a validation-only release gate. Do not run a Production
+  migration, mutation, user/audit read, session test, or deployment from this
+  workflow.
+- `scripts/verify-phase10-disposable.mjs` uses only a temporary loopback
+  PostgreSQL cluster. It verifies the pending migration artifact, fail-closed
+  legacy-data checks, and cross-mutation concurrency; it must never receive a
+  Production URL or `.env.local` credentials.
+- Final evidence is recorded in
+  `docs/PHASE10_FULL_VALIDATION_PRODUCTION_READINESS_2026-09-08.md`.
+- The referenced `#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt` was not found during
+  the Phase 10 documentation-first review; do not infer or invent its rules.

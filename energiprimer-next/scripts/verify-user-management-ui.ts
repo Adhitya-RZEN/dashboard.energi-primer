@@ -116,6 +116,15 @@ function testPresentationSurface() {
     "Change Role dialog is action-integrated with safe pending and success feedback",
   );
   assert(
+    client.includes("changeStatus") &&
+      client.includes('name="desiredStatus"') &&
+      client.includes('name="targetUserId"') &&
+      client.includes("Updating...") &&
+      client.includes("User disabled successfully.") &&
+      client.includes("User enabled successfully."),
+    "Enable/Disable dialog is action-integrated with safe pending and success feedback",
+  );
+  assert(
     service.includes("requireAdminUser") &&
       service.includes("userListSelect") &&
       service.includes("prisma.user.findMany") &&
@@ -152,12 +161,15 @@ function testNoMutationOrSensitivePersistence() {
   const roleDialogStart = client.indexOf("function ChangeRoleDialog");
   const roleDialogEnd = client.indexOf("function UserStatusDialog");
   const roleDialog = client.slice(roleDialogStart, roleDialogEnd);
+  const statusDialogStart = client.indexOf("function UserStatusDialog");
+  const statusDialog = client.slice(statusDialogStart);
   assert(
     client.includes("No changes were saved") &&
-      client.includes("No status was changed") &&
       !roleDialog.includes("presentation-only") &&
+      statusDialog.includes("changeStatus") &&
+      !statusDialog.includes("deferred to a later phase") &&
       !client.includes("No password was changed"),
-    "remaining deferred presentation actions provide no fake mutation success feedback",
+    "remaining deferred presentation actions provide no fake success while status mutation is persistent",
   );
 }
 

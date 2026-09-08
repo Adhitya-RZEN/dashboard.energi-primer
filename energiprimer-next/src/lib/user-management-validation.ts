@@ -1,7 +1,9 @@
 import {
   ADMIN_ROLE,
+  isAuthorizationStatus,
   USER_ROLE,
   type AuthorizationRole,
+  type AuthorizationStatus,
 } from "./authorization-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -122,6 +124,12 @@ export function validatePasswordResetInput(input: PasswordResetInput) {
 
 export function isAuthorizationRole(value: string): value is AuthorizationRole {
   return value === ADMIN_ROLE || value === USER_ROLE;
+}
+
+export function isUserManagementStatus(
+  value: unknown,
+): value is AuthorizationStatus {
+  return isAuthorizationStatus(value);
 }
 
 export function validateCreateUserInput(input: CreateUserInput) {

@@ -4,6 +4,10 @@
 **Status:** `VERIFIED`  
 **Scope:** ADMIN-initiated `ADMIN ↔ USER` role changes from User Management
 
+> Historical scope note: Phase 8 supersedes the Enable/Disable deferral noted
+> below. Role Management behavior and evidence remain unchanged; see
+> `PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md` for account status changes.
+
 ## Implementation
 
 Phase 7 uses the existing Phase 3–6 Auth.js, JWT, Prisma, and transaction

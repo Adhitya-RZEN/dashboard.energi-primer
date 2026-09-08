@@ -11,7 +11,8 @@ credential was used.
 
 > Historical scope note: Phase 7 supersedes the Change Role deferral retained
 > in this report. Reset Password behavior is unchanged; see
-> `PHASE7_ROLE_MANAGEMENT_2026-09-08.md`.
+> `PHASE7_ROLE_MANAGEMENT_2026-09-08.md`. Phase 8 supersedes the historical
+> Enable/Disable deferral; see `PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md`.
 
 ## Implementation
 

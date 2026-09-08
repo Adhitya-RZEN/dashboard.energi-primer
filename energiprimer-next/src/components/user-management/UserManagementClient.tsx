@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import {
+  changeStatus,
   changeRole,
   createUser,
   resetPassword,
@@ -45,6 +46,7 @@ type RowAction = Exclude<DialogName, "add" | "status" | null> | "status";
 const initialCreateUserState = { status: "idle" as const };
 const initialResetPasswordState = { status: "idle" as const };
 const initialChangeRoleState = { status: "idle" as const };
+const initialChangeStatusState = { status: "idle" as const };
 
 const inputClassName =
   "mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:bg-slate-100";
@@ -873,27 +875,46 @@ function UserStatusDialog({
   user,
   action,
   onClose,
+  onCompleted,
 }: {
   user: UserManagementUser;
   action: StatusAction;
   onClose: () => void;
+  onCompleted: () => void;
 }) {
   const isDisable = action === "DISABLE_USER";
   const protectedTarget = Boolean(
     isDisable && (user.isCurrentUser || user.isProtectedAdministrator),
   );
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    changeStatus,
+    initialChangeStatusState,
+  );
   const verb = isDisable ? "Disable User" : "Enable User";
 
+  useEffect(() => {
+    if (state.status === "success") {
+      onCompleted();
+    }
+  }, [onCompleted, state.status]);
+
+  const displayNotice =
+    pending || state.status !== "error"
+      ? notice
+      : state.message ?? notice ?? "Unable to update account status.";
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (protectedTarget) {
-      setNotice("This administrator target is protected by the security policy.");
+    if (pending) {
+      event.preventDefault();
       return;
     }
-    setNotice(
-      `No status was changed. ${verb} mutation is deferred to a later phase.`,
-    );
+    if (protectedTarget) {
+      setNotice("This administrator target is protected by the security policy.");
+      event.preventDefault();
+      return;
+    }
+    setNotice(null);
   }
 
   return (
@@ -902,10 +923,23 @@ function UserStatusDialog({
       description={`Review access for ${user.name}.`}
       onClose={onClose}
     >
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form
+        className="space-y-5"
+        action={formAction}
+        onSubmit={handleSubmit}
+      >
+        <input type="hidden" name="targetUserId" value={user.id} />
+        <input
+          type="hidden"
+          name="desiredStatus"
+          value={isDisable ? "DISABLED" : "ACTIVE"}
+        />
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm font-bold text-slate-900">{user.name}</p>
           <p className="mt-1 text-xs text-slate-500">{user.email}</p>
+          <div className="mt-3">
+            <StatusBadge status={user.status} />
+          </div>
         </div>
         <p className="text-sm leading-6 text-slate-700">
           {isDisable
@@ -918,19 +952,20 @@ function UserStatusDialog({
             the UI.
           </p>
         ) : null}
-        {notice ? (
+        {displayNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
-            {notice}
+            {displayNotice}
           </p>
         ) : null}
         <PhaseNotice>
-          this confirmation is presentation-only. No account status will be
-          changed.
+          the server rechecks the target&apos;s current status and administrator
+          policy. A successful status change invalidates the target&apos;s
+          existing session.
         </PhaseNotice>
         <DialogFooter
           onClose={onClose}
-          submitLabel={verb}
-          disabled={protectedTarget}
+          submitLabel={pending ? "Updating..." : verb}
+          disabled={pending || protectedTarget}
         />
       </form>
     </DialogShell>
@@ -1215,6 +1250,17 @@ export function UserManagementClient({
     router.refresh();
   }, [closeDialog, router]);
 
+  const handleStatusChanged = useCallback(() => {
+    const wasDisable = statusAction === "DISABLE_USER";
+    closeDialog();
+    setFeedback(
+      wasDisable
+        ? "User disabled successfully."
+        : "User enabled successfully.",
+    );
+    router.refresh();
+  }, [closeDialog, router, statusAction]);
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -1380,6 +1426,7 @@ export function UserManagementClient({
           user={selectedUser}
           action={statusAction}
           onClose={closeDialog}
+          onCompleted={handleStatusChanged}
         />
       ) : null}
     </div>

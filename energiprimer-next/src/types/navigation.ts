@@ -6,7 +6,8 @@ export type NavigationIconName =
   | "stock"
   | "target"
   | "settings"
-  | "users";
+  | "users"
+  | "audit";
 
 export type NavigationItem = {
   href: string | null;

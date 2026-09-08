@@ -6,8 +6,9 @@
 
 > Historical baseline: Phase 5 supersedes the fixture-backed data source and
 > connects Add User to a server action. Phase 6 supersedes the Reset Password
-> deferral, and Phase 7 supersedes the Change Role deferral. Edit User and
-> Enable/Disable remain deferred. See `PHASE7_ROLE_MANAGEMENT_2026-09-08.md`.
+> deferral, Phase 7 supersedes the Change Role deferral, and Phase 8 supersedes
+> the Enable/Disable deferral. Edit User remains deferred. See
+> `PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md` for the current status flow.
 
 ## UI Implemented
 

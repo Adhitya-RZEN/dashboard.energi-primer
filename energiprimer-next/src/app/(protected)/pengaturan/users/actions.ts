@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import {
   assertAdminUser,
   assertCanChangeRoleInTransaction,
+  assertCanChangeStatusInTransaction,
   assertCanResetPasswordInTransaction,
   AuthorizationPolicyError,
   isAuthorizationPolicyError,
@@ -16,6 +17,7 @@ import {
 import {
   assertUserCreationUnique,
   changeUserRoleAndAudit,
+  changeUserStatusAndAudit,
   createUserAndAudit,
   resetUserPasswordAndAudit,
 } from "@/lib/user-management-mutation";
@@ -25,6 +27,7 @@ import {
 } from "@/lib/user-management-errors";
 import {
   isAuthorizationRole,
+  isUserManagementStatus,
   parseUserManagementUserId,
   type PasswordResetFieldErrors,
   validateCreateUserInput,
@@ -44,6 +47,9 @@ const SAFE_SELF_RESET_ERROR =
 const SAFE_SELF_ROLE_ERROR =
   "You cannot change your own role from User Management.";
 const SAFE_NO_ROLE_CHANGE = "The user already has this role.";
+const SAFE_NO_STATUS_CHANGE = "The user already has this status.";
+const SAFE_INVALID_STATUS = "Invalid account status.";
+const SAFE_STATUS_ERROR = "Unable to update account status.";
 const SAFE_LAST_ADMIN_ERROR =
   "The last active administrator cannot be removed.";
 
@@ -60,6 +66,11 @@ export type ResetPasswordState = {
 };
 
 export type ChangeRoleState = {
+  status: "idle" | "error" | "success";
+  message?: string;
+};
+
+export type ChangeStatusState = {
   status: "idle" | "error" | "success";
   message?: string;
 };
@@ -294,5 +305,75 @@ export async function changeRole(
     }
 
     return { status: "error", message: SAFE_ROLE_ERROR };
+  }
+}
+
+export async function changeStatus(
+  _previousState: ChangeStatusState,
+  formData: FormData,
+): Promise<ChangeStatusState> {
+  try {
+    const current = await requireAdminUser();
+    const targetUserId = parseUserManagementUserId(
+      formData.get("targetUserId"),
+    );
+    if (targetUserId === null) {
+      return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+    }
+
+    const desiredStatus = formData.get("desiredStatus");
+    if (!isUserManagementStatus(desiredStatus)) {
+      return { status: "error", message: SAFE_INVALID_STATUS };
+    }
+
+    await withUserManagementTransaction(async (tx) => {
+      const context = await assertCanChangeStatusInTransaction(
+        tx,
+        current.user.id,
+        targetUserId,
+        desiredStatus,
+      );
+      await changeUserStatusAndAudit(
+        tx,
+        current.user.id,
+        context.target.id,
+        context.target.status,
+        desiredStatus,
+        new Date(),
+      );
+    });
+
+    revalidatePath("/pengaturan/users");
+    return {
+      status: "success",
+      message:
+        desiredStatus === "DISABLED"
+          ? "User disabled successfully."
+          : "User enabled successfully.",
+    };
+  } catch (error) {
+    if (isAuthorizationPolicyError(error)) {
+      if (error.code === "SELF_DISABLE") {
+        return {
+          status: "error",
+          message: "You cannot disable your own account from User Management.",
+        };
+      }
+      if (error.code === "NO_CHANGE") {
+        return { status: "error", message: SAFE_NO_STATUS_CHANGE };
+      }
+      if (error.code === "LAST_ADMIN") {
+        return { status: "error", message: SAFE_LAST_ADMIN_ERROR };
+      }
+      if (error.code === "INVALID_TARGET") {
+        return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+      }
+      if (error.code === "INVALID_TRANSITION") {
+        return { status: "error", message: SAFE_INVALID_STATUS };
+      }
+      return { status: "error", message: SAFE_AUTHORIZATION_ERROR };
+    }
+
+    return { status: "error", message: SAFE_STATUS_ERROR };
   }
 }

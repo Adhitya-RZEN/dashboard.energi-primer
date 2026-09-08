@@ -230,6 +230,12 @@ export function assertCanChangeStatus(
       "Disabling your own account is not permitted.",
     );
   }
+  if (target.status === nextStatus) {
+    throw new AuthorizationPolicyError(
+      "NO_CHANGE",
+      "The user already has this status.",
+    );
+  }
   if (nextStatus === DISABLED_STATUS) {
     assertLastAdminSafe(target, "DISABLE_USER", activeAdminCount);
   }

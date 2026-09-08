@@ -80,6 +80,14 @@ const navigationSections: NavigationSection[] = [
         available: true,
         adminOnly: true,
       },
+      {
+        href: "/pengaturan/audit-log",
+        label: "Audit Log",
+        description: "Riwayat aktivitas akun",
+        icon: "audit",
+        available: true,
+        adminOnly: true,
+      },
     ],
   },
 ];
@@ -192,6 +200,18 @@ function NavigationIcon({ name }: { name: NavigationIconName }) {
           <path d="M16 21v-1.5a4.5 4.5 0 0 0-4.5-4.5h-3A4.5 4.5 0 0 0 4 19.5V21" />
           <circle cx="10" cy="7" r="3.5" />
           <path d="M16 4.5a3.5 3.5 0 0 1 0 6.8M18 15.2a4.5 4.5 0 0 1 2 4.3V21" />
+        </svg>
+      );
+    case "audit":
+      return (
+        <svg
+          aria-hidden="true"
+          className="size-5 shrink-0"
+          viewBox="0 0 24 24"
+          {...commonProps}
+        >
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7v5l3.2 2M5.5 5.5 4 4M18.5 5.5 20 4" />
         </svg>
       );
   }

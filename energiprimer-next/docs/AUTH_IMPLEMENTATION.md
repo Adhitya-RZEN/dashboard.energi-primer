@@ -20,6 +20,9 @@
 >
 > Phase 7 Role Management update (2026-09-08): see
 > [`PHASE7_ROLE_MANAGEMENT_2026-09-08.md`](./PHASE7_ROLE_MANAGEMENT_2026-09-08.md).
+>
+> Phase 8 Account Status Management update (2026-09-08): see
+> [`PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md`](./PHASE8_ACCOUNT_STATUS_MANAGEMENT_2026-09-08.md).
 
 ## Status
 
@@ -85,16 +88,17 @@ User Management files are:
 
 - `src/app/(protected)/pengaturan/users/*` — ADMIN-only User Management route,
   route loading state, safe error boundary, and Add User/Reset Password/Change
-  Role server actions.
+  Role/Enable/Disable server actions.
 - `src/components/user-management/*` — user table, filters, server-backed
-  role-change/reset/add dialogs, safe UI types, and accessible modal
+  role-change/reset/status/add dialogs, safe UI types, and accessible modal
   primitives.
 - `src/lib/user-management-validation.ts` — pure Add User/password-reset
   validation and canonical user-ID/role input checks.
 - `src/lib/user-management-errors.ts` — safe duplicate-constraint mapping.
 - `src/lib/user-management-mutation.ts` — transaction-scoped user creation,
-  role-change, and password-reset mutations with
-  `USER_CREATED`/`ROLE_CHANGED`/`PASSWORD_RESET` audit writers.
+  role-change, status-change, and password-reset mutations with
+  `USER_CREATED`/`ROLE_CHANGED`/`USER_ENABLED`/`USER_DISABLED`/`PASSWORD_RESET`
+  audit writers.
 - `src/services/user-management.ts` — ADMIN-guarded, allowlisted user-list
   query.
 - `scripts/verify-user-management-ui.ts` — zero-write static UI boundary
@@ -114,6 +118,13 @@ User Management files are:
   role transaction, rollback, and concurrency verification.
 - `scripts/verify-role-management-e2e.mjs` — isolated Auth.js/Playwright role
   lifecycle verification; it never loads `.env.local` credentials.
+
+- `scripts/verify-account-status.ts` — zero-write status policy, mutation,
+  rollback, and source-boundary verification.
+- `scripts/verify-account-status-disposable.mjs` — disposable PostgreSQL
+  status transaction, rollback, last-admin, and concurrency verification.
+- `scripts/verify-account-status-e2e.mjs` — isolated Auth.js/Playwright
+  enable/disable lifecycle verification; it never loads `.env.local` credentials.
 
 ## Phase 3 authorization policy
 
@@ -149,10 +160,11 @@ server-only `listUsersAfterAdminGuard()` query and an allowlisted selection;
 the pending Phase 2 migration is still an operator-approved deployment step.
 The query and UI contain no password, token, or secret fields.
 
-Edit User and Enable/Disable remain deferred. Phase 6 connects Reset Password
-to the server-side mutation boundary described below, and Phase 7 connects
-Change Role. See the Phase 4 report for the historical presentation baseline,
-the Phase 5 report for Add User, and the Phase 7 report for role mutation.
+Edit User remains deferred. Phase 6 connects Reset Password, Phase 7 connects
+Change Role, and Phase 8 connects Enable/Disable to the server-side mutation
+boundary described below. See the Phase 4 report for the historical
+presentation baseline, the Phase 5 report for Add User, the Phase 7 report for
+role mutation, and the Phase 8 report for account status.
 
 ## Phase 5 Add User
 
@@ -252,6 +264,35 @@ The server remains authoritative regardless of UI visibility. The existing
 Auth.js JWT/session-version revalidation invalidates stale USER/ADMIN sessions
 after a role change; no new authentication or session architecture was added.
 
+## Phase 8 Account Status Management
+
+Enable/Disable is now an ADMIN-only server action that accepts only
+`targetUserId` and canonical `desiredStatus` (`ACTIVE` or `DISABLED`). The actor
+comes from the authenticated session. The target, current status, role, and
+active-administrator count are re-read inside the existing serializable
+transaction; the actor and target plus all active-admin rows are locked with
+`FOR UPDATE`.
+
+The status policy rejects USER or DISABLED actors, self-disable, invalid or
+missing targets/statuses, no-op transitions, and any disablement that would
+remove the last ACTIVE ADMIN. Enable/Disable never changes role, username, or
+email. A DISABLED ADMIN can be enabled by another ACTIVE ADMIN and remains an
+ADMIN.
+
+Successful status changes update only `status` and `updatedAt` through
+`securityVersionUpdate()`, then write exactly one `USER_ENABLED` or
+`USER_DISABLED` audit row with minimal `fromStatus`/`toStatus` metadata in the
+same transaction. Audit failure rolls the status and session-version update
+back. Auth.js login and session revalidation reject DISABLED accounts, so an
+existing target session is invalidated after disablement and a re-enabled user
+must complete the normal login lifecycle.
+
+The Enable/Disable dialog now submits through `useActionState`, shows the
+current status and safe target identity, blocks duplicate submission, reports
+safe feedback, closes after success, and refreshes the list. The current
+administrator and only ACTIVE ADMIN do not receive a destructive disable action
+in the UI; server policy remains authoritative.
+
 ## Laravel behavior mapping
 
 | Laravel behavior | Active Next.js implementation |
@@ -331,6 +372,15 @@ canonical input validation, no-op behavior, role/security-version mutation,
 database writes or network requests. The disposable and browser runtime checks
 are available through `user-management:role-management:verify:disposable` and
 `user-management:role-management:verify:e2e`; both use only temporary local
+fixtures and clean up after completion.
+
+`user-management:status-management:verify` covers the status policy matrix,
+canonical input validation, self/no-op/last-admin protection, status/security
+version mutation, role preservation, `USER_ENABLED`/`USER_DISABLED` metadata,
+rollback, and UI/server source boundaries without database writes or network
+requests. The disposable and browser runtime checks are available through
+`user-management:status-management:verify:disposable` and
+`user-management:status-management:verify:e2e`; both use only temporary local
 fixtures and clean up after completion.
 
 The Phase 4 report retains its historical fixture-backed findings. The Phase 5
@@ -536,3 +586,61 @@ authorized isolated test target or redesign that verifier check before sending
 any signed test token. Do not suppress `CredentialsSignin`, weaken password
 verification, bypass CSRF/session validation, or change production user data
 to make the log disappear.
+
+## 24. Phase 9 Audit Log and session-security verification
+
+Phase 9 adds the read-only `/pengaturan/audit-log` route for ACTIVE ADMIN
+accounts. The route and its server query use the existing `requireAdminUser()`
+boundary. Its query selects only the allowlisted audit fields and actor/target
+identity/status relations, uses bounded pagination (default 25, maximum 100),
+fixed newest-first ordering, and validated action/search/date filters. Raw JSON
+metadata is not rendered.
+
+The Phase 5-8 mutation writers remain the only audit writers. Their exact safe
+metadata contract is `USER_CREATED {username, role}`, `PASSWORD_RESET {}`,
+`ROLE_CHANGED {fromRole, toRole}`, and status transitions
+`{fromStatus, toStatus}`. Passwords, hashes, tokens, cookies, JWTs, secrets,
+headers, and security-version internals are excluded. Existing audit foreign
+keys remain `ON DELETE RESTRICT`.
+
+Focused, disposable PostgreSQL, and local Playwright checks passed for exact
+one-row audit integrity, rejected/no-op zero rows, rollback, sensitive-field
+scanning, read authorization, filters, pagination, password-reset/role/status
+stale-session rejection, disabled-login rejection, and logout. Auth.js
+Credentials/JWT, two-hour max age, session callback revalidation, and the
+legacy Prisma `Session` model contract were not replaced.
+
+Phase 9 Production gate:
+
+```text
+Production migration = NOT PERFORMED
+Production mutation = NOT PERFORMED
+Production audit read = NOT PERFORMED
+```
+
+Evidence is recorded in `docs/PHASE9_AUDIT_LOG_SESSION_SECURITY_2026-09-08.md`.
+
+## 25. Phase 10 full validation and production-readiness gate
+
+Phase 10 is a validation-only release gate. It preserves the Auth.js
+Credentials/JWT architecture, the production schema/migration boundary, the
+ACTIVE ADMIN/USER authorization matrix, the serializable user-management
+transactions, and the read-only Audit Log contract.
+
+The disposable Phase 10 verifier additionally executes the production
+migration artifact only against a temporary loopback PostgreSQL cluster. It
+checks legacy username backfill and role mapping, password/email preservation,
+audit relations/indexes, fail-closed collision/unknown-role behavior, and
+cross-mutation concurrency. It never loads `.env.local` and never targets
+Production.
+
+Evidence is recorded in
+`docs/PHASE10_FULL_VALIDATION_PRODUCTION_READINESS_2026-09-08.md`.
+
+```text
+Production migration = NOT PERFORMED
+Production mutation = NOT PERFORMED
+Production audit read = NOT PERFORMED
+Production user read = NOT PERFORMED
+Production deployment = NOT PERFORMED
+```

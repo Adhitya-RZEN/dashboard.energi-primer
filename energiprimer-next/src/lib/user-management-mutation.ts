@@ -6,11 +6,13 @@ import {
 
 import {
   ADMIN_ROLE,
+  isAuthorizationStatus,
   isDashboardRole,
   securityVersionUpdate,
   USER_ROLE,
 } from "./authorization-policy";
 import type { AuthorizationRole } from "./authorization-policy";
+import type { AuthorizationStatus } from "./authorization-policy";
 import type { UserManagementTransaction } from "./authorization";
 import { UserManagementDuplicateError } from "./user-management-errors";
 import type { NormalizedCreateUserInput } from "./user-management-validation";
@@ -64,6 +66,26 @@ const roleChangeUserSelect = {
 } as const;
 
 export type RoleChangeUserRecord = {
+  id: bigint;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  updatedAt: Date | null;
+};
+
+const statusChangeUserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+  updatedAt: true,
+} as const;
+
+export type StatusChangeUserRecord = {
   id: bigint;
   username: string;
   name: string;
@@ -209,6 +231,56 @@ export async function changeUserRoleAndAudit(
       metadata: {
         fromRole,
         toRole: updatedUser.role,
+      },
+    },
+    select: { id: true },
+  });
+
+  return updatedUser;
+}
+
+/**
+ * Update only the locked target status/security version and write the matching
+ * USER_ENABLED or USER_DISABLED audit row in the caller's transaction.
+ */
+export async function changeUserStatusAndAudit(
+  tx: UserManagementTransaction,
+  actorUserId: bigint,
+  targetUserId: bigint,
+  fromStatus: UserStatus,
+  nextStatus: AuthorizationStatus,
+  now = new Date(),
+): Promise<StatusChangeUserRecord> {
+  if (
+    !isAuthorizationStatus(fromStatus) ||
+    !isAuthorizationStatus(nextStatus) ||
+    fromStatus === nextStatus
+  ) {
+    throw new Error("Invalid status transition");
+  }
+
+  const status =
+    nextStatus === "ACTIVE" ? UserStatus.ACTIVE : UserStatus.DISABLED;
+  const updatedUser = await tx.user.update({
+    where: { id: targetUserId },
+    data: {
+      status,
+      ...securityVersionUpdate(now),
+    },
+    select: statusChangeUserSelect,
+  });
+
+  await tx.userAuditLog.create({
+    data: {
+      actorUserId,
+      targetUserId: updatedUser.id,
+      action:
+        status === UserStatus.ACTIVE
+          ? UserAuditAction.USER_ENABLED
+          : UserAuditAction.USER_DISABLED,
+      metadata: {
+        fromStatus,
+        toStatus: updatedUser.status,
       },
     },
     select: { id: true },

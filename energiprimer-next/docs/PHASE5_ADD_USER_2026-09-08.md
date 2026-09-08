@@ -5,9 +5,10 @@
 **Scope:** Add User only; no production migration or live account mutation
 
 > Historical scope note: Phase 6 supersedes only the Reset Password deferral
-> recorded here, and Phase 7 later connects Change Role. The Add User
-> implementation and its limitations remain the Phase 5 contract. See
-> `PHASE7_ROLE_MANAGEMENT_2026-09-08.md`.
+> recorded here, Phase 7 later connects Change Role, and Phase 8 later connects
+> Enable/Disable. The Add User
+> implementation and its limitations remain the Phase 5 contract. See the
+> Phase 7 and Phase 8 reports for the later role/status flows.
 
 ## Objective and boundary
 
