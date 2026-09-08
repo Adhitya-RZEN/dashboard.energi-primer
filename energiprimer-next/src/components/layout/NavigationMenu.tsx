@@ -7,6 +7,7 @@ import type { Route } from "next";
 
 import type { NavigationIconName, NavigationItem } from "@/types/navigation";
 import { getDashboardTheme } from "@/components/dashboard/dashboard-themes";
+import { ADMIN_ROLE } from "@/lib/authorization-policy";
 
 type NavigationSection = {
   label: string;
@@ -70,6 +71,14 @@ const navigationSections: NavigationSection[] = [
         description: "Preferensi dan profil",
         icon: "settings",
         available: true,
+      },
+      {
+        href: "/pengaturan/users",
+        label: "User Management",
+        description: "Kelola akses pengguna",
+        icon: "users",
+        available: true,
+        adminOnly: true,
       },
     ],
   },
@@ -172,17 +181,41 @@ function NavigationIcon({ name }: { name: NavigationIconName }) {
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5v.1h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1-2.8-2.8.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1L7 4.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5v-.1h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1 2.8 2.8-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a2 2 0 0 0-1.3 1Z" />
         </svg>
       );
+    case "users":
+      return (
+        <svg
+          aria-hidden="true"
+          className="size-5 shrink-0"
+          viewBox="0 0 24 24"
+          {...commonProps}
+        >
+          <path d="M16 21v-1.5a4.5 4.5 0 0 0-4.5-4.5h-3A4.5 4.5 0 0 0 4 19.5V21" />
+          <circle cx="10" cy="7" r="3.5" />
+          <path d="M16 4.5a3.5 3.5 0 0 1 0 6.8M18 15.2a4.5 4.5 0 0 1 2 4.3V21" />
+        </svg>
+      );
   }
 }
 
-export function NavigationMenu() {
+type NavigationMenuProps = {
+  role?: string | null;
+};
+
+export function NavigationMenu({ role }: NavigationMenuProps) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const feedbackTheme = getDashboardTheme(pendingHref ?? pathname);
 
   return (
     <nav aria-label="Primary navigation">
-      {navigationSections.map((section, sectionIndex) => (
+      {navigationSections.map((section, sectionIndex) => {
+        const visibleItems = section.items.filter(
+          (item) => !item.adminOnly || role === ADMIN_ROLE,
+        );
+
+        if (visibleItems.length === 0) return null;
+
+        return (
         <div
           key={section.label}
           className={
@@ -193,7 +226,7 @@ export function NavigationMenu() {
             {section.label}
           </p>
           <ul className="space-y-1">
-            {section.items.map((item) => {
+            {visibleItems.map((item) => {
               const isActive = Boolean(
                 item.href &&
                 (pendingHref === item.href ||
@@ -256,7 +289,8 @@ export function NavigationMenu() {
             })}
           </ul>
         </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }

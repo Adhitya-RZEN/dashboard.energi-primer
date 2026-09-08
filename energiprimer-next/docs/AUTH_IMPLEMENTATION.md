@@ -5,6 +5,12 @@
 >
 > Phase 2 data-model update (2026-09-08): see
 > [`PHASE2_DATABASE_DATA_MODEL_2026-09-08.md`](./PHASE2_DATABASE_DATA_MODEL_2026-09-08.md).
+>
+> Phase 3 authorization/security policy update (2026-09-08): see
+> [`PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md`](./PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md).
+>
+> Phase 4 User Management UI update (2026-09-08): see
+> [`PHASE4_USER_MANAGEMENT_UI_2026-09-08.md`](./PHASE4_USER_MANAGEMENT_UI_2026-09-08.md).
 
 ## Status
 
@@ -13,7 +19,7 @@
 - **Production verification:** Phase 6K deployment/auth/dashboard checks PASS;
   Phase 6L post-checks retained the authenticated dashboard result
 - **Reference application:** Laravel remains an immutable reference only
-- **Database:** Existing PostgreSQL/Supabase `users` data; Phase 2 additive user-model migration prepared, not applied to production
+- **Database:** Existing PostgreSQL/Supabase `users` data; Phase 2 migration prepared, Phase 3 policy requires the new status column before deployment
 
 ## Active architecture
 
@@ -30,16 +36,21 @@ src/proxy.ts + protected layout + server auth()
 ```
 
 Auth.js owns credentials callback, CSRF, sign-in/sign-out, redirect handling,
-and the JWT session boundary. Prisma reads the existing `users` table and only
-authorizes the `ADMIN` role. The Phase 2 model represents roles as `ADMIN` and
-`USER`, and account state as `ACTIVE` or `DISABLED`; status enforcement remains
-deferred. Passwords are compared with `bcryptjs`; plaintext passwords are never
-sent to the client or stored.
+and the JWT session boundary. Prisma reads the existing `users` table and
+allows only `ACTIVE` `ADMIN`/`USER` accounts through the authentication and
+dashboard boundaries. The reusable server-side policy authorizes `ADMIN` for
+future User Management resources. Passwords are compared with `bcryptjs`;
+plaintext passwords are never sent to the client or stored.
 
 The Phase 2 migration adds a unique `username` backfilled from the lowercase
 email local-part, preserves `password`, `email`, `last_login_at`, and existing
 timestamps, and adds the `user_audit_logs` table. It does not add user-management
 UI or mutation actions.
+
+Disabled accounts are rejected at login and during JWT session revalidation.
+Role/status changes must advance `updatedAt` so the existing session-version
+check invalidates older JWTs. The legacy `Session` table is not used as an
+Auth.js adapter.
 
 ## Active files
 
@@ -49,13 +60,65 @@ UI or mutation actions.
 - `src/proxy.ts` — early guest and role protection for dashboard paths.
 - `src/app/api/auth/[...nextauth]/route.ts` — Auth.js route handler.
 - `src/app/(protected)/layout.tsx` — repeated server-side authentication and
-  admin authorization boundary.
+  active dashboard authorization boundary.
+- `src/lib/authorization-policy.ts` — pure role/status, self-target, and
+  last-admin policy with deterministic error codes.
+- `src/lib/authorization.ts` — server-only session/admin guards and the
+  serializable transaction/row-lock path for future user mutations.
 - `src/app/login/*` — login form and action.
 - `src/app/password/change/*` — authenticated password-change flow.
 - `src/lib/auth-tokens.ts` — non-recovery token used by the existing password
   change compatibility path.
 - `src/lib/auth-security.ts` and `src/lib/login-throttle.ts` — redirect,
   email-validation, and persistent login-throttle helpers.
+
+Additional Phase 4 UI files are:
+
+- `src/app/(protected)/pengaturan/users/*` — ADMIN-only User Management route,
+  route loading state, and safe error boundary.
+- `src/components/user-management/*` — presentation-only table, filters,
+  action menu, dialogs, fixture boundary, and accessible modal primitives.
+- `scripts/verify-user-management-ui.ts` — zero-write static UI boundary
+  verification.
+
+## Phase 3 authorization policy
+
+`src/lib/authorization-policy.ts` contains the pure role/status, self-target,
+and last-admin guards. `src/lib/authorization.ts` contains server-only active
+session/admin guards and the serializable transaction/row-lock path for future
+user mutations. The protected layout and proxy use the active dashboard policy;
+future User Management resources must use the ADMIN policy.
+
+Disabled accounts are rejected at login and during JWT session revalidation.
+Role/status mutations must advance `updatedAt` so the existing session-version
+check invalidates older JWTs. The legacy `Session` table is not an Auth.js
+adapter.
+
+## Phase 4 User Management UI
+
+The current presentation route is `/pengaturan/users`. The server page calls
+`requireAdminUser()` before rendering, and the shell passes the authenticated
+role to navigation so the `User Management` entry is only shown to `ADMIN`.
+The page still has a server-side boundary; hiding the link is not treated as
+authorization.
+
+The page contains a responsive horizontal-scroll user table with Username,
+Name, Email, Role, Status, and Actions columns. Search covers username, name,
+and email; Role and Status filters can be combined. The action menu opens
+presentation-only Edit User, Reset Password, Change Role, and Enable/Disable
+dialogs. Add User includes client-side validation feedback, but no form submits
+to a server action or changes the database.
+
+The table currently uses an isolated UI development fixture because no safe
+read-only user-list service existed when Phase 4 was implemented and the Phase
+2 user migration remains an operator-approved deployment step. The fixture is
+explicitly labeled `UI DEVELOPMENT FIXTURE — NOT PRODUCTION DATA` and contains
+no password, token, or secret fields. The authorized current administrator's
+display name/email are used only to exercise the self-target presentation.
+
+All mutation behavior, audit-event writing, password reset delivery, and
+production user reads remain deferred. See the Phase 4 report for validation
+and limitations.
 
 ## Laravel behavior mapping
 
@@ -65,7 +128,7 @@ UI or mutation actions.
 | Web session guard | Auth.js JWT httpOnly cookie, two-hour max age |
 | `last_login_at` update | Prisma update after valid credentials |
 | Logout/invalidation | Auth.js sign-out and session-version checks |
-| `EnsureAdmin` middleware | Proxy `authorized` callback plus protected layout |
+| `EnsureAdmin` middleware | Active dashboard proxy/layout boundary; reusable ADMIN policy for admin-only resources |
 | `/login` | `src/app/login/page.tsx` |
 | `/password/change` | Authenticated page/action with current-password check |
 
@@ -105,6 +168,15 @@ cron authorization, protected route checks, session revalidation, login
 throttling, and security headers. Live credential E2E is an operator action and
 must use an isolated test account/database; it is not run by the Phase 6C
 zero-write remediation.
+
+`authz:security:verify` covers the Phase 3 role/status access matrix,
+self-target guards, last-admin guards, session-version primitive, and the
+transaction-safe future mutation path without database writes.
+
+`user-management:ui:verify` covers the Phase 4 route guard, role-aware
+navigation wiring, table/filter/dialog surface, accessibility hooks, fixture
+boundary, and absence of UI database mutations. It performs no database or
+network work.
 
 Historical Phase 4/5 reports retain their original findings and must not be
 treated as the current authentication contract.

@@ -2,8 +2,12 @@
 
 import bcrypt from "bcryptjs";
 
-import { auth, signOut } from "@/auth";
+import { signOut } from "@/auth";
 import { createRememberToken } from "@/lib/auth-tokens";
+import {
+  isAuthorizationPolicyError,
+  requireActiveSession,
+} from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 
 export type ChangePasswordState = {
@@ -14,9 +18,14 @@ export async function changePassword(
   _previousState: ChangePasswordState,
   formData: FormData,
 ): Promise<ChangePasswordState> {
-  const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ADMIN") {
-    return { error: "Sesi tidak valid. Silakan login kembali." };
+  let session;
+  try {
+    ({ session } = await requireActiveSession());
+  } catch (error) {
+    if (isAuthorizationPolicyError(error)) {
+      return { error: "Sesi tidak valid. Silakan login kembali." };
+    }
+    throw error;
   }
 
   const currentPassword = String(formData.get("current_password") ?? "");

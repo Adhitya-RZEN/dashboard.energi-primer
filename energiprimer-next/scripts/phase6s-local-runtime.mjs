@@ -534,7 +534,7 @@ async function runBrowserMatrix() {
       });
     }
 
-    await page.getByLabel("Email admin").fill(fixtureEmail);
+    await page.getByLabel("Email").fill(fixtureEmail);
     await page.getByLabel("Password").fill(fixturePassword);
     await Promise.all([
       page.waitForURL(
@@ -656,7 +656,7 @@ async function runBrowserMatrix() {
     };
 
     await gotoRoute("/login?phase6s_invalid=1");
-    await page.getByLabel("Email admin").fill(fixtureEmail);
+    await page.getByLabel("Email").fill(fixtureEmail);
     await page.getByLabel("Password").fill("wrong-password-for-phase6s");
     await page.getByRole("button", { name: "Login", exact: true }).click();
     await page.getByText("Email atau password tidak valid.").waitFor({

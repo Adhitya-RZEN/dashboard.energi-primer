@@ -30,6 +30,9 @@ dalam Phase 2. Production preflight tetap fail-closed terhadap data operation
 lainnya dan hanya mengizinkan controlled backfill username yang persis mengikuti
 aturan lokal-part email Phase 2.
 
+Enforcement status/role dan transaction-safe last-admin policy berada pada
+Phase 3; lihat [`PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md`](./PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md).
+
 ## Migration history policy (Phase 6B)
 
 Repository ini memiliki dua history yang sengaja dipisahkan dan tidak boleh

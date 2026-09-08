@@ -5,7 +5,8 @@ export type NavigationIconName =
   | "solar"
   | "stock"
   | "target"
-  | "settings";
+  | "settings"
+  | "users";
 
 export type NavigationItem = {
   href: string | null;
@@ -13,4 +14,5 @@ export type NavigationItem = {
   description: string;
   icon: NavigationIconName;
   available: boolean;
+  adminOnly?: boolean;
 };

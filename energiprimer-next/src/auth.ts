@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { UserRole } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { headers } from "next/headers";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth-security";
 import { consumeLoginAttempt, getRequestIp } from "@/lib/login-throttle";
 import { prisma } from "@/lib/prisma";
+import { isDashboardRole } from "@/lib/authorization-policy";
 
 export const {
   handlers: { GET, POST },
@@ -54,7 +55,8 @@ export const {
         const user = await prisma.user.findFirst({
           where: {
             email: { equals: email, mode: "insensitive" },
-            role: UserRole.ADMIN,
+            role: { in: [UserRole.ADMIN, UserRole.USER] },
+            status: UserStatus.ACTIVE,
           },
           select: {
             id: true,
@@ -62,6 +64,7 @@ export const {
             email: true,
             password: true,
             role: true,
+            status: true,
             updatedAt: true,
           },
         });
@@ -88,7 +91,7 @@ export const {
   callbacks: {
     authorized({ auth: session, request }) {
       if (request.nextUrl.pathname.startsWith("/dashboard")) {
-        return session?.user?.role === UserRole.ADMIN;
+        return isDashboardRole(session?.user?.role);
       }
 
       return true;
@@ -110,25 +113,26 @@ export const {
 
       if (session.user && subject) {
         session.user.id = subject;
-        session.user.role =
-          token.role === UserRole.ADMIN || token.role === UserRole.USER
-            ? token.role
-            : "";
+        session.user.role = isDashboardRole(token.role) ? token.role : "";
       }
 
       if (session.user && /^\d+$/.test(subject)) {
         const currentUser = await prisma.user.findUnique({
           where: { id: BigInt(subject) },
-          select: { role: true, updatedAt: true },
+          select: { role: true, status: true, updatedAt: true },
         });
 
         const currentVersion = currentUser?.updatedAt?.toISOString() ?? "";
         const tokenVersion =
           typeof token.sessionVersion === "string" ? token.sessionVersion : null;
+        const tokenRole = isDashboardRole(token.role) ? token.role : null;
 
         if (
           !currentUser ||
-          currentUser.role !== UserRole.ADMIN ||
+          currentUser.status !== UserStatus.ACTIVE ||
+          !isDashboardRole(currentUser.role) ||
+          tokenRole === null ||
+          currentUser.role !== tokenRole ||
           tokenVersion === null ||
           currentVersion !== tokenVersion
         ) {

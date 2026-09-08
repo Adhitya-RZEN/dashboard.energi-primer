@@ -23,7 +23,7 @@ export function AppShell({ children, user, theme }: AppShellProps) {
       </a>
       <SiteHeader user={user} theme={theme} />
       <div className="mx-auto grid w-full max-w-[1600px] flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <Sidebar />
+        <Sidebar role={user.role} />
         <main
           id="main-content"
           className="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"

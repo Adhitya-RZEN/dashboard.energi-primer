@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { auth } from "@/auth";
 import { AuthShell } from "@/components/layout/AuthShell";
+import {
+  isAuthorizationPolicyError,
+  requireActiveSession,
+} from "@/lib/authorization";
 
 import { ChangePasswordForm } from "./ChangePasswordForm";
 
 export default async function ChangePasswordPage() {
-  const session = await auth();
-  if (!session) redirect("/login?callbackUrl=/password/change");
-  if (session.user.role !== "ADMIN") redirect("/login?error=unauthorized");
+  try {
+    await requireActiveSession();
+  } catch (error) {
+    if (isAuthorizationPolicyError(error)) {
+      if (error.code === "UNAUTHENTICATED") {
+        redirect("/login?callbackUrl=/password/change");
+      }
+      redirect("/login?error=unauthorized");
+    }
+    throw error;
+  }
 
   return (
     <AuthShell>

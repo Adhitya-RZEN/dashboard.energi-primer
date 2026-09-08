@@ -98,9 +98,10 @@ function testSourceSecurity() {
     "Auth.js redirect callback is explicitly origin-safe",
   );
   assert(
-    authSource.includes("currentUser.role !== UserRole.ADMIN") &&
+    authSource.includes("currentUser.status !== UserStatus.ACTIVE") &&
+      authSource.includes("currentUser.role !== tokenRole") &&
       authSource.includes("currentVersion !== tokenVersion"),
-    "session authorization revalidates current role and session version",
+    "session authorization revalidates current status, role, and session version",
   );
   assert(
     authSource.includes('strategy: "jwt"') &&
@@ -123,15 +124,15 @@ function testSourceSecurity() {
     "sync endpoint enforces server-side cron authorization",
   );
   assert(
-    protectedLayoutSource.includes("await auth()") &&
-      protectedLayoutSource.includes('session.user.role !== "ADMIN"'),
-    "protected route group repeats server-side authentication and role checks",
+    protectedLayoutSource.includes("requireDashboardUser") &&
+      protectedLayoutSource.includes("isAuthorizationPolicyError"),
+    "protected route group uses the active dashboard authorization policy",
   );
   assert(
     proxySource.includes("isProtectedPath(pathname)") &&
-      proxySource.includes('request.auth?.user?.role !== "ADMIN"') &&
+      proxySource.includes("isDashboardRole(request.auth?.user?.role)") &&
       proxySource.includes("NextResponse.redirect(loginUrl)"),
-    "proxy rejects guest and non-admin requests before protected rendering",
+    "proxy rejects guest, disabled, and unsupported sessions before protected rendering",
   );
   assert(
     nextConfigSource.includes('X-Content-Type-Options') &&

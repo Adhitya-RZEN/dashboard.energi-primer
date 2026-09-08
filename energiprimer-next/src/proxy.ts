@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextMiddleware, NextRequest } from "next/server";
 
 import { auth } from "@/auth";
+import { isDashboardRole } from "@/lib/authorization-policy";
 
 const PROTECTED_PATH_PREFIXES = [
   "/dashboard",
@@ -67,9 +68,10 @@ const protectedProxy = auth((request) => {
 
   // A custom auth() callback owns the response path. The Auth.js
   // callbacks.authorized result is not applied after this callback runs, so
-  // reject unauthenticated/non-admin requests before any protected layout or
-  // dashboard child can render.
-  if (isProtectedPath(pathname) && request.auth?.user?.role !== "ADMIN") {
+  // Reject guests, disabled sessions, and unsupported roles before any
+  // protected layout or dashboard child can render. Auth.js session
+  // revalidation has already checked the current account status.
+  if (isProtectedPath(pathname) && !isDashboardRole(request.auth?.user?.role)) {
     const loginUrl = new URL("/login", request.url);
     if (request.auth?.user) {
       loginUrl.searchParams.set("error", "unauthorized");

@@ -59,7 +59,7 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
               Menu
             </summary>
             <div className="absolute right-0 z-30 mt-2 max-h-[calc(100vh-5rem)] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-              <NavigationMenu />
+              <NavigationMenu role={user.role} />
             </div>
           </details>
         </div>

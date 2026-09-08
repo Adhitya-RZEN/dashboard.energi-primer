@@ -19,14 +19,14 @@ export function LoginForm() {
           className="block text-sm font-semibold text-slate-700"
           htmlFor="email"
         >
-          Email admin
+          Email
         </label>
         <input
           autoComplete="email"
           className="mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-700 focus:ring-2 focus:ring-sky-100"
           id="email"
           name="email"
-          placeholder="admin@example.com"
+          placeholder="nama@contoh.com"
           required
           type="email"
         />

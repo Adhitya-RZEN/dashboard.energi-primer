@@ -31,7 +31,7 @@ export function AuthShell({ children }: AuthShellProps) {
         </Link>
         {children}
         <p className="mt-5 text-center text-xs leading-5 text-slate-500">
-          Akun admin digunakan bersama oleh tim yang berwenang.
+          Akses hanya tersedia untuk akun yang terdaftar dan aktif.
         </p>
       </div>
     </main>

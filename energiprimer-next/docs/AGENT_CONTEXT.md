@@ -11,6 +11,20 @@ migration is prepared and read-only preflight verified with zero writes, but it
 is pending operator-approved deployment. See
 `docs/PHASE2_DATABASE_DATA_MODEL_2026-09-08.md`.
 
+Phase 3 (2026-09-08) adds the active account/session boundary and reusable
+authorization policy. Active `ADMIN` and `USER` accounts can access the
+dashboard; User Management is ADMIN-only by policy; `DISABLED` accounts are
+rejected at login and JWT revalidation. No User Management mutation or audit
+writer exists yet. See
+`docs/PHASE3_AUTHORIZATION_SECURITY_POLICY_2026-09-08.md`.
+
+Phase 4 (2026-09-08) adds the presentation-only User Management UI at
+`/pengaturan/users`. The page is server-guarded with `requireAdminUser()` and
+the navigation entry is role-aware, but no user-management mutation or audit
+writer exists. Its table uses an explicitly labeled isolated UI fixture until a
+safe read-only user query is introduced after the pending Phase 2 migration.
+See `docs/PHASE4_USER_MANAGEMENT_UI_2026-09-08.md`.
+
 ## Evidence status
 
 - **VERIFIED** means source/configuration or a local command proves it.
@@ -91,7 +105,7 @@ Most page reads are server-component reads. Client components handle forms, char
 ```text
 energiprimer-next/
 ├── src/app/                 App Router pages, layouts, actions, API routes
-├── src/components/          Shared shell, auth UI, charts, dashboard primitives
+├── src/components/          Shared shell, auth UI, dashboard, user-management UI
 ├── src/lib/                 Prisma, Google API, auth security, throttling
 ├── src/services/            Dashboard reads, reports, import, parser, sync
 ├── src/types/               Shared TypeScript types and Auth.js declarations
@@ -120,7 +134,18 @@ Public routes include `/login`. The authenticated `/password/change` route is
 protected. Other dashboard detail pages include `/data-batu-bara`,
 `/monitoring`, `/laporan`, and `/pengaturan`.
 
-The protected layout performs the server-side session/admin check. Dashboard filter state uses month/year/day query parameters and HTTP-only cookies maintained by `src/proxy.ts`. Dashboard pages render loading/error states and typed KPI/series data.
+The protected layout performs the server-side active dashboard policy check.
+Dashboard filter state uses month/year/day query parameters and HTTP-only
+cookies maintained by `src/proxy.ts`. Dashboard pages render loading/error
+states and typed KPI/series data.
+
+`/pengaturan/users` is an ADMIN-only presentation route. Its server page calls
+`requireAdminUser()`, while `NavigationMenu` receives the authenticated role
+from `AppShell` and hides the User Management entry from `USER` accounts. The
+page uses a client component for local search/filter/dialog state, a
+horizontal-scroll table on narrow screens, and route-level loading/error
+states. Current Phase 4 data is the labeled fixture in
+`src/components/user-management/fixture.ts`; it is not production data.
 
 `/data-batu-bara`, `/monitoring`, and `/laporan` are protected but not linked in the current navigation. Report/import/export/PDF controls are disabled placeholders. Do not interpret UI hiding or disabled buttons as backend authorization.
 
@@ -133,7 +158,17 @@ There are two backend styles:
 
 Important server modules:
 
-- `src/auth.ts`: Auth.js provider, throttle, bcrypt, JWT/session callbacks.
+- `src/auth.ts`: Auth.js provider, throttle, bcrypt, JWT/session callbacks, and
+  active role/status revalidation.
+- `src/lib/authorization-policy.ts`: pure authorization and invariant policy.
+- `src/lib/authorization.ts`: server-only active/admin guards and transaction-safe
+  future user-mutation guard path.
+- `src/components/user-management/UserManagementClient.tsx`: presentation-only
+  user table, filters, action menu, dialogs, and accessible modal behavior.
+- `src/components/user-management/fixture.ts`: isolated non-production UI
+  fixture; never add passwords, tokens, or secrets to it.
+- `src/app/(protected)/pengaturan/users/page.tsx`: server-side ADMIN guard and
+  fixture handoff; no mutation code.
 - `src/services/overview.ts`: query normalization and data-source selection.
 - `src/services/overview-postgres.ts`: PostgreSQL KPI and series aggregation.
 - `src/services/google-sheets-overview.ts`: optional direct Sheets adapter.
@@ -168,7 +203,7 @@ explicitly guards the production schema/history.
 The active flow is:
 
 ```text
-Credentials → Auth.js authorize → throttle → Prisma ADMIN user → bcrypt
+Credentials → Auth.js authorize → throttle → Prisma ACTIVE ADMIN/USER → bcrypt
            → JWT (id/role/sessionVersion) → session callback re-reads user
 ```
 
@@ -183,9 +218,17 @@ compatibility artifact until a separate migration is approved.
 
 ## 9. Authorization
 
-Authorization is server-side for pages: `(protected)/layout.tsx` calls `auth()` and requires `session.user.role === "admin"`. Auth.js `authorize` also selects only admin users, and the session callback rechecks the current user and session version.
+Authorization is server-side for pages: `(protected)/layout.tsx` requires an
+active supported dashboard role, while the User Management page additionally
+calls `requireAdminUser()`. Auth.js `authorize` and the session callback
+recheck active status, supported role, and session version.
 
-The proxy matcher covers `/dashboard/:path*` for Auth.js/filter-cookie behavior, while the protected layout covers the complete protected route group. The sync API is not user-session protected; its boundary is the deployment gate followed by `CRON_SECRET`. Production and explicit local development are allowed; Preview and unknown deployment identities are denied before authentication or sync execution.
+The proxy matcher covers protected paths, including `/pengaturan/users`, for
+early guest/unsupported-session rejection; the page-level ADMIN check remains
+the User Management authorization boundary. The sync API is not user-session
+protected; its boundary is the deployment gate followed by `CRON_SECRET`.
+Production and explicit local development are allowed; Preview and unknown
+deployment identities are denied before authentication or sync execution.
 
 Supabase RLS/policies are UNKNOWN and must be verified before any browser Supabase access is enabled. No browser Supabase helper is part of the active application source.
 
@@ -311,6 +354,10 @@ Current local results:
 - Parser/mapping/schema/retry/cron static checks: PASS.
 - Preview write-safety check: PASS; Preview, unknown, and production-without-deployment-identity are denied before sync.
 - Auth security check: PASS after normalizing CRLF/LF source text and verifying the atomic throttle boundary; a single valid Production Auth.js E2E is recorded in Phase 6V without exposing credential values.
+- Authorization security check: PASS; active ADMIN/USER dashboard access,
+  disabled-session rejection, self-target/last-admin guards, and transaction
+  locking are covered without database writes or network requests.
+- Next.js production build: PASS after the Phase 3 policy integration.
 - Environment preflight: PASS against the local environment without printing secret values.
 - Production deployment, Auth.js/dashboard, migration status, and Cron were
   verified in Phase 6K; one controlled sync was verified in Phase 6L.
