@@ -4,7 +4,11 @@ import {
   UserStatus,
 } from "@prisma/client";
 
-import { ADMIN_ROLE, USER_ROLE } from "./authorization-policy";
+import {
+  ADMIN_ROLE,
+  securityVersionUpdate,
+  USER_ROLE,
+} from "./authorization-policy";
 import type { UserManagementTransaction } from "./authorization";
 import { UserManagementDuplicateError } from "./user-management-errors";
 import type { NormalizedCreateUserInput } from "./user-management-validation";
@@ -18,6 +22,16 @@ const createdUserSelect = {
   status: true,
 } as const;
 
+const resetUserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+  updatedAt: true,
+} as const;
+
 export type CreatedUserRecord = {
   id: bigint;
   username: string;
@@ -25,6 +39,16 @@ export type CreatedUserRecord = {
   email: string;
   role: UserRole;
   status: UserStatus;
+};
+
+export type ResetUserRecord = {
+  id: bigint;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  updatedAt: Date | null;
 };
 
 /**
@@ -94,4 +118,37 @@ export async function createUserAndAudit(
   });
 
   return createdUser;
+}
+
+/**
+ * Update only the target password/security version and write the corresponding
+ * PASSWORD_RESET audit row in the caller's transaction.
+ */
+export async function resetUserPasswordAndAudit(
+  tx: UserManagementTransaction,
+  actorUserId: bigint,
+  targetUserId: bigint,
+  passwordHash: string,
+  now = new Date(),
+): Promise<ResetUserRecord> {
+  const updatedUser = await tx.user.update({
+    where: { id: targetUserId },
+    data: {
+      password: passwordHash,
+      ...securityVersionUpdate(now),
+    },
+    select: resetUserSelect,
+  });
+
+  await tx.userAuditLog.create({
+    data: {
+      actorUserId,
+      targetUserId: updatedUser.id,
+      action: UserAuditAction.PASSWORD_RESET,
+      metadata: {},
+    },
+    select: { id: true },
+  });
+
+  return updatedUser;
 }

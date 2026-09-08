@@ -4,6 +4,10 @@
 **Status:** `PASS_WITH_REVIEW`  
 **Scope:** Add User only; no production migration or live account mutation
 
+> Historical scope note: Phase 6 supersedes only the Reset Password deferral
+> recorded here. The Add User implementation and its limitations remain the
+> Phase 5 contract. See `PHASE6_RESET_PASSWORD_2026-09-08.md`.
+
 ## Objective and boundary
 
 Phase 5 implements the Add User flow end-to-end for the existing ADMIN-only

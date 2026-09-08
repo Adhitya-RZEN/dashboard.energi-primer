@@ -14,6 +14,9 @@
 >
 > Phase 5 Add User update (2026-09-08): see
 > [`PHASE5_ADD_USER_2026-09-08.md`](./PHASE5_ADD_USER_2026-09-08.md).
+>
+> Phase 6 Reset Password update (2026-09-08): see
+> [`PHASE6_RESET_PASSWORD_2026-09-08.md`](./PHASE6_RESET_PASSWORD_2026-09-08.md).
 
 ## Status
 
@@ -85,13 +88,16 @@ User Management files are:
   server/client-safe validation.
 - `src/lib/user-management-errors.ts` — safe duplicate-constraint mapping.
 - `src/lib/user-management-mutation.ts` — transaction-scoped user creation and
-  `USER_CREATED` audit writer with allowlisted selections.
+  password-reset mutations with `USER_CREATED`/`PASSWORD_RESET` audit writers.
 - `src/services/user-management.ts` — ADMIN-guarded, allowlisted user-list
   query.
 - `scripts/verify-user-management-ui.ts` — zero-write static UI boundary
   verification.
 - `scripts/verify-add-user.ts` — zero-database-write Add User validation,
   hashing, audit, rollback, and source-boundary verification.
+- `scripts/verify-reset-password.ts` — zero-database-write Reset Password
+  policy, hashing, session-version, audit, rollback, and source-boundary
+  verification.
 
 ## Phase 3 authorization policy
 
@@ -127,9 +133,10 @@ server-only `listUsersAfterAdminGuard()` query and an allowlisted selection;
 the pending Phase 2 migration is still an operator-approved deployment step.
 The query and UI contain no password, token, or secret fields.
 
-Edit User, Reset Password, Change Role, and Enable/Disable remain deferred.
-See the Phase 4 report for the historical presentation baseline and the Phase 5
-report for the implemented Add User boundary.
+Edit User, Change Role, and Enable/Disable remain deferred. Phase 6 connects
+Reset Password to the server-side mutation boundary described below. See the
+Phase 4 report for the historical presentation baseline and the Phase 5 report
+for the implemented Add User boundary.
 
 ## Phase 5 Add User
 
@@ -158,6 +165,38 @@ migration or account mutation was executed. The implementation therefore
 requires the pending Phase 2 migration before the route can be enabled against
 a database that does not yet have the new columns/table. Local verification is
 recorded in `PHASE5_ADD_USER_2026-09-08.md`.
+
+## Phase 6 Reset Password
+
+Reset Password is an ADMIN-initiated mutation for another user from the same
+`/pengaturan/users` route. `resetPassword()` calls `requireAdminUser()` before
+input validation, accepts only `targetUserId`, `newPassword`, and
+`confirmPassword`, and obtains the actor ID from the authenticated session.
+
+The target is parsed and then loaded/locked inside the Phase 3 serializable
+`withUserManagementTransaction()` path. The actor is re-read and revalidated
+as ACTIVE + ADMIN in that transaction. `assertCanResetPassword()` rejects
+self-targets with `SELF_PASSWORD_RESET`; it permits both ACTIVE and DISABLED
+targets without changing their status or role.
+
+The new password is validated through the shared user-management validation
+module and hashed with `bcryptjs` using 12 rounds before the transaction. The
+transaction updates only `password` and `updatedAt` through
+`securityVersionUpdate()`, then writes one `PASSWORD_RESET` audit row with the
+authenticated actor, target, and empty metadata. The password update and audit
+are atomic; an audit failure rolls back the password update.
+
+Auth.js session revalidation compares each JWT's `sessionVersion` with the
+current user's `updatedAt`, so existing target JWTs become stale after a
+successful reset. The legacy `Session` table, password-reset-token model,
+email delivery, temporary passwords, role, status, and `lastLoginAt` remain
+untouched.
+
+The Reset Password dialog is now a real Server Action form with target
+presentation fields, client/server validation, pending duplicate-submission
+protection, safe errors, cleared password state, and success refresh. It is
+hidden for the current administrator in the row menu; the server self-target
+policy remains mandatory.
 
 ## Laravel behavior mapping
 
@@ -222,9 +261,18 @@ safe duplicate mapping, rollback when audit creation fails, and source-boundary
 checks. It uses synthetic transaction doubles and performs zero database writes
 and zero network requests.
 
+`user-management:reset-password:verify` covers the reset-password validation
+and authorization matrix, self-target policy, disabled-target preservation,
+bcrypt hashing, `updatedAt` security-version update, `PASSWORD_RESET` audit
+contents, rollback on audit/update failure, target/actor lock wiring, and UI
+source boundaries. It uses synthetic transaction doubles and performs zero
+database writes and zero network requests. Live Auth.js session E2E is not run
+when an isolated environment is unavailable.
+
 The Phase 4 report retains its historical fixture-backed findings. The Phase 5
-report distinguishes local implementation checks from production verification;
-neither report authorizes applying the pending migration or mutating an account.
+report retains its Add User scope. The Phase 6 report distinguishes local
+implementation checks from live and production verification; neither report
+authorizes applying the pending migration or mutating a production account.
 
 ## Phase 4A-R2 - Production CredentialsSignin Root-Cause Remediation
 

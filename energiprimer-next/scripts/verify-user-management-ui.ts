@@ -99,6 +99,15 @@ function testPresentationSurface() {
     "table and combined search/filter state are implemented",
   );
   assert(
+    client.includes("resetPassword") &&
+      client.includes('name="targetUserId"') &&
+      client.includes('name="newPassword"') &&
+      client.includes("Resetting...") &&
+      client.includes("Password reset successfully.") &&
+      client.includes("!user.isCurrentUser"),
+    "Reset Password dialog is action-integrated and hidden for the current user",
+  );
+  assert(
     service.includes("requireAdminUser") &&
       service.includes("userListSelect") &&
       service.includes("prisma.user.findMany") &&
@@ -134,8 +143,10 @@ function testNoMutationOrSensitivePersistence() {
   }
   assert(
     client.includes("No changes were saved") &&
-      client.includes("No password was changed"),
-    "presentation actions provide no fake mutation success feedback",
+      client.includes("No role was changed") &&
+      client.includes("No status was changed") &&
+      !client.includes("No password was changed"),
+    "deferred presentation actions provide no fake mutation success feedback",
   );
 }
 

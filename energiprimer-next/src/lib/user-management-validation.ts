@@ -19,6 +19,12 @@ export type CreateUserFieldErrors = Partial<
   Record<CreateUserField, string>
 >;
 
+export type PasswordResetField = "newPassword" | "confirmPassword";
+
+export type PasswordResetFieldErrors = Partial<
+  Record<PasswordResetField, string>
+>;
+
 export type CreateUserInput = {
   username: unknown;
   name: unknown;
@@ -37,6 +43,16 @@ export type NormalizedCreateUserInput = {
   role: string;
 };
 
+export type PasswordResetInput = {
+  newPassword: unknown;
+  confirmPassword: unknown;
+};
+
+export type NormalizedPasswordResetInput = {
+  newPassword: string;
+  confirmPassword: string;
+};
+
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -53,6 +69,38 @@ export function normalizeCreateUserInput(
     // Role is intentionally not lowercased. The server accepts only the
     // explicit enum values ADMIN and USER.
     role: stringValue(input.role).trim(),
+  };
+}
+
+export function normalizePasswordResetInput(
+  input: PasswordResetInput,
+): NormalizedPasswordResetInput {
+  return {
+    newPassword: stringValue(input.newPassword),
+    confirmPassword: stringValue(input.confirmPassword),
+  };
+}
+
+export function validatePasswordResetInput(input: PasswordResetInput) {
+  const normalized = normalizePasswordResetInput(input);
+  const fieldErrors: PasswordResetFieldErrors = {};
+
+  if (!normalized.newPassword) {
+    fieldErrors.newPassword = "Password required";
+  } else if (normalized.newPassword.length < 12) {
+    fieldErrors.newPassword = "Password must be at least 12 characters.";
+  }
+
+  if (!normalized.confirmPassword) {
+    fieldErrors.confirmPassword = "Confirm password required";
+  } else if (normalized.newPassword !== normalized.confirmPassword) {
+    fieldErrors.confirmPassword = "Passwords do not match.";
+  }
+
+  return {
+    input: normalized,
+    fieldErrors,
+    valid: Object.keys(fieldErrors).length === 0,
   };
 }
 

@@ -23,6 +23,7 @@ export type AuthorizationErrorCode =
   | "INVALID_TRANSITION"
   | "SELF_ROLE_CHANGE"
   | "SELF_DISABLE"
+  | "SELF_PASSWORD_RESET"
   | "LAST_ADMIN"
   | "INVALID_POLICY_INPUT";
 
@@ -118,6 +119,20 @@ export function assertAdminUser(
     throw new AuthorizationPolicyError(
       "FORBIDDEN",
       "Administrator access is required.",
+    );
+  }
+}
+
+export function assertCanResetPassword(
+  actor: AuthorizationSubject,
+  target: AuthorizationSubject | null | undefined,
+) {
+  assertAdminUser(actor);
+  assertValidSubject(target);
+  if (sameUser(actor, target)) {
+    throw new AuthorizationPolicyError(
+      "SELF_PASSWORD_RESET",
+      "Resetting your own password from User Management is not permitted.",
     );
   }
 }

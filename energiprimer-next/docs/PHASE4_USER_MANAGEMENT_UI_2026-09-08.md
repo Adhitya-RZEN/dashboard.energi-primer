@@ -5,10 +5,9 @@
 **Scope:** presentation layer only; no user-management database mutation
 
 > Historical baseline: Phase 5 supersedes the fixture-backed data source and
-> connects Add User to a server action. The deferred-dialog and UI findings in
-> this report remain accurate for Edit User, Reset Password, Change Role, and
-> Enable/Disable. See `PHASE5_ADD_USER_2026-09-08.md` for the current Add User
-> contract.
+> connects Add User to a server action. Phase 6 supersedes the Reset Password
+> deferral. The remaining deferred-dialog findings are accurate for Edit User,
+> Change Role, and Enable/Disable. See `PHASE6_RESET_PASSWORD_2026-09-08.md`.
 
 ## UI Implemented
 

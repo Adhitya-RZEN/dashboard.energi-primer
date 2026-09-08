@@ -12,6 +12,7 @@ import {
   USER_ROLE,
   assertActiveUser,
   assertAdminUser,
+  assertCanResetPassword,
   assertCanChangeRole,
   assertCanChangeStatus,
   assertCanManageUser,
@@ -36,6 +37,7 @@ export {
   USER_ROLE,
   assertActiveUser,
   assertAdminUser,
+  assertCanResetPassword,
   assertCanChangeRole,
   assertCanChangeStatus,
   assertCanManageUser,
@@ -195,7 +197,13 @@ async function loadLockedPolicyContext(
   });
   const actor = users.find((user) => user.id === actorUserId);
   const target = users.find((user) => user.id === targetUserId);
-  if (!actor || !target) {
+  if (!actor) {
+    throw new AuthorizationPolicyError(
+      "INVALID_SESSION",
+      "The user authorization actor is unavailable.",
+    );
+  }
+  if (!target) {
     throw new AuthorizationPolicyError(
       "INVALID_TARGET",
       "The user authorization target is unavailable.",
@@ -239,6 +247,19 @@ export async function assertCanChangeRoleInTransaction(
     asPolicySubject(context.target),
     nextRole,
     context.activeAdminCount,
+  );
+  return context;
+}
+
+export async function assertCanResetPasswordInTransaction(
+  tx: UserManagementTransaction,
+  actorId: bigint | string,
+  targetId: bigint | string,
+) {
+  const context = await loadLockedPolicyContext(tx, actorId, targetId);
+  assertCanResetPassword(
+    asPolicySubject(context.actor),
+    asPolicySubject(context.target),
   );
   return context;
 }

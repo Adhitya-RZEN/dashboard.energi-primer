@@ -33,6 +33,8 @@
     "auth:security:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-auth-security.ts",
     "authz:security:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-authorization-security.ts",
     "user-management:add-user:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-add-user.ts",
+    "user-management:reset-password:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-reset-password.ts",
+    "user-management:reset-password:verify:disposable": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-reset-password-disposable.mjs",
     "user-management:ui:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-user-management-ui.ts",
     "ops:verify-env": "node --env-file-if-exists=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-environment.ts",
     "dashboard:verify-cutoff": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-dashboard-cutoff.ts",

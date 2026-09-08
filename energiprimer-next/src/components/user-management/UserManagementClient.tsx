@@ -15,10 +15,14 @@ import { useRouter } from "next/navigation";
 import {
   createUser,
   initialCreateUserState,
+  initialResetPasswordState,
+  resetPassword,
 } from "@/app/(protected)/pengaturan/users/actions";
 import {
   validateCreateUserInput,
   type CreateUserFieldErrors,
+  type PasswordResetFieldErrors,
+  validatePasswordResetInput,
 } from "@/lib/user-management-validation";
 
 import type {
@@ -599,23 +603,44 @@ function EditUserDialog({
 }
 
 type PasswordForm = {
-  password: string;
+  newPassword: string;
   confirmPassword: string;
 };
 
 function ResetPasswordDialog({
   user,
   onClose,
+  onCompleted,
 }: {
   user: UserManagementUser;
   onClose: () => void;
+  onCompleted: () => void;
 }) {
   const [form, setForm] = useState<PasswordForm>({
-    password: "",
+    newPassword: "",
     confirmPassword: "",
   });
-  const [errors, setErrors] = useState<Partial<Record<keyof PasswordForm, string>>>({});
+  const [errors, setErrors] = useState<PasswordResetFieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    resetPassword,
+    initialResetPasswordState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      onCompleted();
+    }
+  }, [onCompleted, state.status]);
+
+  const displayErrors = {
+    ...(pending || state.status !== "error" ? {} : state.fieldErrors),
+    ...errors,
+  };
+  const displayNotice =
+    pending || state.status !== "error"
+      ? notice
+      : state.message ?? notice ?? "Unable to reset password.";
 
   function updateField<K extends keyof PasswordForm>(
     field: K,
@@ -627,67 +652,82 @@ function ResetPasswordDialog({
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextErrors: Partial<Record<keyof PasswordForm, string>> = {};
-    if (!form.password) nextErrors.password = "Password required";
-    if (!form.confirmPassword) {
-      nextErrors.confirmPassword = "Confirm password required";
-    } else if (form.password !== form.confirmPassword) {
-      nextErrors.confirmPassword = "Password mismatch";
+    if (pending) {
+      event.preventDefault();
+      return;
     }
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-    setForm({ password: "", confirmPassword: "" });
+
+    const validation = validatePasswordResetInput(form);
+    setErrors(validation.fieldErrors);
     setNotice(
-      "No password was changed. Password reset is deferred to a later phase.",
+      validation.valid ? null : "Please correct the highlighted fields.",
     );
+    if (!validation.valid) event.preventDefault();
   }
 
   return (
     <DialogShell
       title="Reset Password"
-      description="Prepare a reset form for a future password-management flow."
+      description="Set a new password for this user. Existing sessions will be invalidated."
       onClose={onClose}
     >
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form
+        className="space-y-5"
+        action={formAction}
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <input type="hidden" name="targetUserId" value={user.id} />
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             User
           </p>
           <p className="mt-2 text-sm font-bold text-slate-900">{user.name}</p>
-          <p className="mt-1 text-xs text-slate-500">{user.email}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {user.username} · {user.email}
+          </p>
         </div>
         <TextField
           id="reset-user-password"
+          name="newPassword"
           label="New Password"
           type="password"
-          value={form.password}
-          onChange={(value) => updateField("password", value)}
-          error={errors.password}
+          value={form.newPassword}
+          onChange={(value) => updateField("newPassword", value)}
+          error={displayErrors.newPassword}
           autoComplete="new-password"
+          disabled={pending}
           required
         />
         <TextField
           id="reset-user-confirm-password"
+          name="confirmPassword"
           label="Confirm Password"
           type="password"
           value={form.confirmPassword}
           onChange={(value) => updateField("confirmPassword", value)}
-          error={errors.confirmPassword}
+          error={displayErrors.confirmPassword}
           autoComplete="new-password"
+          disabled={pending}
           required
         />
-        {notice ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
-            {notice}
+        {displayNotice ? (
+          <p
+            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900"
+            role="status"
+          >
+            {displayNotice}
           </p>
         ) : null}
         <PhaseNotice>
-          passwords remain only in this controlled form state and are not sent
-          to a backend. There is no temporary password, email reset, or reset
-          token in Phase 4.
+          the server validates and hashes the new password, updates the
+          security version, and records a password-reset audit transactionally.
         </PhaseNotice>
-        <DialogFooter onClose={onClose} submitLabel="Reset Password" />
+        <DialogFooter
+          onClose={onClose}
+          submitLabel={pending ? "Resetting..." : "Reset Password"}
+          disabled={pending}
+        />
       </form>
     </DialogShell>
   );
@@ -901,13 +941,15 @@ function UserActionMenu({ user, onSelect }: UserActionMenuProps) {
         >
           Edit User
         </button>
-        <button
-          type="button"
-          className={actionClassName}
-          onClick={() => select("reset-password")}
-        >
-          Reset Password
-        </button>
+        {!user.isCurrentUser ? (
+          <button
+            type="button"
+            className={actionClassName}
+            onClick={() => select("reset-password")}
+          >
+            Reset Password
+          </button>
+        ) : null}
         {!protectedTarget ? (
           <button
             type="button"
@@ -1123,6 +1165,12 @@ export function UserManagementClient({
     router.refresh();
   }, [closeDialog, router]);
 
+  const handlePasswordReset = useCallback(() => {
+    closeDialog();
+    setFeedback("Password reset successfully.");
+    router.refresh();
+  }, [closeDialog, router]);
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -1270,7 +1318,11 @@ export function UserManagementClient({
         <EditUserDialog user={selectedUser} onClose={closeDialog} />
       ) : null}
       {activeDialog === "reset-password" && selectedUser ? (
-        <ResetPasswordDialog user={selectedUser} onClose={closeDialog} />
+        <ResetPasswordDialog
+          user={selectedUser}
+          onClose={closeDialog}
+          onCompleted={handlePasswordReset}
+        />
       ) : null}
       {activeDialog === "change-role" && selectedUser ? (
         <ChangeRoleDialog user={selectedUser} onClose={closeDialog} />
