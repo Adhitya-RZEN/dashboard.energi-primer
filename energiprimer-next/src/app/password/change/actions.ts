@@ -15,7 +15,7 @@ export async function changePassword(
   formData: FormData,
 ): Promise<ChangePasswordState> {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "admin") {
+  if (!session?.user?.id || session.user.role !== "ADMIN") {
     return { error: "Sesi tidak valid. Silakan login kembali." };
   }
 

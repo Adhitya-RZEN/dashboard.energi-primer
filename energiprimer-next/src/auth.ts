@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { UserRole } from "@prisma/client";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { headers } from "next/headers";
@@ -53,7 +54,7 @@ export const {
         const user = await prisma.user.findFirst({
           where: {
             email: { equals: email, mode: "insensitive" },
-            role: "admin",
+            role: UserRole.ADMIN,
           },
           select: {
             id: true,
@@ -87,7 +88,7 @@ export const {
   callbacks: {
     authorized({ auth: session, request }) {
       if (request.nextUrl.pathname.startsWith("/dashboard")) {
-        return session?.user?.role === "admin";
+        return session?.user?.role === UserRole.ADMIN;
       }
 
       return true;
@@ -109,7 +110,10 @@ export const {
 
       if (session.user && subject) {
         session.user.id = subject;
-        session.user.role = typeof token.role === "string" ? token.role : "";
+        session.user.role =
+          token.role === UserRole.ADMIN || token.role === UserRole.USER
+            ? token.role
+            : "";
       }
 
       if (session.user && /^\d+$/.test(subject)) {
@@ -124,7 +128,7 @@ export const {
 
         if (
           !currentUser ||
-          currentUser.role !== "admin" ||
+          currentUser.role !== UserRole.ADMIN ||
           tokenVersion === null ||
           currentVersion !== tokenVersion
         ) {

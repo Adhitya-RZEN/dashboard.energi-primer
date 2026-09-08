@@ -9,7 +9,7 @@ import { ChangePasswordForm } from "./ChangePasswordForm";
 export default async function ChangePasswordPage() {
   const session = await auth();
   if (!session) redirect("/login?callbackUrl=/password/change");
-  if (session.user.role !== "admin") redirect("/login?error=unauthorized");
+  if (session.user.role !== "ADMIN") redirect("/login?error=unauthorized");
 
   return (
     <AuthShell>

@@ -1,8 +1,15 @@
 # AGENT_CONTEXT.md — Energi Primer
 
-Last audited: 2026-09-06
+Last audited: 2026-09-08
 Purpose: single source of truth for AI coding agents working in this repository.
 Scope: current `energiprimer-next` worktree. Read the actual source after this document before changing anything.
+
+Phase 2 (2026-09-08) adds the additive user data model: `username` (unique),
+`UserRole` (`ADMIN`/`USER`), `UserStatus` (`ACTIVE`/`DISABLED`), and retained
+`PasswordResetToken`/`Session` legacy models plus `UserAuditLog`. The production
+migration is prepared and read-only preflight verified with zero writes, but it
+is pending operator-approved deployment. See
+`docs/PHASE2_DATABASE_DATA_MODEL_2026-09-08.md`.
 
 ## Evidence status
 
@@ -146,7 +153,7 @@ The sync route checks the deployment environment before `CRON_SECRET` and consta
 - Sync/provenance: `SyncSource`, `SyncWorksheet`, `SyncRun`, `SyncRowState`, `SyncSchemaChange`.
 - Normalized import: `SpreadsheetImportRun`, `SpreadsheetImportStaging`, `BiomassReceipt`, `CoalReceipt`, `BiomassConsumption`, `SolarReceipt`, `SolarConsumption`, `HopReading`, `BiomassTarget`, `BiomassCumulativeSnapshot`.
 
-Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Statuses, roles, and entity types are strings rather than enums. No views, triggers, or database functions were found in reviewed migrations.
+Unique keys provide idempotency for most normalized entities. Unit measurement relations use cascade; import/provenance relations mostly use restrict. Most domain statuses and entity types are strings rather than enums; the Phase 2 user role/status/audit fields are explicit PostgreSQL/Prisma enums. No views, triggers, or database functions were found in reviewed migrations.
 
 There are two migration histories with a fixed policy: **SUPABASE
 PRODUCTION** uses `prisma/production/schema.prisma` and
@@ -161,7 +168,7 @@ explicitly guards the production schema/history.
 The active flow is:
 
 ```text
-Credentials → Auth.js authorize → throttle → Prisma admin user → bcrypt
+Credentials → Auth.js authorize → throttle → Prisma ADMIN user → bcrypt
            → JWT (id/role/sessionVersion) → session callback re-reads user
 ```
 

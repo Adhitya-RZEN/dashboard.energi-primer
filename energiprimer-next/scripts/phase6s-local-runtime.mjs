@@ -28,6 +28,7 @@ const databaseName = "phase6s";
 const host = "127.0.0.1";
 const baseOrigin = `http://${host}:${runtimePort}`;
 const fixtureEmail = "phase6s-admin@example.test";
+const fixtureUsername = "phase6s-admin";
 const fixturePassword = `Phase6S-${randomBytes(18).toString("base64url")}`;
 const localAuthSecret = randomBytes(32).toString("base64url");
 const localCronSecret = randomBytes(24).toString("base64url");
@@ -130,8 +131,8 @@ function fixtureSql(passwordHash) {
   const now = "CURRENT_TIMESTAMP";
   const unit = (code) => `(SELECT id FROM units WHERE code = ${sqlString(code)})`;
   return `BEGIN;
-INSERT INTO users (name, email, password, role, created_at, updated_at)
-VALUES (${sqlString("Phase 6S Local Admin")}, ${sqlString(fixtureEmail)}, ${sqlString(passwordHash)}, 'admin', ${now}, ${now});
+INSERT INTO users (name, username, email, password, role, status, created_at, updated_at)
+VALUES (${sqlString("Phase 6S Local Admin")}, ${sqlString(fixtureUsername)}, ${sqlString(fixtureEmail)}, ${sqlString(passwordHash)}, 'ADMIN', 'ACTIVE', ${now}, ${now});
 INSERT INTO units (code, name, status, created_at, updated_at)
 VALUES
   ('U1', 'Unit 1', true, ${now}, ${now}),

@@ -7,20 +7,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum UserAuditAction {
+  USER_CREATED
+  USER_UPDATED
+  PASSWORD_RESET
+  ROLE_CHANGED
+  USER_ENABLED
+  USER_DISABLED
+}
+
 model User {
-  id              BigInt    @id @default(autoincrement()) @db.BigInt
+  id              BigInt     @id @default(autoincrement()) @db.BigInt
+  username        String     @unique
   name            String
-  email           String    @unique
-  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamp(0)
+  email           String     @unique
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamp(0)
   password        String
-  rememberToken   String?   @map("remember_token") @db.VarChar(100)
-  createdAt       DateTime? @map("created_at") @db.Timestamp(0)
-  updatedAt       DateTime? @map("updated_at") @db.Timestamp(0)
-  role            String    @default("admin")
-  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamp(0)
+  rememberToken   String?    @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime?  @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime?  @map("updated_at") @db.Timestamp(0)
+  role            UserRole   @default(ADMIN)
+  status          UserStatus @default(ACTIVE)
+  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamp(0)
+
+  auditLogsAsActor  UserAuditLog[] @relation("UserAuditActor")
+  auditLogsAsTarget UserAuditLog[] @relation("UserAuditTarget")
 
   @@index([role])
   @@map("users")
+}
+
+model UserAuditLog {
+  id           BigInt          @id @default(autoincrement()) @db.BigInt
+  actorUserId  BigInt          @map("actor_user_id") @db.BigInt
+  targetUserId BigInt          @map("target_user_id") @db.BigInt
+  action       UserAuditAction
+  metadata     Json?           @db.JsonB
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
+
+  actor  User @relation("UserAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  target User @relation("UserAuditTarget", fields: [targetUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([createdAt])
+  @@map("user_audit_logs")
 }
 
 model PasswordResetToken {
@@ -211,42 +252,42 @@ model SpreadsheetImportLog {
 }
 
 model SyncSource {
-  id                BigInt          @id @default(autoincrement()) @db.BigInt
-  sourceKey         String          @unique @map("source_key") @db.VarChar(128)
-  provider          String          @db.VarChar(32)
-  externalId        String          @map("external_id") @db.VarChar(255)
-  status            String          @db.VarChar(32)
-  lastDiscoveredAt  DateTime?       @map("last_discovered_at") @db.Timestamp(0)
-  lockToken         String?         @map("lock_token") @db.VarChar(128)
-  lockExpiresAt     DateTime?       @map("lock_expires_at") @db.Timestamp(0)
-  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
-  worksheets        SyncWorksheet[]
-  runs              SyncRun[]
+  id               BigInt          @id @default(autoincrement()) @db.BigInt
+  sourceKey        String          @unique @map("source_key") @db.VarChar(128)
+  provider         String          @db.VarChar(32)
+  externalId       String          @map("external_id") @db.VarChar(255)
+  status           String          @db.VarChar(32)
+  lastDiscoveredAt DateTime?       @map("last_discovered_at") @db.Timestamp(0)
+  lockToken        String?         @map("lock_token") @db.VarChar(128)
+  lockExpiresAt    DateTime?       @map("lock_expires_at") @db.Timestamp(0)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheets       SyncWorksheet[]
+  runs             SyncRun[]
 
   @@unique([provider, externalId])
   @@map("sync_sources")
 }
 
 model SyncWorksheet {
-  id                BigInt        @id @default(autoincrement()) @db.BigInt
-  sourceId          BigInt        @map("source_id") @db.BigInt
-  worksheetKey      String        @map("worksheet_key") @db.VarChar(64)
-  worksheetTitle    String        @map("worksheet_title") @db.VarChar(255)
-  normalizedTitle   String        @map("normalized_title") @db.VarChar(255)
-  status            String        @db.VarChar(32)
-  firstSeenAt       DateTime      @default(now()) @map("first_seen_at") @db.Timestamp(0)
-  lastSeenAt        DateTime      @map("last_seen_at") @db.Timestamp(0)
-  lastSyncAt        DateTime?     @map("last_sync_at") @db.Timestamp(0)
-  schemaHash        String?       @map("schema_hash") @db.VarChar(128)
-  schemaSnapshot    String?       @map("schema_snapshot") @db.Text
-  contentHash       String?       @map("content_hash") @db.VarChar(128)
-  rowCount          Int           @default(0) @map("row_count")
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
-  source            SyncSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  rowStates         SyncRowState[]
-  schemaChanges     SyncSchemaChange[]
+  id              BigInt             @id @default(autoincrement()) @db.BigInt
+  sourceId        BigInt             @map("source_id") @db.BigInt
+  worksheetKey    String             @map("worksheet_key") @db.VarChar(64)
+  worksheetTitle  String             @map("worksheet_title") @db.VarChar(255)
+  normalizedTitle String             @map("normalized_title") @db.VarChar(255)
+  status          String             @db.VarChar(32)
+  firstSeenAt     DateTime           @default(now()) @map("first_seen_at") @db.Timestamp(0)
+  lastSeenAt      DateTime           @map("last_seen_at") @db.Timestamp(0)
+  lastSyncAt      DateTime?          @map("last_sync_at") @db.Timestamp(0)
+  schemaHash      String?            @map("schema_hash") @db.VarChar(128)
+  schemaSnapshot  String?            @map("schema_snapshot") @db.Text
+  contentHash     String?            @map("content_hash") @db.VarChar(128)
+  rowCount        Int                @default(0) @map("row_count")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamp(0)
+  source          SyncSource         @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  rowStates       SyncRowState[]
+  schemaChanges   SyncSchemaChange[]
 
   @@unique([sourceId, worksheetKey])
   @@index([sourceId, status])
@@ -254,23 +295,23 @@ model SyncWorksheet {
 }
 
 model SyncRun {
-  id                BigInt       @id @default(autoincrement()) @db.BigInt
-  sourceId          BigInt       @map("source_id") @db.BigInt
-  triggerType       String       @map("trigger_type") @db.VarChar(32)
-  status            String       @db.VarChar(32)
-  startedAt         DateTime     @default(now()) @map("started_at") @db.Timestamp(0)
-  finishedAt        DateTime?    @map("finished_at") @db.Timestamp(0)
-  worksheetsScanned Int          @default(0) @map("worksheets_scanned")
-  rowsScanned       Int          @default(0) @map("rows_scanned")
-  inserted          Int          @default(0)
-  updated           Int          @default(0)
-  skipped           Int          @default(0)
-  failed            Int          @default(0)
-  durationMs        Int?         @map("duration_ms")
-  errorSummary      String?      @map("error_summary") @db.Text
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamp(0)
-  source            SyncSource   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  id                BigInt     @id @default(autoincrement()) @db.BigInt
+  sourceId          BigInt     @map("source_id") @db.BigInt
+  triggerType       String     @map("trigger_type") @db.VarChar(32)
+  status            String     @db.VarChar(32)
+  startedAt         DateTime   @default(now()) @map("started_at") @db.Timestamp(0)
+  finishedAt        DateTime?  @map("finished_at") @db.Timestamp(0)
+  worksheetsScanned Int        @default(0) @map("worksheets_scanned")
+  rowsScanned       Int        @default(0) @map("rows_scanned")
+  inserted          Int        @default(0)
+  updated           Int        @default(0)
+  skipped           Int        @default(0)
+  failed            Int        @default(0)
+  durationMs        Int?       @map("duration_ms")
+  errorSummary      String?    @map("error_summary") @db.Text
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamp(0)
+  source            SyncSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
 
   @@index([sourceId, startedAt])
   @@index([status])
@@ -278,16 +319,16 @@ model SyncRun {
 }
 
 model SyncRowState {
-  id             BigInt        @id @default(autoincrement()) @db.BigInt
-  worksheetId    BigInt        @map("worksheet_id") @db.BigInt
-  sourceKey      String        @map("source_key") @db.VarChar(512)
-  entityType     String        @map("entity_type") @db.VarChar(64)
-  contentHash    String        @map("content_hash") @db.VarChar(128)
-  lastSeenAt     DateTime      @map("last_seen_at") @db.Timestamp(0)
-  lastSyncedAt   DateTime?     @map("last_synced_at") @db.Timestamp(0)
-  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
-  worksheet      SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
+  id           BigInt        @id @default(autoincrement()) @db.BigInt
+  worksheetId  BigInt        @map("worksheet_id") @db.BigInt
+  sourceKey    String        @map("source_key") @db.VarChar(512)
+  entityType   String        @map("entity_type") @db.VarChar(64)
+  contentHash  String        @map("content_hash") @db.VarChar(128)
+  lastSeenAt   DateTime      @map("last_seen_at") @db.Timestamp(0)
+  lastSyncedAt DateTime?     @map("last_synced_at") @db.Timestamp(0)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+  worksheet    SyncWorksheet @relation(fields: [worksheetId], references: [id], onDelete: Restrict)
 
   @@unique([worksheetId, sourceKey])
   @@index([worksheetId, lastSeenAt])
@@ -390,15 +431,15 @@ model BiomassReceipt {
 }
 
 model CoalReceipt {
-  id           BigInt                @id @default(autoincrement()) @db.BigInt
-  importRunId  BigInt?               @map("import_run_id") @db.BigInt
-  periodStart  DateTime              @map("period_start") @db.Date
-  quantityTon  Decimal?              @map("quantity_ton") @db.Decimal(18, 3)
-  sourceSheet  String                @map("source_worksheet") @db.VarChar(255)
-  sourceCell   String?               @map("source_cell") @db.VarChar(32)
-  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt    DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
-  importRun    SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
+  id          BigInt                @id @default(autoincrement()) @db.BigInt
+  importRunId BigInt?               @map("import_run_id") @db.BigInt
+  periodStart DateTime              @map("period_start") @db.Date
+  quantityTon Decimal?              @map("quantity_ton") @db.Decimal(18, 3)
+  sourceSheet String                @map("source_worksheet") @db.VarChar(255)
+  sourceCell  String?               @map("source_cell") @db.VarChar(32)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamp(0)
+  importRun   SpreadsheetImportRun? @relation(fields: [importRunId], references: [id], onDelete: Restrict)
 
   @@unique([periodStart])
   @@map("coal_receipts")

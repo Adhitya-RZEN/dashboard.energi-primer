@@ -7,14 +7,14 @@ const BCRYPT_ROUNDS = 12;
 function usage(message) {
   if (message) console.error(`ADMIN CREATE ERROR: ${message}`);
   console.error(
-    'Usage: npm run admin:create -- --email "admin@example.com" --password "<operator-supplied-password>" --name "Administrator"',
+    'Usage: npm run admin:create -- --email "admin@example.com" --password "<operator-supplied-password>" --name "Administrator" [--username "administrator"]',
   );
   process.exitCode = 2;
 }
 
 function parseArguments(argumentsList) {
   const values = {};
-  const allowed = new Set(["email", "password", "name"]);
+  const allowed = new Set(["email", "password", "name", "username"]);
 
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
@@ -87,10 +87,12 @@ if (["email", "password", "name"].some((key) => typeof input[key] !== "string"))
 const email = normalizeAuthEmail(input.email);
 const name = input.name.trim();
 const password = input.password;
+const username = (input.username ?? email.split("@", 1)[0]).trim().toLowerCase();
 
 if (!isValidAuthEmail(email)) usage("email is invalid");
 if (email.length === 0 || name.length === 0) usage("email, password, and name are required");
 if (name.length > 255) usage("name is too long");
+if (username.length === 0 || username.length > 255) usage("username must contain between 1 and 255 characters");
 if (password.length < 12) usage("password must contain at least 12 characters");
 if (process.exitCode) process.exit(process.exitCode);
 
@@ -133,13 +135,13 @@ try {
     console.error("ADMIN CREATE BLOCKED: connected schema is not public.");
     process.exitCode = 1;
   } else {
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-      select: { email: true },
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email }, { username }] },
+      select: { email: true, username: true },
     });
 
     if (existingUser) {
-      console.error("ADMIN NOT CREATED: a user with this email already exists; no fields were changed.");
+      console.error("ADMIN NOT CREATED: a user with this email or username already exists; no fields were changed.");
       process.exitCode = 3;
     } else {
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -147,9 +149,11 @@ try {
       await prisma.user.create({
         data: {
           name,
+          username,
           email,
           password: passwordHash,
-          role: "admin",
+          role: "ADMIN",
+          status: "ACTIVE",
           createdAt: now,
           updatedAt: now,
         },
@@ -160,7 +164,8 @@ try {
         status: "PASS",
         adminCreated: true,
         email,
-        role: "admin",
+        username,
+        role: "ADMIN",
         databaseWrites: 1,
       }, null, 2));
     }

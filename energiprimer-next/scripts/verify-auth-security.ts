@@ -98,7 +98,7 @@ function testSourceSecurity() {
     "Auth.js redirect callback is explicitly origin-safe",
   );
   assert(
-    authSource.includes('currentUser.role !== "admin"') &&
+    authSource.includes("currentUser.role !== UserRole.ADMIN") &&
       authSource.includes("currentVersion !== tokenVersion"),
     "session authorization revalidates current role and session version",
   );
@@ -124,12 +124,12 @@ function testSourceSecurity() {
   );
   assert(
     protectedLayoutSource.includes("await auth()") &&
-      protectedLayoutSource.includes('session.user.role !== "admin"'),
+      protectedLayoutSource.includes('session.user.role !== "ADMIN"'),
     "protected route group repeats server-side authentication and role checks",
   );
   assert(
     proxySource.includes("isProtectedPath(pathname)") &&
-      proxySource.includes('request.auth?.user?.role !== "admin"') &&
+      proxySource.includes('request.auth?.user?.role !== "ADMIN"') &&
       proxySource.includes("NextResponse.redirect(loginUrl)"),
     "proxy rejects guest and non-admin requests before protected rendering",
   );

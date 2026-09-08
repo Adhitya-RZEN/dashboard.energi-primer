@@ -120,15 +120,26 @@ function canonicalMigrationInventory() {
     }
 
     const sql = normalizeSql(fs.readFileSync(sqlPath, "utf8"));
-    const forbiddenOperation = /\b(?:INSERT\s+INTO|UPDATE\s+.+\s+SET|DELETE\s+FROM|DROP\s+(?:TABLE|COLUMN|SCHEMA|INDEX)|TRUNCATE)\b/i.test(
-      sql,
-    );
+    // Phase 2 requires one deterministic, non-destructive username backfill.
+    // Keep the exception exact and reject every other UPDATE statement.
+    const updateStatementCount = (sql.match(/\bUPDATE\s+/gi) ?? []).length;
+    const controlledUsernameBackfill =
+      updateStatementCount === 1 &&
+      /UPDATE\s+"users"\s+SET\s+"username"\s*=\s*LOWER\s*\(\s*SPLIT_PART\s*\(\s*"email"\s*,\s*'@'\s*,\s*1\s*\)\s*\)\s+WHERE\s+"username"\s+IS\s+NULL\s*;/i.test(
+        sql,
+      );
+    const forbiddenOperation =
+      /\b(?:INSERT\s+INTO|DELETE\s+FROM|DROP\s+(?:TABLE|COLUMN|SCHEMA|INDEX)|TRUNCATE)\b/i.test(
+        sql,
+      ) ||
+      (/\bUPDATE\s+.+\s+SET\b/i.test(sql) && !controlledUsernameBackfill);
 
     return {
       name,
       sqlPath,
       checksum: sha256(sql),
       bytes: Buffer.byteLength(sql, "utf8"),
+      controlledUsernameBackfill,
       forbiddenOperation,
     };
   });
@@ -261,6 +272,7 @@ try {
     migrationNames: migrations.map(({ name }) => name),
     allSqlFilesPresent: true,
     forbiddenOperations: migrations.filter((migration) => migration.forbiddenOperation).map(({ name }) => name),
+    controlledBackfills: migrations.filter((migration) => migration.controlledUsernameBackfill).map(({ name }) => name),
     lockProvider: fs.readFileSync(productionLockPath, "utf8").includes(
       'provider = "postgresql"',
     )

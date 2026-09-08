@@ -18,7 +18,7 @@ export default async function ProtectedLayout({
     redirect("/login?callbackUrl=/dashboard" as Route);
   }
 
-  if (session.user.role !== "admin") {
+  if (session.user.role !== "ADMIN") {
     redirect("/login?error=unauthorized" as Route);
   }
 

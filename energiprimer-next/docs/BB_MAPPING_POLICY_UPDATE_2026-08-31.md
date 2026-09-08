@@ -352,3 +352,437 @@ Known review item:
    approval, tanpa mengubah nilai kuantitas.
 
 Status Phase 3: `PASS_WITH_REVIEW`.
+
+## Phase 4 - Authenticated Visual & Runtime Verification
+
+### Objective and scope
+
+Phase 4 memverifikasi implementasi `Pemakaian Solar Harian` pada aplikasi
+yang berjalan setelah authenticated login. Verifikasi meliputi `/dashboard`,
+`/dashboard/solar`, focus date, nilai KPI, unit, chart, tooltip, missing-data
+semantics, runtime errors, dan loading sederhana. Tidak ada perubahan schema,
+migration, tabel, endpoint, formula, source mapping, atau historical data.
+
+Keputusan source dari Phase 3 tetap `REUSE_EXISTING_SOURCE`: dashboard aktif
+membaca PostgreSQL normalized `solar_consumptions`, bukan
+`solar_receipts` atau proxy lain.
+
+### Environment and authentication
+
+Environment authenticated menggunakan deployment target yang dikonfigurasi
+oleh `AUTH_TEST_BASE_URL` dan credential admin yang sudah tersedia melalui
+`AUTH_TEST_ADMIN_EMAIL` / `AUTH_TEST_ADMIN_PASSWORD` pada `.env.e2e.local`.
+Nilai credential tidak dicatat.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Login form dengan credential valid | PASS dengan catatan navigasi | Session cookie terbentuk; sesudah server action URL browser masih `/login`, lalu navigasi authenticated langsung ke `/dashboard` menghasilkan `200` dan marker overview |
+| Auth.js CSRF | PASS | `GET /api/auth/csrf` -> `200` |
+| Auth.js credentials callback | PASS | `POST /api/auth/callback/credentials` -> redirect `302`, session cookie terbentuk |
+| Protected dashboard | PASS | `/dashboard?month=7&year=2026&day=28` -> `200`; halaman authenticated tampil |
+
+Tidak ada bypass middleware, fake user, perubahan `AUTH_SECRET`, atau
+provisioning user. Endpoint callback yang dipakai untuk cross-check adalah
+endpoint Auth.js resmi yang sama dengan konfigurasi aplikasi.
+
+### Route and UI verification
+
+| Check | Actual result | Status |
+| --- | --- | --- |
+| Overview route | `/dashboard` -> `200`; `Overview Energi Primer` tampil | PASS |
+| Daily KPI label | `Pemakaian Solar Harian` | PASS |
+| Focus date | `28 Juli 2026` | PASS |
+| Daily KPI value | `854 liter` | PASS |
+| Monthly KPI value | `24.274 liter` | PASS |
+| Solar detail route | `/dashboard/solar` -> `200`; `Ringkasan Solar` tampil | PASS |
+| Detail KPI parity | Daily `854 liter`, focus date, dan monthly `24.274 liter` sama dengan Overview | PASS |
+
+Nilai UI di atas cocok dengan hasil service/database Phase 3: focus date
+`2026-07-28` pada `solar_consumptions.quantity_liter` adalah `854`, dan SUM
+periode Juli adalah `24,274` liter. Kartu dan detail chart menggunakan
+`OverviewData` yang sama; tidak ditemukan divergence pada runtime.
+
+### Solar chart and tooltip
+
+Chart `Pemakaian Solar Harian` pada `/dashboard/solar` tampil dengan satu SVG,
+satu line, dan 29 titik bernilai dari series Juli. 29 titik sesuai dengan 31
+hari periode dan dua nilai Solar yang null pada data source. Binding runtime
+terverifikasi melalui chart label `Grafik Pemakaian Solar`, series `solar`,
+dan unit `liter`.
+
+Hover pada titik focus menghasilkan tooltip yang memuat:
+
+- tanggal `28 Juli 2026`;
+- label `Pemakaian Solar`;
+- nilai `854`;
+- unit `liter`.
+
+Nilai tooltip sama dengan KPI dan tidak mengambil `solarReceipt`.
+
+### NULL and missing-data verification
+
+Pada query `day=30`:
+
+| Surface | Actual behavior | Status |
+| --- | --- | --- |
+| Overview daily panel | `30 Juli 2026`, `Data belum tersedia`, dan catatan source aktif | PASS |
+| Solar detail KPI | `30 Juli 2026`, dash, `liter`; tidak menjadi `0 liter` | PASS |
+| Solar chart | Tetap tampil; null point tidak difabrikasi/interpolasi | PASS |
+
+Behavior ini konsisten dengan service: `solar = null` dan metric
+`available = false`. Tidak ada pembagian angka bulanan, estimasi, dummy data,
+atau penggunaan receipt sebagai pengganti.
+
+### Runtime and loading observation
+
+Authenticated browser run mencatat:
+
+- console errors: `0`;
+- page errors: `0`;
+- HTTP response `4xx/5xx`: `0`;
+- route render sampai marker UI: sekitar `3.7-5.7` detik per navigasi yang
+  diuji;
+- tidak ada infinite loading, blank chart, hydration error, atau crash.
+
+Beberapa request `GET` prefetch dan `POST /login` tercatat aborted saat
+navigasi halaman pada headless browser, tetapi tidak menghasilkan HTTP error;
+session tetap terbentuk dan protected route berhasil. Ini dicatat sebagai
+observasi auth/navigation, bukan error Solar.
+
+### Database safety and code changes
+
+Tidak ada INSERT/UPDATE/DELETE terhadap tabel Solar, tidak ada migration,
+schema modification, reimport, atau historical provenance mutation. Dengan
+demikian business-data/schema/migration writes Phase 4 adalah `0`.
+
+Catatan penting: alur login valid memang menjalankan `prisma.user.update` pada
+`users.last_login_at` sesuai desain Auth.js. Ini adalah side effect metadata
+authentication yang diharapkan, bukan perubahan data KPI; jumlah pastinya
+tidak diinstrumentasi.
+
+Tidak ada code change runtime pada Phase 4. Verifier dan screenshot sementara
+untuk observasi sudah dihapus setelah inspeksi; hanya entry dokumentasi ini
+yang ditambahkan.
+
+### Validation
+
+| Command/check | Result |
+| --- | --- |
+| Authenticated Playwright UI run dengan credential valid | PASS untuk Overview, Solar detail, chart, tooltip, focus date, dan null semantics |
+| Temporary screenshot inspection | PASS; card, unit, tanggal, chart, dan missing-data state terlihat benar |
+| `npm.cmd run db:verify-overview` | PASS; final read-only rerun mengonfirmasi daily `854`, monthly `24,274`, chart alignment, dan null semantics |
+| `npm.cmd run dynamic:verify` | PASS pada Phase 3 baseline |
+| `npm.cmd run bb:mapping:test` | PASS pada Phase 3 baseline; 27 assertions |
+| `node --env-file=.env.e2e.local scripts/verify-auth.mjs` | `VALIDATION_ERROR` tersanitasi pada verifier existing; direct Auth.js callback + authenticated browser route tetap PASS. Perlu review terpisah bila verifier dipakai sebagai gate |
+
+### Root cause and known issues
+
+Root cause Solar: `NO_CODE_BUG_FOUND`. Tidak ada bukti runtime untuk
+`DATA_QUERY_BUG`, `SERVICE_MAPPING_BUG`, `KPI_COMPONENT_BUG`,
+`CHART_BINDING_BUG`, `DATE_ALIGNMENT_BUG`, `FORMATTER_BUG`, atau
+`NULL_SEMANTICS_BUG`.
+
+Known issues yang tidak memblokir KPI Solar:
+
+1. Record historis `solar_consumptions` masih dapat menyimpan provenance
+   `source_cell` lama `CF11:CF40`; Phase 4 tidak mengubahnya.
+2. Login form membentuk session tetapi headless observation tetap berada di
+   `/login` sampai route protected dinavigasi; direct `/dashboard` authenticated
+   tetap `200`. Existing `auth:verify` juga mengembalikan error tersanitasi,
+   sehingga auth verifier/navigation perlu follow-up terpisah bila dijadikan
+   release gate.
+
+### Final status
+
+`PASS_WITH_REVIEW` untuk Phase 4 secara keseluruhan karena observasi auth
+verifier/navigation di atas. Seluruh verifikasi authenticated Solar KPI
+sendiri lulus: Overview dan detail menampilkan `854 liter` pada `28 Juli
+2026`, monthly `24.274 liter`, chart dan tooltip konsisten, serta null date
+`30 Juli 2026` tidak berubah menjadi angka fabricated.
+
+Phase 5 untuk perbaikan Solar KPI: `NO`. Jika diperlukan, investigasi auth
+verifier/post-login navigation dilakukan sebagai pekerjaan terpisah dan tidak
+boleh mengubah source, formula, schema, atau historical Solar data.
+
+## Phase 6 — Historical BB Mapping Remediation
+
+### Status dan batas fase
+
+Review date: 2026-09-08 (Asia/Makassar).
+
+Status Phase 6: **`PASS_WITH_REVIEW`**.
+
+Phase ini hanya melakukan discovery, schema classification, mapping evidence,
+duplicate/collision analysis, dan dry-run read-only. Tidak ada import,
+backfill, seed, migration, schema change, database correction, Google Sheets
+write, Auth.js change, Solar change, atau dashboard change.
+
+`/docx` tidak tersedia pada repository ini. Dokumen mapping policy existing
+ini digunakan sebagai source of truth dan diperbarui; laporan historis lain
+tetap dipertahankan sebagai historical evidence, bukan sebagai hasil live
+Phase 6.
+
+### Existing pipeline dan source of truth
+
+Phase 6 memakai implementation existing, bukan scanner baru:
+
+| Layer | Existing implementation | Evidence |
+| --- | --- | --- |
+| Worksheet metadata | `listGoogleSheetsWorksheets()` | `src/lib/google-sheets.ts` |
+| Worksheet eligibility | `parseBBWorksheetName()` | `src/services/google-sheets/dynamic/worksheet-resolver.ts` |
+| Read range | `A1:ZZ500` | `src/services/google-sheets/dynamic/reader.ts` |
+| Cell scanner | `scanSpreadsheet()` | `src/services/google-sheets/dynamic/spreadsheet-scanner.ts` |
+| Structure/header/table detection | `parseDynamicWorksheet()` dan `analyzeTableStructure()` | `src/services/google-sheets/dynamic/parser.ts` |
+| Daily semantic mapping | `parseDailyTable()` | `src/services/google-sheets/dynamic/parsers/daily-parser.ts` |
+| Import staging plan | `buildGoogleSheetsImportPlanFromReadResult()` | `src/services/google-sheets/import/plan.ts` |
+| Schema family | `classifySchemaFamily()` | `src/services/google-sheets/legacy-mapping/mapper.ts` |
+| Legacy mapping and gate | `mapLegacyWorksheet()` | `src/services/google-sheets/legacy-mapping/mapper.ts` |
+| Dry-run runner | `run-bb-legacy-mapping.ts` | `scripts/run-bb-legacy-mapping.ts` |
+
+Policy identity tetap eksplisit: worksheet BB valid harus memakai token bulan
+yang disetujui, dua digit tahun, dan suffix `-BB`. Alias seperti `Jan`, `Feb`,
+`Sept`, `Okt`, atau `Des` diterima hanya karena secara eksplisit terdaftar di
+resolver; kolom tidak dipilih berdasarkan huruf/posisi saja.
+
+### Historical discovery
+
+Dry-run live menggunakan `scripts/run-bb-legacy-mapping.ts --compact` tanpa
+`--write-report`. Hasil source-of-truth aktual:
+
+| Discovery | Count |
+| --- | ---: |
+| Semua worksheet metadata | 199 |
+| BB in-scope (`2023` sampai terbaru) | 43 |
+| BB out-of-scope sebelum 2023 | 12 |
+| Non-BB / bukan source database BB pada fase ini | 144 |
+| Read failure | 0 |
+| Database writes | 0 |
+| Database snapshot | Stable |
+
+Worksheet BB out-of-scope yang ditemukan:
+
+`JAN22 - BB`, `FEB22-BB`, `Mar22-BB`, `Apr22-BB`, `Mei22-BB`,
+`Juni22-BB`, `Juli22-BB`, `Agus22-BB`, `Sep22-BB`, `Okt22-BB`,
+`Nov22-BB`, `Des22-BB`.
+
+### Inventory in-scope
+
+Status mapping di bawah ini adalah status worksheet-level dan tidak menggantikan
+status per-field. `CONFIRMED*` berarti seluruh entity yang didukung plan
+memiliki candidate deterministik dan tidak memiliki blocking issue pada dry-run;
+worksheet tersebut tetap memerlukan review provenance/future-scope sebelum
+Phase 7. `UNRESOLVED + COLLISION` sengaja dihitung overlap, bukan kategori
+mutually exclusive.
+
+| Worksheet | Tahun | In scope | Schema | Mapping status |
+| --- | ---: | --- | --- | --- |
+| Jan23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_B | UNRESOLVED |
+| Feb23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_B | UNRESOLVED |
+| Mar23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_C | UNRESOLVED |
+| Apr23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_C | UNRESOLVED |
+| Mei23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_C | UNRESOLVED |
+| Juni23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_C | UNRESOLVED + COLLISION |
+| Juli23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_C | UNRESOLVED |
+| Agust23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Sept23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Okt23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Nov23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Des23-BB | 2023 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Jan24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Feb24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Mar24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| APR24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| MEI24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| JUNI24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| JULY24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| AGUS24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| SEPT24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Okt24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Nov24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Des24-BB | 2024 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Jan25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Feb25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Mar25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Apr25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Mei25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Juni25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Juli25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Agustus25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| September25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED + COLLISION |
+| Oktober25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| November25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Desember25-BB | 2025 | IN_SCOPE | LEGACY_FAMILY_A | UNRESOLVED |
+| Januari26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| Februari26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| Maret26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| April26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| Mei26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| Juni26-BB | 2026 | IN_SCOPE | LEGACY_FAMILY_A | CONFIRMED* |
+| Juli26-BB | 2026 | IN_SCOPE | CANONICAL_FAMILY | CONFIRMED* |
+
+### Schema classification dan cluster
+
+Schema family dihitung dari semantic-key coverage dan label coverage terhadap
+`Juli26-BB`, bukan dari tahun atau column letter:
+
+| Schema cluster | Count | Semantic coverage live | Structural interpretation |
+| --- | ---: | --- | --- |
+| `CANONICAL_FAMILY` | 1 | 100% | `Juli26-BB`; current canonical reference |
+| `LEGACY_FAMILY_A` | 35 | 90.7%–100% | Semantic fields largely equivalent, tetapi physical order, aliases, receipt/cumulative resolution, provenance, atau duplicate evidence perlu review |
+| `LEGACY_FAMILY_B` | 2 | 37.0%–44.4% | Meaning tidak aman untuk auto-map; seluruh field value menunggu owner mapping |
+| `LEGACY_FAMILY_C` | 5 | 47.2%–50.9% | Partial overlap; block/identity semantics ambiguous dan tidak auto-map |
+
+Canonical/representative structural evidence:
+
+| Worksheet | Read range | Detected range | Header rows | Date | Solar quantity | Daily rows |
+| --- | --- | --- | --- | --- | --- | ---: |
+| `Juli26-BB` | `A1:ZZ500` | `A4:DJ148` | `5, 8, 9, 10` | `B` / column 2 | `CJ` / column 88, `HSD > COAL HANDLING > BIOMASSA > TOTAL` | 31 |
+| `Januari26-BB`–`Juni26-BB` | `A1:ZZ500` | `A1/A4:DJ147` sesuai worksheet | `5, 8, 9, 10` | `B` / column 2 | `CJ` / column 88, semantic Solar total | 28–31 |
+
+Legacy Family A produces deterministic supported plan rows on the 2026 set,
+but older Family A worksheets remain blocked by unresolved receipt/cumulative
+fields, ambiguous fields, provenance gaps, or collision evidence. Family B/C
+does not produce canonical records because its profile explicitly has no
+auto-mapped entity types.
+
+### Mapping policy dan provenance
+
+Mapping contract existing tetap digunakan:
+
+| Source semantic field | Existing target | Grain/unit | Decision |
+| --- | --- | --- | --- |
+| `BIOMASS_RECEIPT` | `biomass_receipts.quantity_ton` | period + supplier / ton | auto-map hanya canonical/Family A dengan evidence |
+| `BIOMASS_CONSUMPTION` | `biomass_consumptions.quantity_ton` | date + unit / ton | auto-map hanya canonical/Family A dengan evidence |
+| `COAL_RECEIPT` | `coal_receipts.quantity_ton` | period / ton | unresolved jika source receipt tidak terbukti |
+| `COAL_CONSUMPTION` | `coal_consumption.coal_used` | date + unit / ton | semantic mapping existing |
+| `COAL_STOCK` | `coal_stock.closing_stock` | date / ton | existing target; tidak disamakan dengan biomass stock |
+| `SOLAR_RECEIPT` | `solar_receipts.quantity_liter` | period / liter | bukan pengganti Solar daily |
+| `SOLAR_CONSUMPTION` | `solar_consumptions.quantity_liter` | date / liter | existing target; source daily semantic |
+| `HOP` | `hop_readings.hop_days` | date + unit / hari | semantic mapping existing |
+| `BIOMASS_TARGET` | `biomass_targets.target_ton` | target year / ton | historical value tidak ditimpa |
+| `BIOMASS_CUMULATIVE` | `biomass_cumulative_snapshots.cumulative_ton` | snapshot / ton | unresolved jika kandidat ambiguous |
+| `BIOMASS_STOCK` | no existing target | — | `FUTURE_SCOPE_DATA`, tidak dipersist |
+
+Untuk canonical `Juli26-BB`, provenance yang terbukti adalah:
+
+- requested read range `A1:ZZ500`;
+- detected range `A4:DJ148`;
+- date header `NO > TGL`/`TANGGAL > TGL` pada kolom `B`, daily row `11..41`;
+- Solar header `HSD > COAL HANDLING > BIOMASSA > TOTAL` pada `CJ`;
+- first daily Solar source cell `CJ11`, satu source cell per row berikutnya;
+- monthly Solar receipt source `Y69`;
+- plan menghasilkan 31 `solarConsumptionRows`, 1 `solarReceiptRow`, dan total 352 staging rows.
+
+Probe existing parser terhadap `Januari26-BB` sampai `Juni26-BB` juga
+menghasilkan Solar source pertama `CJ11`, dengan 28–31 daily Solar rows sesuai
+jumlah hari valid. `ImportStagingRecord.source` mempertahankan worksheet, cell,
+dan row untuk candidate daily records. Summary records tertentu masih dapat
+memiliki `sourceRow = null`; kondisi ini dicatat sebagai `PROVENANCE_GAP`, bukan
+diisi dengan row tebakan.
+
+### Mapping status, coverage, dan collision
+
+Status worksheet-level tidak mutually exclusive pada collision:
+
+| Mapping classification | Count | % of 43 in-scope | Evidence |
+| --- | ---: | ---: | --- |
+| `CONFIRMED*` | 7 | 16.3% | canonical + Januari–Juni 2026; candidate deterministik, no blocking issue |
+| `UNRESOLVED` tanpa collision | 26 | 60.5% | field/source semantics atau profile belum cukup untuk auto-map |
+| `COLLISION` overlap | 10 | 23.3% | duplicate date/source-key evidence; juga memiliki unresolved review |
+
+Dry-run gate totals:
+
+| Gate | Count |
+| --- | ---: |
+| `IMPORT_AFTER_REVIEW` | 7 |
+| `BLOCKED` | 36 |
+
+Duplicate/collision evidence dari seluruh staging rows, tanpa memilih winner:
+
+| Duplicate classification | Groups |
+| --- | ---: |
+| `BUSINESS_KEY_COLLISION` | 117 |
+| `TRUE_DUPLICATE` | 26 |
+| Total duplicate groups | 143 |
+
+`TRUE_DUPLICATE` tetap tidak dihapus atau di-merge pada Phase 6.
+`BUSINESS_KEY_COLLISION` memerlukan keputusan owner data karena business key
+sama tetapi content berbeda. Tanggal duplicate juga tetap blocking; source row
+tidak digeser atau dipilih secara otomatis.
+
+### Dry-run output
+
+| Metric | Result |
+| --- | ---: |
+| Source rows read | 6,093 |
+| Scanned cells | 429,953 |
+| Staging rows | 14,834 |
+| Candidate records | 12,473 |
+| Insert candidates (not executed) | 9,932 |
+| Update candidates (not executed) | 0 |
+| Existing rows skipped | 2,409 |
+| Rejected rows | 0 |
+| Manual-review rows | 2,493 |
+| Blocking issue entries | 175 |
+| Database writes | 0 |
+
+`Juli26-BB` regression tetap match: 352 rows, `insertCandidate = 0`,
+`updateCandidate = 0`, `skipCandidate = 352`, `rejected = 0`.
+
+### Parser compatibility dan code change decision
+
+| Cluster | Compatibility | Decision |
+| --- | --- | --- |
+| Canonical | SUPPORTED | Jangan refactor; gunakan sebagai reference |
+| Family A | PARTIALLY_SUPPORTED | Existing semantic mapping menghasilkan candidates, tetapi issue review tetap blocking; tidak ada hardcoded worksheet-specific column letter |
+| Family B | NOT_SUPPORTED for automatic value mapping | Tetap `UNRESOLVED`; perlu approved mapping profile |
+| Family C | NOT_SUPPORTED for automatic value mapping | Tetap `UNRESOLVED`; perlu approved mapping profile |
+
+Keputusan Phase 6: **NO CODE CHANGE**. Parser dan mapping layer sudah mampu
+mendeteksi schema family, provenance, unresolved, dan collision. Menambahkan
+fallback atau memaksa mapping pada 36 worksheet blocked akan bersifat
+speculative dan melanggar policy.
+
+### Validation
+
+| Command/check | Result |
+| --- | --- |
+| `npm.cmd run dynamic:verify` | PASS |
+| `npm.cmd run bb:mapping:test` | PASS — 27 assertions |
+| Live `run-bb-legacy-mapping.ts --compact` | PASS_WITH_REVIEW — 199 metadata, 43 in-scope, 0 read failure |
+| Database snapshot around dry-run | PASS — stable, `databaseWrites: 0` |
+| `npx.cmd tsc --noEmit --incremental false` | PASS |
+| `npm.cmd run lint` | PASS |
+| `npm.cmd run build` | PASS |
+
+Percobaan pertama di sandbox berhenti sebelum discovery dengan `fatalErrorCode:
+api` karena network restriction. Rerun read-only dengan akses jaringan yang
+diizinkan berhasil dan menjadi evidence Phase 6. Tidak ada `--write-report`,
+`sheets:import`, sync write, backfill, atau command mutasi yang dijalankan.
+
+### Database, Auth.js, dan Solar safety
+
+- Database: **READ-ONLY**; snapshot sebelum/sesudah stabil; writes `0`.
+- Migration/schema/seed/import/backfill: **NONE**.
+- Auth.js/login/session/proxy: **UNCHANGED**.
+- Solar parser, Solar mapping, Solar database data, KPI/UI/chart: **UNCHANGED**.
+- Source worksheet: **UNCHANGED**.
+
+### Phase 7 entry gate
+
+Phase 7: **`NOT READY`**.
+
+Sebelum import/backfill, owner harus menyetujui mapping contract untuk Family A,
+menentukan mapping manual untuk Family B/C, menyelesaikan 117
+`BUSINESS_KEY_COLLISION`, mendokumentasikan perlakuan 26 `TRUE_DUPLICATE`, dan
+menutup `UNRESOLVED`/`PROVENANCE_GAP` per worksheet. Phase 7 tidak boleh memilih
+winner, mengisi fallback speculative, membagi nilai monthly menjadi daily, atau
+mengimpor hasil dry-run ini tanpa approval.
+
+### Phase 6 conclusion
+
+Inventory dan evidence mapping telah selesai. Hasilnya bukan “semua worksheet
+berhasil diparse”, melainkan kontrak yang membedakan mapping deterministik dari
+legacy/unresolved/collision. Karena unresolved dan collision legitimate masih
+ada, status yang benar adalah **`PASS_WITH_REVIEW`** dan rekomendasi final
+adalah **jangan import/backfill sampai Phase 7 entry gate disetujui**.

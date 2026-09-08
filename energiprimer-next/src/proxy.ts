@@ -69,7 +69,7 @@ const protectedProxy = auth((request) => {
   // callbacks.authorized result is not applied after this callback runs, so
   // reject unauthenticated/non-admin requests before any protected layout or
   // dashboard child can render.
-  if (isProtectedPath(pathname) && request.auth?.user?.role !== "admin") {
+  if (isProtectedPath(pathname) && request.auth?.user?.role !== "ADMIN") {
     const loginUrl = new URL("/login", request.url);
     if (request.auth?.user) {
       loginUrl.searchParams.set("error", "unauthorized");

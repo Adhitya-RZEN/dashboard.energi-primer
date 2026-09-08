@@ -14,6 +14,22 @@ Phase 3 menambahkan Prisma sebagai data access layer di Next.js. Schema Prisma
 ditulis berdasarkan migration Laravel dan mempertahankan nama tabel/kolom
 existing menggunakan `@@map` dan `@map`.
 
+## Phase 2 user data model update (2026-09-08)
+
+Phase 2 menambahkan model data user yang additive dan kompatibel dengan Auth.js:
+`users.username` (unique), `users.status` (`ACTIVE`/`DISABLED`), role enum
+`ADMIN`/`USER`, serta `user_audit_logs` dengan foreign key actor/target yang
+restrictive. Detail audit, backfill, collision analysis, dan validasi ada di
+[`PHASE2_DATABASE_DATA_MODEL_2026-09-08.md`](./PHASE2_DATABASE_DATA_MODEL_2026-09-08.md).
+
+Migration sudah tersedia di kedua history repository, tetapi belum diterapkan ke
+database production. Existing `PasswordResetToken`, `Session`, password,
+email, `last_login_at`, dan timestamps dipertahankan. Tidak ada UI, mutation
+action, status enforcement, reset flow, atau audit-event writer yang ditambahkan
+dalam Phase 2. Production preflight tetap fail-closed terhadap data operation
+lainnya dan hanya mengizinkan controlled backfill username yang persis mengikuti
+aturan lokal-part email Phase 2.
+
 ## Migration history policy (Phase 6B)
 
 Repository ini memiliki dua history yang sengaja dipisahkan dan tidak boleh
