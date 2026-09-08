@@ -670,10 +670,257 @@ disposable concurrency run exposed a transient password/status atomicity
 failure; two subsequent runs passed, so the signal remains documented as a
 test-flakiness follow-up rather than suppressed.
 
-Vercel build and preview smoke verification remain blocked because no Vercel
-project link, target, preview URL, or usable authentication context was
-available. No deployment, Production migration, Production mutation, user
-read, audit read, or session test was performed.
+The rerun identified the Vercel project `projek-rzen/dashboard-energi-primer`
+with root directory `energiprimer-next` and Node `24.x`. The existing remote
+Production deployment is `Ready`; anonymous boundary checks returned `200` for
+`/login` and `307` to `/login` for protected User Management and Audit Log
+routes. The current workspace `vercel build --prod` compiled successfully but
+failed during Windows symlink packaging with `EPERM`; `--standalone` had the
+same result. An existing Preview deployment returned `404` for the checked
+application routes. Phase 10R therefore remains `BLOCKED`, and no deployment,
+Production migration, mutation, user read, audit read, or session test was
+performed.
 
 Evidence is recorded in
 `docs/PHASE10R_VERCEL_PRISMA_BUILD_INTEGRITY_2026-09-08.md`.
+
+## 27. Production Migration Gate — blocked
+
+The controlled Production Migration Gate was evaluated against the approved
+Phase 2 artifact, but it stopped before any Production connection or
+preflight. Phase 10R remains `BLOCKED` because the current-source Vercel
+packaging check failed on Windows symlink creation and the available Preview
+returned `404`; the gate therefore does not satisfy the required
+`Phase 10R = VERIFIED` and `Vercel build = PASS / READY` preconditions.
+
+The canonical artifact remains
+`prisma/production/migrations/20260908120000_add_user_management_data_model/migration.sql`.
+Its root/production copies are identical and the SQL was reviewed locally,
+but Production target identity, operator backup, migration history, schema
+baseline, and post-migration integrity were not verified in this gate.
+
+```text
+Production Vercel project = CONFIRMED (projek-rzen/dashboard-energi-primer)
+Production database target = NOT CONFIRMED
+Production backup = NOT RUN / UNKNOWN
+Production migration = NOT PERFORMED
+Production user mutation = NOT PERFORMED
+Production audit mutation = NOT PERFORMED
+Production audit read = NOT PERFORMED
+Production deployment = NOT PERFORMED
+```
+
+Evidence is recorded in
+`docs/PRODUCTION_MIGRATION_GATE_2026-09-08.md`. The next gate remains
+`Production Mutation Gate = NOT READY`.
+
+## 28. Phase 10R-V2 current-source Vercel verification
+
+The remediation commit is now committed and pushed: local `HEAD` and
+`origin/NextJs` both equal `958a83518fe18ea7ccc357a5e2790d39ff400828`. Vercel
+deployment `dpl_HYW2ipiPSLS8orb4o5BokxRYhMUM` reports the same Git SHA and
+`Ready` Production status. Its build log explicitly shows dependency install,
+`postinstall` Prisma generation, `prebuild` Prisma generation from
+`prisma/schema.prisma`, Prisma Client `6.19.3`, TypeScript, and 17-page Next.js
+build completion.
+
+Phase 10R-V2 remains `BLOCKED` because no Preview deployment from that same
+commit exists. The only existing Preview is from an older commit and returned
+`404` for the checked application routes, so it is not valid evidence. A
+temporary Git branch push was not performed after the workspace safety boundary
+rejected public repository egress without explicit authorization.
+
+Evidence is recorded in
+`docs/PHASE10R_V2_CURRENT_SOURCE_VERCEL_VERIFICATION_2026-09-08.md`. Production
+migration and all Production User Management mutations remain not performed.
+
+## 29. Phase 10R-V3 current-source Vercel Preview verification
+
+The user explicitly authorized the temporary branch push after the prior
+safety rejection. The push succeeded without force-push: remote branch
+`phase10r-v2-verification-20260908` points to
+`958a83518fe18ea7ccc357a5e2790d39ff400828`.
+
+Vercel was polled for a Preview from that branch and SHA, but it continued to
+show only the older Preview from commit
+`dc5a0c299552738f8434fac0942d1c37d07e7166`. No direct deployment workaround
+was used. Phase 10R-V3 therefore remains `BLOCKED`; the matching Preview
+build, smoke, and Prisma runtime criteria are not verified.
+
+The Production Migration Gate remains `NOT READY` and was not executed. No
+Production database access, migration, mutation, audit read, or deployment
+was performed. Evidence is recorded in
+`docs/PHASE10R_V3_CURRENT_SOURCE_VERCEL_PREVIEW_2026-09-08.md`.
+
+## 30. Phase 10R-V4 Vercel Preview trigger diagnosis
+
+Phase 10R-V4 performed a read-only deployment-boundary diagnosis. Local and
+remote Git state matched target SHA
+`958a83518fe18ea7ccc357a5e2790d39ff400828`; the existing verification branch
+was not pushed again or rewritten.
+
+The Vercel project metadata confirms the GitHub repository
+`dashboard.energi-primer`, production branch `NextJs`, root `energiprimer-next`,
+Next.js, Node `24.x`, and project-level Git deployment creation enabled. The
+only Preview remains the old `dc5a0c2` deployment. Non-production branch
+policy, Ignore Build Step behavior, and GitHub-to-Vercel event delivery are
+not exposed by the available read-only tooling.
+
+The root cause is therefore `UNVERIFIED` under the tooling limitation
+category. No configuration, application, database, migration, mutation, or
+deployment was changed. Phase 10R and the Production Migration Gate remain
+blocked/not ready. Evidence is recorded in
+`docs/PHASE10R_V4_VERCEL_PREVIEW_TRIGGER_DIAGNOSIS_2026-09-08.md`.
+
+## 31. Phase 10R-V2 current-source Preview verification rerun
+
+The user-created Preview was verified directly at deployment
+`dpl_99HUUjJp6dNoyugWwKwVs1fQQfac`. It is a `Ready` Preview from branch
+`NextJs` with source commit
+`958a83518fe18ea7ccc357a5e2790d39ff400828`.
+
+Its Vercel build log proves dependency installation, explicit Prisma
+generation from `prisma/schema.prisma` in both `postinstall` and `prebuild`,
+Prisma Client `6.19.3`, TypeScript, and 17-page Next.js generation. Anonymous
+Preview smoke passed: `/login` returned `200`, and User Management/Audit Log
+returned `307` authentication boundaries. No Prisma runtime error appeared in
+the Preview request logs.
+
+Phase 10R-V2 rerun is `VERIFIED`, so Phase 10R is now `VERIFIED`. The
+Production Migration Gate is ready only for separate controlled execution; it
+was not run, and no Production database or mutation was touched. Evidence is
+recorded in
+`docs/PHASE10R_V2_CURRENT_SOURCE_VERCEL_VERIFICATION_RERUN_2026-09-08.md`.
+
+## 32. Production Migration Gate rerun - blocked before database access
+
+The Phase 10R prerequisite remains `VERIFIED`, and the canonical Production
+migration checksum passed:
+`C1EC53D7A1C41A8FC587EE0BA683E79AD86A54B10D13DA5EFFD2861A0416004E`.
+The root and Production migration copies are identical, and both Prisma
+schema copies are hash-identical.
+
+The Production Migration Gate rerun stopped before any database connection
+because an approved Production backup timestamp/reference was not available
+and the exact database target was not confirmed. Production preflight,
+migration history read, schema read, migration execution, and all data or
+audit operations were not performed. No credentials or secret values were
+printed.
+
+Evidence is recorded in
+`docs/PRODUCTION_MIGRATION_GATE_RERUN_2026-09-08.md`. The Production
+Migration Gate is `BLOCKED`; the Production Mutation Gate remains
+`NOT READY`.
+
+## 33. Production Backup Pre-Migration Gate - blocked
+
+The required Supabase CLI was not available on PATH:
+`supabase --version` could not be executed. The canonical `supabase db dump`
+mechanism was therefore not run, and no arbitrary replacement tool was used.
+
+No Production database connection was opened. No logical backup artifact,
+SHA-256, backup reference, secure storage location, or disposable restore
+evidence was created. No migration, mutation, cron, or sync was performed.
+The exact Production target was not confirmed, and no credential or secret
+value was printed or consumed. The documentation sync policy file
+`#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt` was NOT FOUND.
+
+Evidence is recorded in
+`docs/PRODUCTION_BACKUP_PRE_MIGRATION_GATE_2026-09-08.md`. Production Backup
+Gate is `BLOCKED` and Production Migration Gate remains `NOT READY`.
+
+## 34. Production Backup Pre-Migration Gate rerun - blocked by dump runtime
+
+The Supabase CLI is now available and verified as version 2.117.0. Project
+metadata matched the Production project EnergiPrimer, reference
+`sreumdkeifkcqmakrfnc`, with the Direct PostgreSQL endpoint on port 5432.
+
+The canonical `supabase db dump --schema public` command was attempted, but
+exited with code 1 before pg_dump because Docker and Podman were unavailable.
+The zero-byte partial artifact was preserved in an external user-only,
+EFS-encrypted directory. The data-only dump was not attempted after the schema
+dump failure. No valid backup hash/reference, restore evidence, migration,
+mutation, cron, or sync was produced.
+
+Evidence is recorded in
+`docs/PRODUCTION_BACKUP_PRE_MIGRATION_GATE_2026-09-08.md`. Production Backup
+Gate remains `BLOCKED` and Production Migration Gate remains `NOT READY`.
+
+## 34. Production Backup Gate rerun - target confirmation blocked
+
+The Supabase CLI is now available at version `2.117.0`. A read-only
+`supabase projects list` lookup could not verify the project because no
+authenticated Supabase session or access token is configured.
+
+Sanitized local connection metadata identifies the direct endpoint as
+`db.sreumdkeifkcqmakrfnc.supabase.co:5432` and the pooler as
+`aws-0-ap-southeast-1.pooler.supabase.com:6543`. This does not independently
+prove that the target is the approved Production database. No credential value
+was printed or passed to a database command.
+
+The rerun stopped before `supabase db dump`. No Production connection, backup
+artifact, hash, reference, secure storage, restore, migration, or mutation was
+performed. Evidence is recorded in
+`docs/PRODUCTION_BACKUP_PRE_MIGRATION_GATE_2026-09-08.md`. Production Backup
+Gate remains `BLOCKED`.
+
+## 35. Supabase to local migration rehearsal - PASS_WITH_REVIEW
+
+The confirmed Supabase Production target was inspected read-only, a protected
+public-schema logical snapshot was created, restored to a disposable local
+PostgreSQL 18.4 cluster, and the user-management migration was applied
+successfully only at 127.0.0.1:55432.
+
+Migration, enum, schema, index, constraint, foreign-key, migration-history,
+data-preservation, Prisma, TypeScript, lint, build, and focused disposable
+Phase 2-10 checks passed. No Production mutation or migration occurred.
+
+The result is `PASS_WITH_REVIEW` because the snapshot scope is public schema
+only, local PostgreSQL is 18.4 versus Production 17.6, and optional browser
+validation was not run. Full evidence is recorded in
+`docs/PRODUCTION_LOCAL_MIGRATION_REHEARSAL_2026-09-08.md`. This evidence does
+not authorize Production migration.
+
+## 36. Production Migration Gate pre-authorization preflight - 2026-09-08
+
+The final Production preflight was completed read-only against the verified
+Supabase target. Project identity, PostgreSQL 17.6, database `postgres`, port
+5432, UTC timezone, finished baseline history, pending target migration, no
+failed/rolled-back migration, relevant legacy `users` schema, indexes,
+`users_pkey`, one existing user row, and absence of target enums/audit table
+all matched the local rehearsal baseline.
+
+Both migration copies matched the approved SHA-256
+`C1EC53D7A1C41A8FC587EE0BA683E79AD86A54B10D13DA5EFFD2861A0416004E`.
+Supabase Free backup/PITR limitations remain; the temporary local logical
+snapshot rehearsal is not a retained Production backup.
+
+Explicit Production authorization was not provided in the current request.
+`npx prisma migrate deploy --schema=prisma/production/schema.prisma` was not
+run, and no Production mutation, DDL, DML, cron, or sync was performed.
+Post-migration verification is therefore not applicable. Evidence is recorded
+in `docs/PRODUCTION_MIGRATION_GATE_PREAUTH_2026-09-08.md`.
+
+Production Migration Gate remains `BLOCKED — WAITING FOR PRODUCTION
+AUTHORIZATION`.
+
+## 37. Production Migration Gate execution and post-verification - 2026-09-08
+
+Explicit Production authorization was received after the final read-only
+preflight passed. The only migration command executed was
+`npx prisma migrate deploy --schema=prisma/production/schema.prisma` against
+the verified Supabase Direct Production target. It completed with exit code
+0 and applied `20260908120000_add_user_management_data_model`.
+
+Post-migration verification passed for migration history/checksum, enums,
+`users.username`, `users.status`, `users.role`, defaults, indexes, primary
+key, `UserAuditLog`, audit indexes, foreign keys and referential actions,
+existing user-data invariants, username backfill, and zero unexpected audit
+rows. No credential or secret was recorded.
+
+Supabase Free has no managed automatic backup/PITR. The local rehearsal
+snapshot was temporary and is not a retained Production backup. Because this
+recovery limitation remains, the overall result is
+`PASS_WITH_REVIEW`, while the migration and integrity verification are
+complete. Evidence is recorded in
+`docs/PRODUCTION_MIGRATION_GATE_FINAL_2026-09-08.md`.
