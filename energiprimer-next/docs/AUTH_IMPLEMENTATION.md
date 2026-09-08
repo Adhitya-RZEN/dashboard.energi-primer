@@ -644,3 +644,36 @@ Production audit read = NOT PERFORMED
 Production user read = NOT PERFORMED
 Production deployment = NOT PERFORMED
 ```
+
+## 26. Phase 10R Prisma build-integrity boundary
+
+Phase 10R confirmed that the application Prisma source of truth is
+`prisma/schema.prisma`, using the default `prisma-client-js` generator and
+the package `@prisma/client`. The root and production schemas are currently
+byte-identical for this data-model contract; the production schema remains a
+migration/preflight boundary and was not used against Production.
+
+The build lifecycle now runs the explicit command
+`prisma generate --schema=prisma/schema.prisma` from both `postinstall` and
+`prebuild`, before the existing CSP patch. This closes the clean-install gap
+where `@prisma/client` could leave its stub client after its own postinstall
+could not resolve the Prisma CLI and silently returned success. No feature
+code, schema contract, dependency version, type suppression, or build bypass
+was added.
+
+A clean archive with no `node_modules`, `.next`, or generated client first
+reproduced the missing-enum/model TypeScript failures. After the lifecycle
+change, clean install, Prisma generation, TypeScript, and Next production
+build passed. The active workspace also passed the Phase 10 static checks,
+disposable PostgreSQL suites, and browser E2E suites. One initial aggregate
+disposable concurrency run exposed a transient password/status atomicity
+failure; two subsequent runs passed, so the signal remains documented as a
+test-flakiness follow-up rather than suppressed.
+
+Vercel build and preview smoke verification remain blocked because no Vercel
+project link, target, preview URL, or usable authentication context was
+available. No deployment, Production migration, Production mutation, user
+read, audit read, or session test was performed.
+
+Evidence is recorded in
+`docs/PHASE10R_VERCEL_PRISMA_BUILD_INTEGRITY_2026-09-08.md`.

@@ -654,3 +654,30 @@ and Production CSP remains OFF.
   `docs/PHASE10_FULL_VALIDATION_PRODUCTION_READINESS_2026-09-08.md`.
 - The referenced `#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt` was not found during
   the Phase 10 documentation-first review; do not infer or invent its rules.
+
+## 26. Phase 10R Vercel / Prisma build-integrity gate
+
+- The application Prisma source of truth is `prisma/schema.prisma` with the
+  default `prisma-client-js` generator. The generated package consumed by the
+  application is `@prisma/client`; the production schema is a separate
+  migration/preflight boundary.
+- `package.json` now runs
+  `prisma generate --schema=prisma/schema.prisma` in both `postinstall` and
+  `prebuild`, followed by the existing CSP patch. Keep this explicit lifecycle
+  guard in place; do not rely on the `@prisma/client` dependency postinstall.
+- The clean-install reproduction showed the ungenerated Prisma stub and the
+  reported missing-enum/model TypeScript errors. After the lifecycle change,
+  clean install, generated-client symbol verification, TypeScript, local build,
+  disposable suites, and browser E2E passed.
+- An aggregate disposable concurrency verifier had one transient
+  `PASSWORD_STATUS_PASSWORD_ATOMICITY_FAILED` result, followed by two passing
+  runs. Do not hide or weaken this check; investigate if it recurs.
+- Vercel build and preview smoke test are `NOT RUN / BLOCKED` because no
+  project link, target, preview URL, or usable Vercel authentication context
+  was available. No deploy or project linking was attempted.
+- Phase 10R evidence is recorded in
+  `docs/PHASE10R_VERCEL_PRISMA_BUILD_INTEGRITY_2026-09-08.md`.
+- Production migration, mutation, user read, audit read, session test, and
+  deployment remain `NOT PERFORMED`.
+- The referenced `#-PROJECT-DOCUMENTATION-SYNC-POLICY.txt` remains absent;
+  do not infer or invent its rules.
