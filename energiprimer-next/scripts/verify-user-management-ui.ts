@@ -173,11 +173,49 @@ function testNoMutationOrSensitivePersistence() {
   );
 }
 
+function testActionMenuBoundary() {
+  const client = readSource(
+    "src/components/user-management/UserManagementClient.tsx",
+  );
+  const menuStart = client.indexOf("function UserActionMenu");
+  const menuEnd = client.indexOf("function UserTable", menuStart);
+  const menu = client.slice(menuStart, menuEnd);
+  const editTrigger = menu.indexOf('onClick={() => select("edit")}');
+  const resetCondition = menu.indexOf("!user.isCurrentUser");
+
+  assert(
+    menuStart >= 0 &&
+      menuEnd > menuStart &&
+      menu.includes('type="button"') &&
+      menu.includes('aria-haspopup="menu"') &&
+      menu.includes("aria-expanded={isOpen}") &&
+      menu.includes("setIsOpen((open) => !open)"),
+    "each user row has an independently controlled action trigger",
+  );
+  assert(
+    menu.includes("createPortal(menu, document.body)") &&
+      menu.includes('position: "fixed"') &&
+      menu.includes("handlePointerDown") &&
+      menu.includes("handleKeyDown") &&
+      !menu.includes("<details") &&
+      !menu.includes("className=\"absolute right-0"),
+    "action menu escapes the table overflow clipping boundary and closes safely",
+  );
+  assert(
+    editTrigger >= 0 &&
+      resetCondition > editTrigger &&
+      menu.includes('onClick={() => select("reset-password")}') &&
+      menu.includes("onSelect(action, user, statusAction)"),
+    "ADMIN can open Edit User for every row while Reset Password remains hidden only for self",
+  );
+}
+
 try {
   testRouteBoundary();
   testNavigationBoundary();
   testPresentationSurface();
   testNoMutationOrSensitivePersistence();
+  testActionMenuBoundary();
 
   console.log(
     JSON.stringify(

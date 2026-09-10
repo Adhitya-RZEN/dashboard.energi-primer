@@ -190,7 +190,8 @@ Gap
 Komponen
 
 - Logo PLN
-- Nama Dashboard
+- Brand utama: Energi Primer
+- Subtitle brand: Team
 - Notification (Future)
 - User Profile
 - Logout
@@ -203,19 +204,27 @@ Tinggi
 
 # Sidebar
 
-Menu
+Menu Utama
 
-- Dashboard
-- Monitoring
-- Data Batu Bara
-- Laporan
-- Pengaturan
+- Overview
+- Biomassa
+- Batubara
+- Solar
+- Stok Batubara
+- Target & Kinerja
+
+Sistem (ADMIN)
+
+- User Management
+- Audit Log
+
+Pengaturan tidak ditampilkan sebagai navigasi utama. Profil dan perubahan
+password tetap tersedia melalui menu akun pada navbar.
 
 Future
 
 - Hak Akses
 - Riwayat
-- Audit Log
 
 ---
 
@@ -584,5 +593,53 @@ API
 - Audit Log
 
 ---
+
+# Current UI Implementation
+
+## Branding
+
+Navbar dan halaman login menggunakan asset lokal `public/images/Logo_PLN.svg`
+sebagai logo utama. Lockup brand menampilkan `Energi Primer` sebagai judul
+utama dan `Team` sebagai subtitle.
+
+## Navigation and Access
+
+- Setiap item sidebar hanya menampilkan icon dan label utama; subtitle menu
+  dihilangkan.
+- State aktif sidebar mengikuti route saat ini dan page header/breadcrumb tetap
+  menjadi konteks halaman.
+- `Pengaturan` dihilangkan dari primary sidebar navigation.
+- Route `/pengaturan` dan fungsi profil/password tetap dipertahankan melalui
+  entry `Pengaturan Profil` pada menu akun.
+- `User Management` dan `Audit Log` tetap tersedia untuk ADMIN dengan guard
+  authorization yang sama.
+
+## Overview Presentation
+
+- KPI card Overview hanya menampilkan judul KPI, nilai, unit, dan konteks
+  periode/status yang relevan; explanatory calculation text dan source text
+  tidak ditampilkan.
+- Panel informasi `Sumber aktif`/`Periode` dihapus dari presentation Overview.
+- Filter tanggal/bulan/tahun dan sumber data tetap menjadi bagian dari logic
+  dashboard dan tidak diubah.
+
+## Validation and Task Status
+
+- `npm.cmd run lint`: PASS.
+- `npm.cmd run build`: PASS; seluruh route existing tetap masuk build output.
+- `npm.cmd run user-management:ui:verify`: PASS.
+- `npm.cmd run auth:security:verify`: PASS.
+- `npm.cmd run authz:security:verify`: PASS.
+- `npm.cmd run dashboard:verify-cutoff`: PASS.
+- Local production smoke: `/login` 200 dengan branding baru; seluruh route
+  protected yang diuji mengembalikan redirect 307 ke login tanpa session dan
+  tidak menunjukkan runtime-error signature.
+- `npm.cmd run auth:verify`: BLOCKED karena environment tidak menyediakan
+  `AUTH_TEST_ADMIN_EMAIL` dan `AUTH_TEST_ADMIN_PASSWORD`; authenticated role
+  E2E perlu dijalankan terpisah dengan credential test yang aman.
+
+Status task: **PASS_WITH_REVIEW**. UI wajib telah diimplementasikan dan
+verifikasi read-only/auth boundary lulus; authenticated ADMIN-vs-USER E2E
+masih memerlukan environment credential test.
 
 End of Document

@@ -11,6 +11,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 
 import {
   changeStatus,
@@ -982,31 +983,111 @@ type UserActionMenuProps = {
 };
 
 function UserActionMenu({ user, onSelect }: UserActionMenuProps) {
-  const menuRef = useRef<HTMLDetailsElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const protectedTarget = Boolean(
     user.isCurrentUser || user.isProtectedAdministrator,
   );
+  const menuWidth = 208;
+  const menuGap = 8;
+  const viewportPadding = 8;
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menuRef.current?.getBoundingClientRect();
+    const width = menuRect?.width || menuWidth;
+    const height = menuRect?.height || 220;
+    const maxLeft = Math.max(
+      viewportPadding,
+      window.innerWidth - width - viewportPadding,
+    );
+    const left = Math.min(
+      Math.max(viewportPadding, triggerRect.right - width),
+      maxLeft,
+    );
+    const opensBelow =
+      triggerRect.bottom + menuGap + height <=
+      window.innerHeight - viewportPadding;
+    const top = opensBelow
+      ? triggerRect.bottom + menuGap
+      : Math.max(viewportPadding, triggerRect.top - height - menuGap);
+
+    setMenuPosition({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    updateMenuPosition();
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        triggerRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setMenuPosition(null);
+      setIsOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMenuPosition(null);
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
 
   function select(
     action: RowAction,
     statusAction?: StatusAction,
   ) {
-    menuRef.current?.removeAttribute("open");
+    setMenuPosition(null);
+    setIsOpen(false);
     onSelect(action, user, statusAction);
   }
 
   const actionClassName =
     "block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50";
-
-  return (
-    <details ref={menuRef} className="relative inline-block text-left">
-      <summary
-        aria-label={`Actions for ${user.name}`}
-        className="flex size-9 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-lg font-bold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+  const menu =
+    isOpen ? (
+      <div
+        ref={menuRef}
+        role="menu"
+        aria-label={"Actions for " + user.name}
+        className="z-[60] w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
+        style={{
+          position: "fixed",
+          top: menuPosition?.top ?? 0,
+          left: menuPosition?.left ?? 0,
+          visibility: menuPosition ? "visible" : "hidden",
+        }}
       >
-        <span aria-hidden="true">⋮</span>
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
         <button
           type="button"
           className={actionClassName}
@@ -1052,7 +1133,29 @@ function UserActionMenu({ user, onSelect }: UserActionMenuProps) {
           </p>
         ) : null}
       </div>
-    </details>
+    ) : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={"Actions for " + user.name}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-slate-200 text-lg font-bold leading-none text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        onClick={(event) => {
+          event.stopPropagation();
+          setMenuPosition(null);
+          setIsOpen((open) => !open);
+        }}
+      >
+        <span aria-hidden="true">⋮</span>
+      </button>
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(menu, document.body)
+        : null}
+    </>
   );
 }
 

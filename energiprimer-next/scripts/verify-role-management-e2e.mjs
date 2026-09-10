@@ -284,6 +284,79 @@ async function expectLoginFailure(page, origin, email, password) {
   assert(new URL(page.url()).pathname === "/login", "LOGIN_FAILURE_REDIRECT");
 }
 
+async function verifyActionMenuAndEdit(adminPage, userPage, origin) {
+  const targets = [
+    { name: actorName, resetVisible: false },
+    { name: otherAdminName, resetVisible: true },
+    { name: activeTargetName, resetVisible: true },
+  ];
+
+  for (const target of targets) {
+    let step = "navigate-users";
+    try {
+      await adminPage.goto(`${origin}/pengaturan/users`, {
+        waitUntil: "domcontentloaded",
+      });
+      const row = adminPage.getByRole("row").filter({ hasText: target.name });
+      const trigger = row.getByLabel(`Actions for ${target.name}`);
+      step = "open-actions";
+      await trigger.click();
+      const menu = adminPage.getByRole("menu", {
+        name: `Actions for ${target.name}`,
+      });
+      await menu.waitFor({ state: "visible", timeout: 20_000 });
+      assert(
+        (await trigger.getAttribute("aria-expanded")) === "true",
+        `ACTION_MENU_NOT_EXPANDED_${target.name.replaceAll(" ", "_")}`,
+      );
+      assert(
+        (await menu.getByRole("button", { name: "Edit User", exact: true }).count()) ===
+          1,
+        `EDIT_ACTION_MISSING_${target.name.replaceAll(" ", "_")}`,
+      );
+      assert(
+        (await menu.getByRole("button", { name: "Reset Password", exact: true }).count()) ===
+          (target.resetVisible ? 1 : 0),
+        `RESET_ACTION_VISIBILITY_${target.name.replaceAll(" ", "_")}`,
+      );
+
+      step = "open-edit";
+      await menu.getByRole("button", { name: "Edit User", exact: true }).click();
+      const dialog = adminPage.getByRole("dialog");
+      await dialog.getByRole("heading", { name: "Edit User", exact: true }).waitFor({
+        state: "visible",
+        timeout: 20_000,
+      });
+      assert(
+        (await dialog
+          .getByText(`Review profile details for ${target.name}.`, {
+            exact: true,
+          })
+          .count()) >= 1,
+        `EDIT_TARGET_NOT_SHOWN_${target.name.replaceAll(" ", "_")}`,
+      );
+      step = "cancel-edit";
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+    } catch {
+      throw new Error(
+        `UI_ACTION_${step}_${target.name.replaceAll(" ", "_")}`,
+      );
+    }
+  }
+
+  await userPage.goto(`${origin}/pengaturan/users`, {
+    waitUntil: "domcontentloaded",
+  });
+  await userPage
+    .waitForURL((url) => url.pathname === "/dashboard", { timeout: 20_000 })
+    .catch(() => {});
+  assert(
+    new URL(userPage.url()).pathname === "/dashboard",
+    "USER_RETAINED_USER_MANAGEMENT_ACCESS",
+  );
+}
+
 async function changeRoleThroughUi(page, origin, targetName, nextRole) {
   let step = "navigate-users";
   try {
@@ -418,6 +491,9 @@ try {
   await login(adminPage, origin, actorEmail, actorPassword);
   await login(activeUserPage, origin, activeTargetEmail, activeTargetPassword);
   await login(otherAdminPage, origin, otherAdminEmail, otherAdminPassword);
+
+  stage = "verify-action-menu-and-edit-boundaries";
+  await verifyActionMenuAndEdit(adminPage, activeUserPage, origin);
 
   stage = "promote-active-user-through-ui";
   const activeBefore = await prisma.user.findUniqueOrThrow({

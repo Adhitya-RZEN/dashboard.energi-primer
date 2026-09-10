@@ -948,3 +948,25 @@ PRODUCTION TEST ACCOUNT`. Evidence is recorded in
 
 Production Post-Migration & Application Smoke Test is
 `PASS_WITH_REVIEW`. Production Migration remains `APPLIED AND VERIFIED`.
+
+## 39. User Management action-menu fix - 2026-09-10
+
+The User Management row action menu was moved out of the table's
+`overflow-x-auto` clipping boundary. Each row now has a controlled button
+trigger and a fixed-position body portal, with outside-click, Escape, resize,
+and scroll handling. This keeps the menu and its Edit User/Reset Password
+actions usable for the current administrator, another ADMIN, and USER targets.
+
+The Phase 6 `resetPassword` Server Action and authorization policy were reused
+without changing their security semantics. Reset Password remains hidden for
+self-targets, validates a minimum 12-character matching password, preserves
+the target role/status, advances the session security version, invalidates
+stale sessions, and writes credential-free `PASSWORD_RESET` audit metadata.
+Edit User now opens reliably for other rows; its profile form remains
+presentation-only as previously specified.
+
+Focused static Phase 5-9, authorization, UI, TypeScript, ESLint, schema
+validation, and production build checks passed. Disposable browser E2E passed
+for Reset Password and for the action-menu/Edit User matrix. No Production
+mutation, migration, cron, sync, or credential test was performed. Evidence:
+`docs/USER_MANAGEMENT_ACTIONS_FIX_2026-09-10.md`.

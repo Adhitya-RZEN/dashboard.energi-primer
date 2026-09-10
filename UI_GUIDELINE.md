@@ -447,16 +447,24 @@ Jangan mencampur banyak style icon.
 
 Sidebar
 
-* Dashboard
-* Monitoring
-* Data Batu Bara
-* Laporan
-* Pengaturan
+* Overview
+* Biomassa
+* Batubara
+* Solar
+* Stok Batubara
+* Target & Kinerja
+* User Management (ADMIN)
+* Audit Log (ADMIN)
+
+Setiap item sidebar hanya terdiri dari icon dan label utama. Subtitle kecil
+di bawah item tidak digunakan. `Pengaturan` tidak menjadi primary navigation;
+entry profil dan password tersedia dari menu akun pada navbar.
 
 Navbar
 
-* Logo
-* Dashboard Title
+* Logo PLN dari asset lokal project
+* Energi Primer sebagai brand title
+* Team sebagai brand subtitle
 * Notification
 * User Profile
 
@@ -597,6 +605,40 @@ sidebar-menu
 page-header
 
 dashboard-container
+
+---
+
+# Branding and Overview Alignment
+
+Navbar dan halaman login menggunakan logo PLN lokal dengan lockup `Energi
+Primer` dan `Team`. Logo memiliki alternative text dan ukuran intrinsik yang
+tetap agar tidak menyebabkan layout shift.
+
+Pada Overview, KPI card difokuskan pada judul, nilai, unit, serta konteks
+periode/status yang relevan. Teks explanatory calculation, source text, dan
+panel informasi `Sumber aktif`/`Periode` tidak ditampilkan. Formula, filter
+periode, dan sumber data tetap dipertahankan di data layer.
+
+`User Management` dan `Audit Log` tetap berada di navigation section Sistem
+untuk ADMIN dan tetap dilindungi authorization existing.
+
+---
+
+# Implementation Validation
+
+Validasi implementasi September 2026:
+
+* `npm.cmd run lint` — PASS
+* `npm.cmd run build` — PASS
+* User Management UI, auth security, authorization security, dan dashboard
+  cutoff verification — PASS
+* Local production smoke — `/login` 200 dengan branding baru; route protected
+  mengembalikan redirect 307 ke login tanpa session; tidak ada runtime-error
+  signature.
+* Credential-based authenticated auth verification BLOCKED karena
+  `AUTH_TEST_ADMIN_EMAIL` dan `AUTH_TEST_ADMIN_PASSWORD` tidak tersedia.
+
+Status task: **PASS_WITH_REVIEW**.
 
 ---
 

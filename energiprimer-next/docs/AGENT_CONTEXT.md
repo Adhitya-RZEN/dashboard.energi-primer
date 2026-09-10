@@ -940,3 +940,18 @@ as Production Migration verification or authorization.
 - Evidence: `docs/PRODUCTION_POST_MIGRATION_SMOKE_TEST_2026-09-08.md`.
 - Phase result: `PASS_WITH_REVIEW`; Production Migration remains
   `APPLIED AND VERIFIED`.
+
+## 39. User Management action-menu fix - 2026-09-10
+
+- The row action menu now uses a controlled button and a fixed-position
+  `document.body` portal, so table `overflow-x-auto` cannot clip menus for
+  lower or other-user rows.
+- Edit User opens for the current administrator, another ADMIN, and USER
+  targets. Edit persistence remains deferred; the dialog does not claim to
+  save profile changes.
+- Reset Password continues to reuse the Phase 6 Server Action, validation,
+  policy, session invalidation, and `PASSWORD_RESET` audit contract. The
+  self-reset UI restriction and server-side guard remain intact.
+- Static regression checks and disposable Reset Password/Role Management
+  browser E2E passed. No Production mutation or credential test was run.
+- Evidence: `docs/USER_MANAGEMENT_ACTIONS_FIX_2026-09-10.md`.
