@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { SignOutButton } from "./SignOutButton";
 import type { DashboardTheme } from "@/components/dashboard/dashboard-themes";
 
@@ -34,6 +36,7 @@ export function UserMenu({ user, theme }: UserMenuProps) {
   return (
     <details className="group relative">
       <summary
+        aria-label={`Buka menu akun ${displayName}`}
         className={`flex cursor-pointer list-none items-center gap-2 rounded-xl border border-transparent p-1.5 transition hover:border-slate-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 ${theme?.ring ?? "focus-visible:ring-blue-600"}`}
       >
         <span
@@ -71,7 +74,13 @@ export function UserMenu({ user, theme }: UserMenuProps) {
             {role}
           </span>
         </div>
-        <div className="pt-3">
+        <div className="space-y-2 pt-3">
+          <Link
+            className="block rounded-lg px-2 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-700 focus-visible:ring-offset-2"
+            href="/pengaturan"
+          >
+            Pengaturan Profil
+          </Link>
           <SignOutButton />
         </div>
       </div>

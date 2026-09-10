@@ -6,7 +6,7 @@ type OverviewKpiCardProps = {
   title: string;
   subtitle: string;
   metric: OverviewMetric;
-  label: string;
+  label?: string;
   href?: string;
   tone?: "green" | "blue" | "amber" | "violet";
 };
@@ -63,9 +63,11 @@ export function OverviewKpiCard({
         </span>
         <span className="text-xs text-slate-500">{metric.unit}</span>
       </div>
-      <p className="mt-2 truncate text-[11px] text-slate-500" title={label}>
-        {label}
-      </p>
+      {label ? (
+        <p className="mt-2 truncate text-[11px] text-slate-500" title={label}>
+          {label}
+        </p>
+      ) : null}
     </article>
   );
 

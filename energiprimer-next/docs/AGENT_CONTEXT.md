@@ -916,3 +916,27 @@ as Production Migration verification or authorization.
   snapshot is not a retained Production backup.
 - Overall result: `PASS_WITH_REVIEW` due to the recovery limitation. Evidence:
   `docs/PRODUCTION_MIGRATION_GATE_FINAL_2026-09-08.md`.
+
+## 38. Production post-migration application smoke test - 2026-09-08
+
+- Active Vercel Production deployment was inspected read-only:
+  `dashboard-energi-primer-i6lhj4w61-projek-rzen.vercel.app`, `READY`,
+  source SHA `4139fe1b3a5d9989bdd360033f3414c38f72d702`, matching workspace
+  HEAD.
+- Production database verification passed again for migration history/checksum,
+  enums, users schema/defaults, indexes/constraints, UserAuditLog, FKs,
+  required data invariants, unique/non-null usernames, and zero audit rows.
+- Anonymous smoke passed `/login` HTTP 200 and both protected routes with
+  HTTP 307 to `/login`; no runtime-error signature was detected.
+- Recent read-only Vercel 5xx query returned zero lines. No secret value was
+  read or recorded.
+- `vercel.json` remains unchanged with `/api/sync/google-sheets` at
+  `0 22 * * *`. Expected Production database/Auth/cron/Google environment
+  names were present by read-only metadata inspection. Cron and full sync were
+  not triggered.
+- Authentication and role-specific authorization were `NOT RUN — NO DEDICATED
+  PRODUCTION TEST ACCOUNT`; do not use a personal Production admin as a
+  fixture.
+- Evidence: `docs/PRODUCTION_POST_MIGRATION_SMOKE_TEST_2026-09-08.md`.
+- Phase result: `PASS_WITH_REVIEW`; Production Migration remains
+  `APPLIED AND VERIFIED`.

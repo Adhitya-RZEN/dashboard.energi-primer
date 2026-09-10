@@ -17,7 +17,7 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
         <Link
           className="flex min-w-0 shrink items-center gap-3"
           href="/dashboard"
-          aria-label="Buka dashboard monitoring"
+          aria-label="Buka dashboard Energi Primer"
         >
           <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
             {/* The local SVG uses intrinsic dimensions; a native image keeps
@@ -31,19 +31,15 @@ export function SiteHeader({ user, theme }: SiteHeaderProps) {
               className="size-9 object-contain"
             />
           </span>
-          <span className="hidden min-w-0 sm:block">
+          <span className="block min-w-0 max-w-[9rem] sm:max-w-none">
             <span className="block truncate text-sm font-bold tracking-tight text-slate-900 lg:text-base">
               Energi Primer
             </span>
+            <span className="block truncate text-[11px] font-medium text-slate-500">
+              Team
+            </span>
           </span>
         </Link>
-
-        <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
-          <span aria-hidden="true" className="h-8 w-px bg-slate-200" />
-          <span className="truncate text-sm font-semibold text-slate-700 lg:text-[15px]">
-            Monitoring Batu Bara
-          </span>
-        </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <span

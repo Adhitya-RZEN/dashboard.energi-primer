@@ -924,3 +924,27 @@ recovery limitation remains, the overall result is
 `PASS_WITH_REVIEW`, while the migration and integrity verification are
 complete. Evidence is recorded in
 `docs/PRODUCTION_MIGRATION_GATE_FINAL_2026-09-08.md`.
+
+## 38. Production post-migration application smoke test - 2026-09-08
+
+The active Vercel Production deployment was inspected read-only at
+`dashboard-energi-primer-i6lhj4w61-projek-rzen.vercel.app`, state `READY`,
+source commit `4139fe1b3a5d9989bdd360033f3414c38f72d702`, matching workspace
+HEAD.
+
+Post-migration database verification passed again for migration history and
+checksum, enums, user-management schema, indexes, constraints, audit table,
+foreign keys, required user-data invariants, unique/non-null usernames, and
+zero audit rows. Anonymous application smoke passed: `/login` returned 200,
+and `/pengaturan/users` plus `/pengaturan/audit-log` returned the expected
+307 login boundary without runtime-error signatures. Recent read-only Vercel
+5xx log inspection returned no lines.
+
+Cron/sync configuration remained unchanged at `/api/sync/google-sheets`
+scheduled for `0 22 * * *`; no cron or sync was triggered. Production
+authentication and role-specific authorization were `NOT RUN — NO DEDICATED
+PRODUCTION TEST ACCOUNT`. Evidence is recorded in
+`docs/PRODUCTION_POST_MIGRATION_SMOKE_TEST_2026-09-08.md`.
+
+Production Post-Migration & Application Smoke Test is
+`PASS_WITH_REVIEW`. Production Migration remains `APPLIED AND VERIFIED`.

@@ -21,42 +21,36 @@ const navigationSections: NavigationSection[] = [
       {
         href: "/dashboard",
         label: "Overview",
-        description: "Ringkasan operasional",
         icon: "overview",
         available: true,
       },
       {
         href: "/dashboard/biomassa",
         label: "Biomassa",
-        description: "Dashboard bahan bakar",
         icon: "biomassa",
         available: true,
       },
       {
         href: "/dashboard/batubara",
         label: "Batubara",
-        description: "Dashboard bahan bakar",
         icon: "batubara",
         available: true,
       },
       {
         href: "/dashboard/solar",
         label: "Solar",
-        description: "Dashboard energi solar",
         icon: "solar",
         available: true,
       },
       {
         href: "/dashboard/stok",
         label: "Stok Batubara",
-        description: "Stok dan HOP unit",
         icon: "stock",
         available: true,
       },
       {
         href: "/dashboard/target",
         label: "Target & Kinerja",
-        description: "Target dan pencapaian",
         icon: "target",
         available: true,
       },
@@ -66,16 +60,8 @@ const navigationSections: NavigationSection[] = [
     label: "Sistem",
     items: [
       {
-        href: "/pengaturan",
-        label: "Pengaturan",
-        description: "Preferensi dan profil",
-        icon: "settings",
-        available: true,
-      },
-      {
         href: "/pengaturan/users",
         label: "User Management",
-        description: "Kelola akses pengguna",
         icon: "users",
         available: true,
         adminOnly: true,
@@ -83,7 +69,6 @@ const navigationSections: NavigationSection[] = [
       {
         href: "/pengaturan/audit-log",
         label: "Audit Log",
-        description: "Riwayat aktivitas akun",
         icon: "audit",
         available: true,
         adminOnly: true,
@@ -249,11 +234,10 @@ export function NavigationMenu({ role }: NavigationMenuProps) {
             {visibleItems.map((item) => {
               const isActive = Boolean(
                 item.href &&
-                (pendingHref === item.href ||
-                  (item.href === "/dashboard"
-                    ? pathname === item.href
-                    : pathname === item.href ||
-                      pathname.startsWith(`${item.href}/`))),
+                (item.href === "/dashboard"
+                  ? pathname === item.href
+                  : pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`)),
               );
               const className = `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
                 isActive
@@ -279,11 +263,8 @@ export function NavigationMenu({ role }: NavigationMenuProps) {
                         />
                       ) : null}
                       <NavigationIcon name={item.icon} />
-                      <span className="min-w-0">
-                        <span className="block truncate">{item.label}</span>
-                        <span className="block truncate text-xs font-normal text-slate-500">
-                          {item.description}
-                        </span>
+                      <span className="min-w-0 truncate">
+                        {item.label}
                       </span>
                     </Link>
                   ) : (
@@ -293,11 +274,8 @@ export function NavigationMenu({ role }: NavigationMenuProps) {
                       title="Belum dimigrasikan"
                     >
                       <NavigationIcon name={item.icon} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate">{item.label}</span>
-                        <span className="block truncate text-xs font-normal text-slate-400">
-                          {item.description}
-                        </span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {item.label}
                       </span>
                       <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
                         Segera

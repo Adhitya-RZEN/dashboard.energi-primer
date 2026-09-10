@@ -94,3 +94,28 @@ No Production backup is claimed as available.
 `Production Migration Gate = PASS_WITH_REVIEW`  
 `Production Migration = APPLIED AND VERIFIED`  
 `Production Mutation Gate = CLOSED FOR THIS CHANGE`
+
+## 6. Post-Migration Application Smoke Test
+
+The active Vercel Production deployment was verified read-only as `READY` at
+`dashboard-energi-primer-i6lhj4w61-projek-rzen.vercel.app`, source commit
+`4139fe1b3a5d9989bdd360033f3414c38f72d702`, matching workspace HEAD.
+
+Anonymous smoke verification passed: `/login` returned HTTP 200, while
+`/pengaturan/users` and `/pengaturan/audit-log` returned HTTP 307 to `/login`
+without runtime-error signatures. Database verification passed again after
+the migration, including history/checksum, enums, user schema, indexes,
+constraints, UserAuditLog, foreign keys, data invariants, unique/non-null
+usernames, and zero audit rows.
+
+Cron/sync configuration remains unchanged at `/api/sync/google-sheets` with
+schedule `0 22 * * *`. Cron and full sync were not triggered. Authentication
+and role-specific authorization tests were `NOT RUN — NO DEDICATED PRODUCTION
+TEST ACCOUNT`; no Production credentials or personal administrator account
+was used.
+
+Full evidence is recorded in
+`docs/PRODUCTION_POST_MIGRATION_SMOKE_TEST_2026-09-08.md`.
+
+Production Post-Migration & Application Smoke Test:
+`PASS_WITH_REVIEW`

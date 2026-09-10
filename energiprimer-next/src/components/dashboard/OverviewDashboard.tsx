@@ -1,6 +1,5 @@
 import type {
   OverviewData,
-  OverviewMetric,
   OverviewUnitValue,
 } from "@/types/overview";
 
@@ -9,7 +8,6 @@ import { OverviewKpiCard } from "./OverviewKpiCard";
 import { OverviewEmptyState, OverviewUnavailable } from "./OverviewState";
 import {
   DashboardChartPanel,
-  DashboardDataStatus,
   DashboardPageHeader,
   DashboardPanel,
   DashboardSectionHeading,
@@ -26,10 +24,6 @@ function formatNumber(value: number | null, decimals = 0) {
         maximumFractionDigits: decimals,
         minimumFractionDigits: decimals,
       }).format(value);
-}
-
-function metricLabel(metric: OverviewMetric, fallback: string) {
-  return metric.available ? metric.source : fallback;
 }
 
 function UnitValues({
@@ -167,7 +161,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
         title="Overview Energi Primer"
         description="Ringkasan kondisi energi primer, konsumsi, target, dan kesiapan operasi."
       />
-      <DashboardDataStatus data={data} />
       {period.fallbackNotice ? (
         <DashboardWarning>
           <strong>Periode yang diminta belum tersedia.</strong>{" "}
@@ -195,11 +188,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Penerimaan Biomassa"
             subtitle={`Bulanan · ${period.monthLabel}`}
             metric={metrics.biomassReceiptMonthly}
-            label={
-              metrics.biomassReceiptMonthly.available
-                ? metrics.biomassReceiptMonthly.source
-                : "Tidak ada data biomassa"
-            }
             tone="green"
           />
           <OverviewKpiCard
@@ -207,11 +195,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Pemakaian Biomassa"
             subtitle={`Bulanan · ${period.monthLabel}`}
             metric={metrics.biomassConsumptionMonthly}
-            label={
-              metrics.biomassConsumptionMonthly.available
-                ? metrics.biomassConsumptionMonthly.source
-                : "Tidak ada data biomassa"
-            }
             tone="green"
           />
           <OverviewKpiCard
@@ -219,10 +202,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Pemakaian Batubara"
             subtitle={`Bulanan · ${period.monthLabel}`}
             metric={metrics.coalConsumptionMonthly}
-            label={metricLabel(
-              metrics.coalConsumptionMonthly,
-              "Tidak ada data konsumsi",
-            )}
             tone="blue"
           />
           <OverviewKpiCard
@@ -230,11 +209,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Stock Batubara"
             subtitle={`Harian · ${focusLabel}`}
             metric={metrics.coalStock}
-            label={
-              metrics.coalStock.progressPercent === null
-                ? "Tidak ada stok pada tanggal fokus"
-                : `Kapasitas 70.000 ton · ${metrics.coalStock.progressPercent}%`
-            }
             tone="amber"
           />
           <OverviewKpiCard
@@ -242,22 +216,12 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Total Pemakaian Solar"
             subtitle={`Bulanan · ${period.monthLabel}`}
             metric={metrics.solarConsumptionMonthly}
-            label={
-              metrics.solarConsumptionMonthly.available
-                ? metrics.solarConsumptionMonthly.source
-                : "Tidak ada data solar"
-            }
             tone="amber"
           />
           <OverviewKpiCard
             title="Realisasi Biomassa Kumulatif"
             subtitle={`s.d. ${period.monthLabel}`}
             metric={metrics.biomassCumulative}
-            label={
-              metrics.biomassCumulative.available
-                ? metrics.biomassCumulative.source
-                : "Tidak ada data biomassa"
-            }
             tone="violet"
           />
           <OverviewKpiCard
@@ -265,11 +229,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Progress Target Biomassa"
             subtitle="Realisasi / target tahunan"
             metric={metrics.biomassTargetProgress}
-            label={
-              metrics.biomassTargetProgress.available
-                ? metrics.biomassTargetProgress.source
-                : "Target biomassa belum tersedia"
-            }
             tone="violet"
           />
           <OverviewKpiCard
@@ -277,10 +236,6 @@ export function OverviewDashboard({ data }: OverviewDashboardProps) {
             title="Penerimaan Batubara"
             subtitle={`Bulanan · ${period.monthLabel}`}
             metric={metrics.coalReceiptMonthly}
-            label={metricLabel(
-              metrics.coalReceiptMonthly,
-              "Tidak ada data penerimaan",
-            )}
             tone="blue"
           />
         </div>

@@ -16,17 +16,22 @@ export function AuthShell({ children }: AuthShellProps) {
           href="/"
           aria-label={`Kembali ke ${publicEnv.appName}`}
         >
-          <span
-            aria-hidden="true"
-            className="flex size-10 items-center justify-center rounded-xl bg-sky-700 text-sm font-bold text-white shadow-sm"
-          >
-            EP
+          <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+            {/* The local SVG keeps login branding independent from external image hosts. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/Logo_PLN.svg"
+              alt="Logo PLN"
+              width={48}
+              height={48}
+              className="size-12 object-contain"
+            />
           </span>
           <span>
-            <span className="block text-sm font-bold text-slate-900">
-              PLN Indonesia Power
+            <span className="block text-sm font-bold tracking-tight text-slate-900">
+              Energi Primer
             </span>
-            <span className="block text-xs text-slate-500">UBP Jeranjang</span>
+            <span className="block text-xs font-medium text-slate-500">Team</span>
           </span>
         </Link>
         {children}
