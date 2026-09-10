@@ -970,3 +970,34 @@ validation, and production build checks passed. Disposable browser E2E passed
 for Reset Password and for the action-menu/Edit User matrix. No Production
 mutation, migration, cron, sync, or credential test was performed. Evidence:
 `docs/USER_MANAGEMENT_ACTIONS_FIX_2026-09-10.md`.
+
+## 40. User Management Edit User persistence + Deactivate/Activate fix - 2026-09-10
+
+The prior action-menu report recorded Edit User as presentation-only. That
+statement is superseded for the current implementation: Edit User now persists
+only `username`, `name`, and `email` through the `editUser` Server Action.
+The action derives the actor from the active session, requires an ACTIVE ADMIN,
+locks and rechecks actor/target authorization inside the serializable
+user-management transaction, rejects duplicate username/email values, and
+writes one `USER_UPDATED` audit row whose metadata contains only changed field
+names. Self-edit, other ADMIN edit, and USER-target edit are allowed for an
+ACTIVE ADMIN; a USER remains denied at the server boundary.
+
+The profile update does not write `password`, `role`, `status`, or `updatedAt`.
+This preserves the target's security state and keeps a profile edit from
+invalidating the actor's session. Existing role, status, and password actions
+retain their security-version/session invalidation behavior.
+
+The UI now submits the existing Edit User fields with pending/error/success
+handling and refreshes the list after success. Status presentation uses
+`Deactivate <username>?` and `Activate <username>?` while reusing the Phase 8
+`changeStatus` Server Action and mutation helper. Persisted status and audit
+semantics remain `ACTIVE`/`DISABLED` and `USER_ENABLED`/`USER_DISABLED`.
+
+Focused edit static/fake-transaction verification, Phase 5-9/Auth regression,
+TypeScript, ESLint, production build, and disposable browser E2E all passed.
+The E2E verified profile persistence for own ADMIN, other ADMIN, and USER
+targets, all three editable profile fields, role/status/password preservation,
+and the existing USER denial boundary. No Production mutation, migration,
+cron, sync, deployment, or credential test was performed. Evidence:
+`docs/USER_MANAGEMENT_EDIT_STATUS_FIX_2026-09-10.md`.

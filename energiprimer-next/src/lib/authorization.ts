@@ -193,7 +193,14 @@ async function loadLockedPolicyContext(
 
   const users = await tx.user.findMany({
     where: { id: { in: ids } },
-    select: { id: true, role: true, status: true },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+      username: true,
+      name: true,
+      email: true,
+    },
   });
   const actor = users.find((user) => user.id === actorUserId);
   const target = users.find((user) => user.id === targetUserId);
@@ -261,6 +268,21 @@ export async function assertCanResetPasswordInTransaction(
     asPolicySubject(context.actor),
     asPolicySubject(context.target),
   );
+  return context;
+}
+
+/**
+ * Profile edits are allowed for an active ADMIN targeting any user, including
+ * the actor. Unlike security-sensitive role, status, and password mutations,
+ * this guard deliberately does not impose a self-target restriction.
+ */
+export async function assertCanEditUserInTransaction(
+  tx: UserManagementTransaction,
+  actorId: bigint | string,
+  targetId: bigint | string,
+) {
+  const context = await loadLockedPolicyContext(tx, actorId, targetId);
+  assertAdminUser(asPolicySubject(context.actor));
   return context;
 }
 

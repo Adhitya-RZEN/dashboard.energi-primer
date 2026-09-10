@@ -286,7 +286,7 @@ async function expectLoginFailure(page, origin, email, password) {
 
 async function changeStatusThroughUi(page, origin, targetName, desiredStatus) {
   const isDisable = desiredStatus === "DISABLED";
-  const actionLabel = isDisable ? "Disable User" : "Enable User";
+  const actionLabel = isDisable ? "Deactivate" : "Activate";
   let step = "navigate-users";
   try {
     await page.goto(`${origin}/pengaturan/users`, { waitUntil: "domcontentloaded" });
@@ -300,7 +300,7 @@ async function changeStatusThroughUi(page, origin, targetName, desiredStatus) {
     await dialog.getByRole("button", { name: actionLabel, exact: true }).click();
     step = "wait-status-success";
     await page.getByText(
-      isDisable ? "User disabled successfully." : "User enabled successfully.",
+      isDisable ? "User deactivated successfully." : "User activated successfully.",
       { exact: true },
     ).waitFor({ state: "visible", timeout: 20_000 });
   } catch {

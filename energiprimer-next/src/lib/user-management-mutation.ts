@@ -15,7 +15,11 @@ import type { AuthorizationRole } from "./authorization-policy";
 import type { AuthorizationStatus } from "./authorization-policy";
 import type { UserManagementTransaction } from "./authorization";
 import { UserManagementDuplicateError } from "./user-management-errors";
-import type { NormalizedCreateUserInput } from "./user-management-validation";
+import type {
+  EditUserField,
+  NormalizedCreateUserInput,
+  NormalizedEditUserInput,
+} from "./user-management-validation";
 
 const createdUserSelect = {
   id: true,
@@ -85,6 +89,24 @@ const statusChangeUserSelect = {
   updatedAt: true,
 } as const;
 
+const profileUserSelect = {
+  id: true,
+  username: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+} as const;
+
+export type UserProfileRecord = {
+  id: bigint;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+};
+
 export type StatusChangeUserRecord = {
   id: bigint;
   username: string;
@@ -112,6 +134,35 @@ export async function assertUserCreationUnique(
   const emailMatch = await tx.user.findFirst({
     where: {
       email: { equals: input.email, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (emailMatch) throw new UserManagementDuplicateError("email");
+}
+
+/**
+ * Check editable identity fields against every other account while the
+ * caller's transaction holds the authorization locks. Database constraints
+ * remain the final race-safe enforcement.
+ */
+export async function assertUserProfileUnique(
+  tx: UserManagementTransaction,
+  targetUserId: bigint,
+  input: NormalizedEditUserInput,
+) {
+  const usernameMatch = await tx.user.findFirst({
+    where: {
+      username: { equals: input.username, mode: "insensitive" },
+      NOT: { id: targetUserId },
+    },
+    select: { id: true },
+  });
+  if (usernameMatch) throw new UserManagementDuplicateError("username");
+
+  const emailMatch = await tx.user.findFirst({
+    where: {
+      email: { equals: input.email, mode: "insensitive" },
+      NOT: { id: targetUserId },
     },
     select: { id: true },
   });
@@ -282,6 +333,41 @@ export async function changeUserStatusAndAudit(
         fromStatus,
         toStatus: updatedUser.status,
       },
+    },
+    select: { id: true },
+  });
+
+  return updatedUser;
+}
+
+/**
+ * Update only editable profile fields and record USER_UPDATED atomically.
+ * Role, status, password, and security-version fields are intentionally not
+ * included in the update payload.
+ */
+export async function updateUserProfileAndAudit(
+  tx: UserManagementTransaction,
+  actorUserId: bigint,
+  targetUserId: bigint,
+  input: NormalizedEditUserInput,
+  changedFields: EditUserField[],
+): Promise<UserProfileRecord> {
+  const updatedUser = await tx.user.update({
+    where: { id: targetUserId },
+    data: {
+      username: input.username,
+      name: input.name,
+      email: input.email,
+    },
+    select: profileUserSelect,
+  });
+
+  await tx.userAuditLog.create({
+    data: {
+      actorUserId,
+      targetUserId: updatedUser.id,
+      action: UserAuditAction.USER_UPDATED,
+      metadata: { fields: changedFields },
     },
     select: { id: true },
   });

@@ -284,11 +284,46 @@ async function expectLoginFailure(page, origin, email, password) {
   assert(new URL(page.url()).pathname === "/login", "LOGIN_FAILURE_REDIRECT");
 }
 
-async function verifyActionMenuAndEdit(adminPage, userPage, origin) {
+async function editProfileThroughUi(page, origin, currentName, values) {
+  await page.goto(`${origin}/pengaturan/users`, { waitUntil: "domcontentloaded" });
+  const row = page.getByRole("row").filter({ hasText: currentName });
+  await row.getByLabel(`Actions for ${currentName}`).click();
+  const menu = page.getByRole("menu", {
+    name: `Actions for ${currentName}`,
+  });
+  await menu.getByRole("button", { name: "Edit User", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("heading", { name: "Edit User", exact: true }).waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
+  if (values.username !== undefined) {
+    await dialog.locator("#edit-user-username").fill(values.username);
+  }
+  if (values.name !== undefined) {
+    await dialog.locator("#edit-user-name").fill(values.name);
+  }
+  if (values.email !== undefined) {
+    await dialog.locator("#edit-user-email").fill(values.email);
+  }
+  await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByText("User profile updated successfully.", { exact: true }).waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
+}
+
+async function verifyActionMenuAndEdit(
+  adminPage,
+  userPage,
+  origin,
+  records,
+  userUpdatedAuditAction,
+) {
   const targets = [
-    { name: actorName, resetVisible: false },
-    { name: otherAdminName, resetVisible: true },
-    { name: activeTargetName, resetVisible: true },
+    { record: records.actor, name: actorName, resetVisible: false },
+    { record: records.otherAdmin, name: otherAdminName, resetVisible: true },
+    { record: records.activeTarget, name: activeTargetName, resetVisible: true },
   ];
 
   for (const target of targets) {
@@ -335,9 +370,68 @@ async function verifyActionMenuAndEdit(adminPage, userPage, origin) {
           .count()) >= 1,
         `EDIT_TARGET_NOT_SHOWN_${target.name.replaceAll(" ", "_")}`,
       );
-      step = "cancel-edit";
-      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-      await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+      step = "save-edit";
+      const before = await prisma.user.findUniqueOrThrow({
+        where: { id: target.record.id },
+        select: {
+          username: true,
+          name: true,
+          email: true,
+          password: true,
+          role: true,
+          status: true,
+        },
+      });
+      const editedName = `${before.name} Edited`;
+      await dialog.locator("#edit-user-name").fill(editedName);
+      await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+      await adminPage
+        .getByText("User profile updated successfully.", { exact: true })
+        .waitFor({ state: "visible", timeout: 20_000 });
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: target.record.id },
+        select: {
+          username: true,
+          name: true,
+          email: true,
+          password: true,
+          role: true,
+          status: true,
+        },
+      });
+      assert(after.name === editedName, `EDIT_NAME_NOT_PERSISTED_${target.name.replaceAll(" ", "_")}`);
+      assert(
+        after.username === before.username &&
+          after.email === before.email &&
+          after.password === before.password &&
+          after.role === before.role &&
+          after.status === before.status,
+        `EDIT_SECURITY_FIELDS_CHANGED_${target.name.replaceAll(" ", "_")}`,
+      );
+      const profileAudit = await prisma.userAuditLog.findFirstOrThrow({
+        where: {
+          actorUserId: records.actor.id,
+          targetUserId: target.record.id,
+          action: userUpdatedAuditAction,
+        },
+        orderBy: { id: "desc" },
+        select: { metadata: true },
+      });
+      assert(
+        Array.isArray(profileAudit.metadata?.fields) &&
+          profileAudit.metadata.fields.length === 1 &&
+          profileAudit.metadata.fields[0] === "name",
+        `EDIT_AUDIT_INVALID_${target.name.replaceAll(" ", "_")}`,
+      );
+      await editProfileThroughUi(adminPage, origin, editedName, {
+        name: before.name,
+      });
+      step = "verify-edit-restore";
+      const restored = await prisma.user.findUniqueOrThrow({
+        where: { id: target.record.id },
+        select: { name: true },
+      });
+      assert(restored.name === before.name, `EDIT_NAME_RESTORE_FAILED_${target.name.replaceAll(" ", "_")}`);
     } catch {
       throw new Error(
         `UI_ACTION_${step}_${target.name.replaceAll(" ", "_")}`,
@@ -355,6 +449,54 @@ async function verifyActionMenuAndEdit(adminPage, userPage, origin) {
     new URL(userPage.url()).pathname === "/dashboard",
     "USER_RETAINED_USER_MANAGEMENT_ACCESS",
   );
+
+  const activeBefore = await prisma.user.findUniqueOrThrow({
+    where: { id: records.activeTarget.id },
+    select: {
+      username: true,
+      name: true,
+      email: true,
+      password: true,
+      role: true,
+      status: true,
+    },
+  });
+  const editedUsername = `${activeBefore.username}-edited`;
+  const editedEmail = `${activeBefore.username}.edited@example.invalid`;
+  const editedName = `${activeBefore.name} Profile Edited`;
+  await editProfileThroughUi(adminPage, origin, activeBefore.name, {
+    username: editedUsername,
+    name: editedName,
+    email: editedEmail,
+  });
+  const activeEdited = await prisma.user.findUniqueOrThrow({
+    where: { id: records.activeTarget.id },
+    select: {
+      username: true,
+      name: true,
+      email: true,
+      password: true,
+      role: true,
+      status: true,
+    },
+  });
+  assert(
+    activeEdited.username === editedUsername &&
+      activeEdited.name === editedName &&
+      activeEdited.email === editedEmail,
+    "EDIT_ALL_PROFILE_FIELDS_NOT_PERSISTED",
+  );
+  assert(
+    activeEdited.password === activeBefore.password &&
+      activeEdited.role === activeBefore.role &&
+      activeEdited.status === activeBefore.status,
+    "EDIT_ALL_PROFILE_FIELDS_CHANGED_SECURITY_STATE",
+  );
+  await editProfileThroughUi(adminPage, origin, editedName, {
+    username: activeBefore.username,
+    name: activeBefore.name,
+    email: activeBefore.email,
+  });
 }
 
 async function changeRoleThroughUi(page, origin, targetName, nextRole) {
@@ -493,7 +635,13 @@ try {
   await login(otherAdminPage, origin, otherAdminEmail, otherAdminPassword);
 
   stage = "verify-action-menu-and-edit-boundaries";
-  await verifyActionMenuAndEdit(adminPage, activeUserPage, origin);
+  await verifyActionMenuAndEdit(
+    adminPage,
+    activeUserPage,
+    origin,
+    { actor, otherAdmin, activeTarget },
+    UserAuditAction.USER_UPDATED,
+  );
 
   stage = "promote-active-user-through-ui";
   const activeBefore = await prisma.user.findUniqueOrThrow({

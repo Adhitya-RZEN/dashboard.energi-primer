@@ -308,13 +308,13 @@ async function changeRoleThroughUi(page, origin, targetName, nextRole) {
 }
 
 async function changeStatusThroughUi(page, origin, targetName, desiredStatus) {
-  const actionLabel = desiredStatus === "DISABLED" ? "Disable User" : "Enable User";
+  const actionLabel = desiredStatus === "DISABLED" ? "Deactivate" : "Activate";
   await openActions(page, origin, targetName);
   await page.getByRole("button", { name: actionLabel, exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: actionLabel, exact: true }).click();
   await page.getByText(
-    desiredStatus === "DISABLED" ? "User disabled successfully." : "User enabled successfully.",
+    desiredStatus === "DISABLED" ? "User deactivated successfully." : "User activated successfully.",
     { exact: true },
   ).waitFor({ state: "visible", timeout: 20_000 });
 }

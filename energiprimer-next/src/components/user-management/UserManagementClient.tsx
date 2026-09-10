@@ -17,12 +17,15 @@ import {
   changeStatus,
   changeRole,
   createUser,
+  editUser,
   resetPassword,
 } from "@/app/(protected)/pengaturan/users/actions";
 import {
   validateCreateUserInput,
   type CreateUserFieldErrors,
+  type EditUserFieldErrors,
   type PasswordResetFieldErrors,
+  validateEditUserInput,
   validatePasswordResetInput,
 } from "@/lib/user-management-validation";
 
@@ -45,6 +48,7 @@ type StatusAction = "ENABLE_USER" | "DISABLE_USER";
 type RowAction = Exclude<DialogName, "add" | "status" | null> | "status";
 
 const initialCreateUserState = { status: "idle" as const };
+const initialEditUserState = { status: "idle" as const };
 const initialResetPasswordState = { status: "idle" as const };
 const initialChangeRoleState = { status: "idle" as const };
 const initialChangeStatusState = { status: "idle" as const };
@@ -160,7 +164,7 @@ function PhaseNotice({ children }: { children: ReactNode }) {
       className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900"
       role="note"
     >
-      <strong>Presentation only:</strong> {children}
+      <strong>Server-enforced:</strong> {children}
     </div>
   );
 }
@@ -306,10 +310,6 @@ function DialogFooter({
       </button>
     </div>
   );
-}
-
-function validateEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 type AddUserForm = {
@@ -502,19 +502,38 @@ type EditUserForm = Pick<UserManagementUser, "username" | "name" | "email">;
 function EditUserDialog({
   user,
   onClose,
+  onCompleted,
 }: {
   user: UserManagementUser;
   onClose: () => void;
+  onCompleted: () => void;
 }) {
   const [form, setForm] = useState<EditUserForm>({
     username: user.username,
     name: user.name,
     email: user.email,
   });
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof EditUserForm, string>>
-  >({});
+  const [errors, setErrors] = useState<EditUserFieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    editUser,
+    initialEditUserState,
+  );
+
+  useEffect(() => {
+    if (state.status === "success") {
+      onCompleted();
+    }
+  }, [onCompleted, state.status]);
+
+  const displayErrors = {
+    ...(pending || state.status !== "error" ? {} : state.fieldErrors),
+    ...errors,
+  };
+  const displayNotice =
+    pending || state.status !== "error"
+      ? notice
+      : state.message ?? notice ?? "Unable to update user profile.";
 
   function updateField<K extends keyof EditUserForm>(
     field: K,
@@ -526,14 +545,17 @@ function EditUserDialog({
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextErrors: Partial<Record<keyof EditUserForm, string>> = {};
-    if (!form.username.trim()) nextErrors.username = "Username required";
-    if (!form.name.trim()) nextErrors.name = "Name required";
-    if (!validateEmail(form.email)) nextErrors.email = "Valid email required";
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-    setNotice("No changes were saved. User updates are deferred to a later phase.");
+    if (pending) {
+      event.preventDefault();
+      return;
+    }
+
+    const validation = validateEditUserInput(form);
+    setErrors(validation.fieldErrors);
+    setNotice(
+      validation.valid ? null : "Please correct the highlighted fields.",
+    );
+    if (!validation.valid) event.preventDefault();
   }
 
   return (
@@ -543,32 +565,45 @@ function EditUserDialog({
       onClose={onClose}
       size="lg"
     >
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form
+        className="space-y-5"
+        action={formAction}
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <input type="hidden" name="targetUserId" value={user.id} />
         <div className="grid gap-5 sm:grid-cols-2">
           <TextField
             id="edit-user-username"
+            name="username"
             label="Username"
             value={form.username}
             onChange={(value) => updateField("username", value)}
-            error={errors.username}
+            error={displayErrors.username}
+            disabled={pending}
             required
           />
           <TextField
             id="edit-user-name"
+            name="name"
             label="Name"
             value={form.name}
             onChange={(value) => updateField("name", value)}
-            error={errors.name}
+            error={displayErrors.name}
+            disabled={pending}
             required
           />
         </div>
         <TextField
           id="edit-user-email"
+          name="email"
           label="Email"
           type="email"
           value={form.email}
           onChange={(value) => updateField("email", value)}
-          error={errors.email}
+          error={displayErrors.email}
+          autoComplete="email"
+          disabled={pending}
           required
         />
         <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
@@ -589,20 +624,24 @@ function EditUserDialog({
             </div>
           </div>
           <p className="text-xs leading-5 text-slate-500 sm:col-span-2">
-            Role and status are read-only here. Their dedicated presentation
-            actions do not save changes in Phase 4.
+            Role and status are read-only here. Use their dedicated actions for
+            access changes; use Reset Password for credential changes.
           </p>
         </div>
-        {notice ? (
+        {displayNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
-            {notice}
+            {displayNotice}
           </p>
         ) : null}
         <PhaseNotice>
-          this profile form is presentation-only. No user profile changes will
-          be persisted.
+          the server validates and normalizes username, name, and email, checks
+          duplicates, and records a safe profile-update audit event.
         </PhaseNotice>
-        <DialogFooter onClose={onClose} submitLabel="Save changes" />
+        <DialogFooter
+          onClose={onClose}
+          submitLabel={pending ? "Saving..." : "Save changes"}
+          disabled={pending}
+        />
       </form>
     </DialogShell>
   );
@@ -892,7 +931,7 @@ function UserStatusDialog({
     changeStatus,
     initialChangeStatusState,
   );
-  const verb = isDisable ? "Disable User" : "Enable User";
+  const verb = isDisable ? "Deactivate" : "Activate";
 
   useEffect(() => {
     if (state.status === "success") {
@@ -920,7 +959,7 @@ function UserStatusDialog({
 
   return (
     <DialogShell
-      title={`${verb}?`}
+      title={`${verb} ${user.username}?`}
       description={`Review access for ${user.name}.`}
       onClose={onClose}
     >
@@ -944,8 +983,8 @@ function UserStatusDialog({
         </div>
         <p className="text-sm leading-6 text-slate-700">
           {isDisable
-            ? `${user.name} will no longer be able to access the application.`
-            : `${user.name} will be allowed to access the application again.`}
+            ? `${user.username} will no longer be able to log in.`
+            : `${user.username} will be allowed to log in again.`}
         </p>
         {protectedTarget ? (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">
@@ -1124,7 +1163,7 @@ function UserActionMenu({ user, onSelect }: UserActionMenuProps) {
               )
             }
           >
-            {user.status === "ACTIVE" ? "Disable User" : "Enable User"}
+            {user.status === "ACTIVE" ? "Deactivate" : "Activate"}
           </button>
         ) : null}
         {protectedTarget ? (
@@ -1353,13 +1392,19 @@ export function UserManagementClient({
     router.refresh();
   }, [closeDialog, router]);
 
+  const handleUserEdited = useCallback(() => {
+    closeDialog();
+    setFeedback("User profile updated successfully.");
+    router.refresh();
+  }, [closeDialog, router]);
+
   const handleStatusChanged = useCallback(() => {
     const wasDisable = statusAction === "DISABLE_USER";
     closeDialog();
     setFeedback(
       wasDisable
-        ? "User disabled successfully."
-        : "User enabled successfully.",
+        ? "User deactivated successfully."
+        : "User activated successfully.",
     );
     router.refresh();
   }, [closeDialog, router, statusAction]);
@@ -1508,7 +1553,11 @@ export function UserManagementClient({
         />
       ) : null}
       {activeDialog === "edit" && selectedUser ? (
-        <EditUserDialog user={selectedUser} onClose={closeDialog} />
+        <EditUserDialog
+          user={selectedUser}
+          onClose={closeDialog}
+          onCompleted={handleUserEdited}
+        />
       ) : null}
       {activeDialog === "reset-password" && selectedUser ? (
         <ResetPasswordDialog

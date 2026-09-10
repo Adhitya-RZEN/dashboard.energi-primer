@@ -72,8 +72,8 @@ function testPresentationSurface() {
     "Edit User",
     "Reset Password",
     "Change Role",
-    "Disable User",
-    "Enable User",
+    "Deactivate",
+    "Activate",
     "Add New User",
     "No users found",
     "No users yet",
@@ -116,13 +116,25 @@ function testPresentationSurface() {
     "Change Role dialog is action-integrated with safe pending and success feedback",
   );
   assert(
+    client.includes("editUser") &&
+      client.includes('name="username"') &&
+      client.includes('name="name"') &&
+      client.includes('name="email"') &&
+      client.includes('name="targetUserId"') &&
+      client.includes("Saving...") &&
+      client.includes("User profile updated successfully.") &&
+      !client.includes("No changes were saved") &&
+      !client.includes("presentation-only"),
+    "Edit User dialog submits username, name, and email through the server action",
+  );
+  assert(
     client.includes("changeStatus") &&
       client.includes('name="desiredStatus"') &&
       client.includes('name="targetUserId"') &&
       client.includes("Updating...") &&
-      client.includes("User disabled successfully.") &&
-      client.includes("User enabled successfully."),
-    "Enable/Disable dialog is action-integrated with safe pending and success feedback",
+      client.includes("User deactivated successfully.") &&
+      client.includes("User activated successfully."),
+    "Deactivate/Activate dialog is action-integrated with safe pending and success feedback",
   );
   assert(
     service.includes("requireAdminUser") &&
@@ -164,12 +176,13 @@ function testNoMutationOrSensitivePersistence() {
   const statusDialogStart = client.indexOf("function UserStatusDialog");
   const statusDialog = client.slice(statusDialogStart);
   assert(
-    client.includes("No changes were saved") &&
+    client.includes("editUser") &&
+      !client.includes("No changes were saved") &&
       !roleDialog.includes("presentation-only") &&
       statusDialog.includes("changeStatus") &&
       !statusDialog.includes("deferred to a later phase") &&
       !client.includes("No password was changed"),
-    "remaining deferred presentation actions provide no fake success while status mutation is persistent",
+    "profile and status actions provide no fake success and use persistent server mutations",
   );
 }
 

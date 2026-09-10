@@ -8,6 +8,7 @@ import {
   assertAdminUser,
   assertCanChangeRoleInTransaction,
   assertCanChangeStatusInTransaction,
+  assertCanEditUserInTransaction,
   assertCanResetPasswordInTransaction,
   AuthorizationPolicyError,
   isAuthorizationPolicyError,
@@ -16,10 +17,12 @@ import {
 } from "@/lib/authorization";
 import {
   assertUserCreationUnique,
+  assertUserProfileUnique,
   changeUserRoleAndAudit,
   changeUserStatusAndAudit,
   createUserAndAudit,
   resetUserPasswordAndAudit,
+  updateUserProfileAndAudit,
 } from "@/lib/user-management-mutation";
 import {
   duplicateUserField,
@@ -29,8 +32,11 @@ import {
   isAuthorizationRole,
   isUserManagementStatus,
   parseUserManagementUserId,
+  type EditUserField,
+  type EditUserFieldErrors,
   type PasswordResetFieldErrors,
   validateCreateUserInput,
+  validateEditUserInput,
   validatePasswordResetInput,
   type CreateUserFieldErrors,
 } from "@/lib/user-management-validation";
@@ -39,6 +45,7 @@ const BCRYPT_ROUNDS = 12;
 const SAFE_AUTHORIZATION_ERROR =
   "Your session is no longer authorized to perform this action.";
 const SAFE_GENERIC_ERROR = "Unable to create user.";
+const SAFE_EDIT_ERROR = "Unable to update user profile.";
 const SAFE_RESET_ERROR = "Unable to reset password.";
 const SAFE_ROLE_ERROR = "Unable to change user role.";
 const SAFE_TARGET_NOT_FOUND = "User not found.";
@@ -48,6 +55,7 @@ const SAFE_SELF_ROLE_ERROR =
   "You cannot change your own role from User Management.";
 const SAFE_NO_ROLE_CHANGE = "The user already has this role.";
 const SAFE_NO_STATUS_CHANGE = "The user already has this status.";
+const SAFE_NO_PROFILE_CHANGE = "No profile changes were provided.";
 const SAFE_INVALID_STATUS = "Invalid account status.";
 const SAFE_STATUS_ERROR = "Unable to update account status.";
 const SAFE_LAST_ADMIN_ERROR =
@@ -63,6 +71,12 @@ export type ResetPasswordState = {
   status: "idle" | "error" | "success";
   message?: string;
   fieldErrors?: PasswordResetFieldErrors;
+};
+
+export type EditUserState = {
+  status: "idle" | "error" | "success";
+  message?: string;
+  fieldErrors?: EditUserFieldErrors;
 };
 
 export type ChangeRoleState = {
@@ -176,6 +190,96 @@ export async function createUser(
     }
 
     return { status: "error", message: SAFE_GENERIC_ERROR };
+  }
+}
+
+export async function editUser(
+  _previousState: EditUserState,
+  formData: FormData,
+): Promise<EditUserState> {
+  try {
+    const current = await requireAdminUser();
+    const targetUserId = parseUserManagementUserId(
+      formData.get("targetUserId"),
+    );
+    if (targetUserId === null) {
+      return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+    }
+
+    const validation = validateEditUserInput({
+      username: formData.get("username"),
+      name: formData.get("name"),
+      email: formData.get("email"),
+    });
+    if (!validation.valid) {
+      return {
+        status: "error",
+        message: "Please correct the highlighted fields.",
+        fieldErrors: validation.fieldErrors,
+      };
+    }
+
+    await withUserManagementTransaction(async (tx) => {
+      const context = await assertCanEditUserInTransaction(
+        tx,
+        current.user.id,
+        targetUserId,
+      );
+      const changedFields = (Object.keys(validation.input) as EditUserField[])
+        .filter((field) => validation.input[field] !== context.target[field]);
+      if (changedFields.length === 0) {
+        throw new AuthorizationPolicyError(
+          "NO_CHANGE",
+          "The profile already contains these values.",
+        );
+      }
+
+      await assertUserProfileUnique(tx, context.target.id, validation.input);
+      await updateUserProfileAndAudit(
+        tx,
+        current.user.id,
+        context.target.id,
+        validation.input,
+        changedFields,
+      );
+    });
+
+    revalidatePath("/pengaturan/users");
+    return {
+      status: "success",
+      message: "User profile updated successfully.",
+    };
+  } catch (error) {
+    if (isAuthorizationPolicyError(error)) {
+      if (error.code === "NO_CHANGE") {
+        return { status: "error", message: SAFE_NO_PROFILE_CHANGE };
+      }
+      if (error.code === "INVALID_TARGET") {
+        return { status: "error", message: SAFE_TARGET_NOT_FOUND };
+      }
+      return { status: "error", message: SAFE_AUTHORIZATION_ERROR };
+    }
+
+    const duplicateField =
+      error instanceof UserManagementDuplicateError
+        ? error.field
+        : duplicateUserField(error);
+    if (duplicateField === "username") {
+      return {
+        status: "error",
+        message: "Username is already in use.",
+        fieldErrors: { username: "Username is already in use." },
+      };
+    }
+    if (duplicateField === "email") {
+      return {
+        status: "error",
+        message: "An account with this email already exists.",
+        fieldErrors: { email: "An account with this email already exists." },
+      };
+    }
+
+    return { status: "error", message: SAFE_EDIT_ERROR };
   }
 }
 
@@ -348,8 +452,8 @@ export async function changeStatus(
       status: "success",
       message:
         desiredStatus === "DISABLED"
-          ? "User disabled successfully."
-          : "User enabled successfully.",
+          ? "User deactivated successfully."
+          : "User activated successfully.",
     };
   } catch (error) {
     if (isAuthorizationPolicyError(error)) {

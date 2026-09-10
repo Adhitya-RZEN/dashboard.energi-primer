@@ -955,3 +955,24 @@ as Production Migration verification or authorization.
 - Static regression checks and disposable Reset Password/Role Management
   browser E2E passed. No Production mutation or credential test was run.
 - Evidence: `docs/USER_MANAGEMENT_ACTIONS_FIX_2026-09-10.md`.
+
+## 40. User Management Edit User persistence + Deactivate/Activate fix - 2026-09-10
+
+- The earlier action-menu fix documented Edit User as presentation-only. The
+  current implementation closes that gap: `editUser` persists only
+  `username`, `name`, and `email` for ACTIVE ADMIN self/other ADMIN/USER
+  targets.
+- The server derives actor identity from the authenticated session, rechecks
+  ACTIVE ADMIN authorization in the serializable transaction, performs
+  duplicate username/email checks, and writes one safe `USER_UPDATED` audit
+  row with changed field names only.
+- Profile edits do not change `password`, `role`, `status`, or `updatedAt`.
+  Role/status/password security-version invalidation remains unchanged for
+  their dedicated actions. USER server denial remains mandatory.
+- UI status labels are `Deactivate` and `Activate`; the implementation reuses
+  Phase 8 `changeStatus`, with existing `ACTIVE`/`DISABLED` transitions and
+  `USER_ENABLED`/`USER_DISABLED` audit actions.
+- Focused verification, all Phase 5-9/Auth regression checks, TypeScript,
+  lint, build, and disposable browser E2E passed. No Production mutation,
+  migration, cron, sync, deployment, or credential test was performed.
+- Evidence: `docs/USER_MANAGEMENT_EDIT_STATUS_FIX_2026-09-10.md`.

@@ -27,6 +27,10 @@ export type PasswordResetFieldErrors = Partial<
   Record<PasswordResetField, string>
 >;
 
+export type EditUserField = "username" | "name" | "email";
+
+export type EditUserFieldErrors = Partial<Record<EditUserField, string>>;
+
 export type CreateUserInput = {
   username: unknown;
   name: unknown;
@@ -53,6 +57,18 @@ export type PasswordResetInput = {
 export type NormalizedPasswordResetInput = {
   newPassword: string;
   confirmPassword: string;
+};
+
+export type EditUserInput = {
+  username: unknown;
+  name: unknown;
+  email: unknown;
+};
+
+export type NormalizedEditUserInput = {
+  username: string;
+  name: string;
+  email: string;
 };
 
 function stringValue(value: unknown) {
@@ -99,6 +115,16 @@ export function normalizePasswordResetInput(
   };
 }
 
+export function normalizeEditUserInput(
+  input: EditUserInput,
+): NormalizedEditUserInput {
+  return {
+    username: stringValue(input.username).trim().toLowerCase(),
+    name: stringValue(input.name).trim(),
+    email: stringValue(input.email).trim().toLowerCase(),
+  };
+}
+
 export function validatePasswordResetInput(input: PasswordResetInput) {
   const normalized = normalizePasswordResetInput(input);
   const fieldErrors: PasswordResetFieldErrors = {};
@@ -113,6 +139,37 @@ export function validatePasswordResetInput(input: PasswordResetInput) {
     fieldErrors.confirmPassword = "Confirm password required";
   } else if (normalized.newPassword !== normalized.confirmPassword) {
     fieldErrors.confirmPassword = "Passwords do not match.";
+  }
+
+  return {
+    input: normalized,
+    fieldErrors,
+    valid: Object.keys(fieldErrors).length === 0,
+  };
+}
+
+export function validateEditUserInput(input: EditUserInput) {
+  const normalized = normalizeEditUserInput(input);
+  const fieldErrors: EditUserFieldErrors = {};
+
+  if (!normalized.username) {
+    fieldErrors.username = "Username required";
+  } else if (
+    normalized.username.length > 100 ||
+    !USERNAME_PATTERN.test(normalized.username)
+  ) {
+    fieldErrors.username = "Invalid username";
+  }
+
+  if (!normalized.name) fieldErrors.name = "Name required";
+
+  if (!normalized.email) {
+    fieldErrors.email = "Email required";
+  } else if (
+    normalized.email.length > 254 ||
+    !EMAIL_PATTERN.test(normalized.email)
+  ) {
+    fieldErrors.email = "Valid email required";
   }
 
   return {

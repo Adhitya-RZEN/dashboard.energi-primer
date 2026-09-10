@@ -404,7 +404,7 @@ function testServerAndUiBoundaries() {
       statusAction.includes("assertCanChangeStatusInTransaction") &&
       statusAction.includes("changeUserStatusAndAudit") &&
       statusAction.includes("withUserManagementTransaction"),
-    "Enable/Disable uses the ADMIN guard, transaction guard, and atomic mutation",
+    "Deactivate/Activate uses the ADMIN guard, transaction guard, and atomic mutation",
   );
   assert(
     statusAction.includes('formData.get("targetUserId")') &&
@@ -414,7 +414,7 @@ function testServerAndUiBoundaries() {
       !statusAction.includes('formData.get("role")') &&
       !statusAction.includes('formData.get("username")') &&
       !statusAction.includes('formData.get("email")'),
-    "Enable/Disable accepts only targetUserId and desiredStatus from the client",
+    "Deactivate/Activate accepts only targetUserId and desiredStatus from the client",
   );
   assert(
     policySource.includes('"SELF_DISABLE"') &&
@@ -443,11 +443,11 @@ function testServerAndUiBoundaries() {
       statusDialog.includes("Updating...") &&
       statusDialog.includes("onCompleted") &&
       !statusDialog.includes("deferred to a later phase"),
-    "Enable/Disable UI submits safely, blocks duplicate submission, and is persistent",
+    "Deactivate/Activate UI submits safely, blocks duplicate submission, and is persistent",
   );
   assert(
-    clientSource.includes("User disabled successfully.") &&
-      clientSource.includes("User enabled successfully.") &&
+    clientSource.includes("User deactivated successfully.") &&
+      clientSource.includes("User activated successfully.") &&
       clientSource.includes("router.refresh()"),
     "successful status changes close through the parent and refresh the list",
   );

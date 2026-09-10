@@ -33,6 +33,7 @@
     "auth:security:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-auth-security.ts",
     "authz:security:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-authorization-security.ts",
     "user-management:add-user:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-add-user.ts",
+    "user-management:edit-user:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-edit-user.ts",
     "user-management:role-management:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-role-management.ts",
     "user-management:role-management:verify:disposable": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-role-management-disposable.mjs",
     "user-management:role-management:verify:e2e": "node scripts/verify-role-management-e2e.mjs",
