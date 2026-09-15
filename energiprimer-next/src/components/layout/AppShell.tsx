@@ -34,7 +34,6 @@ export function AppShell({ children, user, theme }: AppShellProps) {
       <footer className="border-t border-slate-200 bg-white" role="contentinfo">
         <div className="mx-auto flex min-h-14 w-full max-w-[1600px] flex-col items-start justify-center gap-1 px-4 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <span>⚡ © {new Date().getFullYear()} Energi Primer</span>
-          <span>Dashboard Monitoring Efisiensi Batu Bara · v1.0 — Phase 1</span>
         </div>
       </footer>
     </div>

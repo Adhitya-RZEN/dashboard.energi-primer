@@ -158,17 +158,6 @@ function TextField({
   );
 }
 
-function PhaseNotice({ children }: { children: ReactNode }) {
-  return (
-    <div
-      className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900"
-      role="note"
-    >
-      <strong>Server-enforced:</strong> {children}
-    </div>
-  );
-}
-
 type DialogShellProps = {
   title: string;
   description?: string;
@@ -483,10 +472,6 @@ function AddUserDialog({
             {displayNotice}
           </p>
         ) : null}
-        <PhaseNotice>
-          the server validates and normalizes these fields, hashes the
-          password, and records the creation audit event transactionally.
-        </PhaseNotice>
         <DialogFooter
           onClose={onClose}
           submitLabel={pending ? "Creating..." : "Create User"}
@@ -623,20 +608,12 @@ function EditUserDialog({
               <StatusBadge status={user.status} />
             </div>
           </div>
-          <p className="text-xs leading-5 text-slate-500 sm:col-span-2">
-            Role and status are read-only here. Use their dedicated actions for
-            access changes; use Reset Password for credential changes.
-          </p>
         </div>
         {displayNotice ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900" role="status">
             {displayNotice}
           </p>
         ) : null}
-        <PhaseNotice>
-          the server validates and normalizes username, name, and email, checks
-          duplicates, and records a safe profile-update audit event.
-        </PhaseNotice>
         <DialogFooter
           onClose={onClose}
           submitLabel={pending ? "Saving..." : "Save changes"}
@@ -764,10 +741,6 @@ function ResetPasswordDialog({
             {displayNotice}
           </p>
         ) : null}
-        <PhaseNotice>
-          the server validates and hashes the new password, updates the
-          security version, and records a password-reset audit transactionally.
-        </PhaseNotice>
         <DialogFooter
           onClose={onClose}
           submitLabel={pending ? "Resetting..." : "Reset Password"}
@@ -897,10 +870,6 @@ function ChangeRoleDialog({
             {displayNotice}
           </p>
         ) : null}
-        <p className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-sky-900">
-          The server rechecks authorization and the target&apos;s current role.
-          A successful role change invalidates the target&apos;s existing session.
-        </p>
         <DialogFooter
           onClose={onClose}
           submitLabel={pending ? "Updating..." : "Change Role"}
@@ -997,11 +966,6 @@ function UserStatusDialog({
             {displayNotice}
           </p>
         ) : null}
-        <PhaseNotice>
-          the server rechecks the target&apos;s current status and administrator
-          policy. A successful status change invalidates the target&apos;s
-          existing session.
-        </PhaseNotice>
         <DialogFooter
           onClose={onClose}
           submitLabel={pending ? "Updating..." : verb}
