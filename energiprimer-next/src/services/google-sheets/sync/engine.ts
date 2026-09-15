@@ -39,6 +39,7 @@ import {
 } from "./schema-detection";
 import {
   evaluateAutomaticWorksheet,
+  isCanonicalSchemaReviewRetryable,
   isAutomaticWorksheetReviewRetryable,
   isAfterCanonicalBBWorksheet,
   isAutomaticFutureBBWorksheet,
@@ -255,13 +256,18 @@ async function autoAdmitCanonicalWorksheet(
   approvedSchema: string | null,
 ) {
   if (!worksheet || !approvedSchema) return approvedSchema;
-  if (worksheet.status === "SCHEMA_REVIEW") {
-    const openSchemaChange = await prisma.syncSchemaChange.findFirst({
-      where: { worksheetId: worksheet.id, status: "OPEN" },
-      select: { id: true },
-    });
-    if (openSchemaChange) return null;
-  }
+  const openSchemaChanges = await prisma.syncSchemaChange.findMany({
+    where: { worksheetId: worksheet.id, status: "OPEN" },
+    select: { id: true, changeType: true },
+  });
+  if (
+    worksheet.status === "SCHEMA_REVIEW" &&
+    !isCanonicalSchemaReviewRetryable(
+      worksheet,
+      openSchemaChanges.map((change) => change.changeType),
+    )
+  )
+    return null;
   if (worksheet.schemaSnapshot) return approvedSchema;
 
   let readResult: DynamicWorksheetReadResult;
@@ -275,20 +281,26 @@ async function autoAdmitCanonicalWorksheet(
   }
 
   const currentSchema = buildSchemaSnapshot(readResult.parsed);
-  const schemaChange = detectSchemaChange(approvedSchema, currentSchema);
+  const schemaChange = detectSchemaChange(
+    approvedSchema,
+    currentSchema,
+    { allowObservedValueTypeDrift: true },
+  );
   if (schemaChange.changed) {
-    await prisma.syncSchemaChange.create({
-      data: {
-        worksheetId: worksheet.id,
-        previousSchemaHash: null,
-        currentSchemaHash: currentSchema.hash,
-        changeType: schemaChange.type,
-        previousSchema: approvedSchema,
-        currentSchema: JSON.stringify(currentSchema),
-        status: "OPEN",
-        resolution: schemaChange.reason,
-      },
-    });
+    if (openSchemaChanges.length === 0) {
+      await prisma.syncSchemaChange.create({
+        data: {
+          worksheetId: worksheet.id,
+          previousSchemaHash: null,
+          currentSchemaHash: currentSchema.hash,
+          changeType: schemaChange.type,
+          previousSchema: approvedSchema,
+          currentSchema: JSON.stringify(currentSchema),
+          status: "OPEN",
+          resolution: schemaChange.reason,
+        },
+      });
+    }
     await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
     return null;
   }
@@ -301,6 +313,16 @@ async function autoAdmitCanonicalWorksheet(
       schemaSnapshot: JSON.stringify(currentSchema),
     },
   });
+  if (openSchemaChanges.length > 0) {
+    await prisma.syncSchemaChange.updateMany({
+      where: { id: { in: openSchemaChanges.map((change) => change.id) } },
+      data: {
+        status: "RESOLVED",
+        resolution:
+          "Automatically resolved: worksheet structure matches the approved canonical schema; observed value type drift is tolerated.",
+      },
+    });
+  }
   return JSON.stringify(currentSchema);
 }
 

@@ -59,6 +59,14 @@ export type SchemaChangeResult = {
   reason: string;
 };
 
+export type SchemaComparisonOptions = {
+  /**
+   * Treat observed cell value types as data drift, not structural schema
+   * drift. Header semantics and column presence remain strict.
+   */
+  allowObservedValueTypeDrift?: boolean;
+};
+
 function canonicalLabels(labels: readonly string[]) {
   return labels
     .map((label) => normalizeCellText(label))
@@ -198,6 +206,17 @@ function groupedBy<T>(
   return groups;
 }
 
+function columnComparisonKey(
+  column: SchemaColumnSnapshot,
+  options: SchemaComparisonOptions,
+) {
+  if (!options.allowObservedValueTypeDrift) return column.signature;
+  return JSON.stringify({
+    semanticKey: column.semanticKey,
+    labels: column.labels,
+  });
+}
+
 function duplicateHeaderGroups(columns: readonly SchemaColumnSnapshot[]) {
   return [...groupedBy(columns, (column) =>
     JSON.stringify({ semanticKey: column.semanticKey, labels: column.labels }),
@@ -229,6 +248,7 @@ export function parseSchemaSnapshot(value: string | null | undefined) {
 export function detectSchemaChange(
   previous: SchemaSnapshot | string | null | undefined,
   current: SchemaSnapshot,
+  options: SchemaComparisonOptions = {},
 ): SchemaChangeResult {
   const previousSnapshot =
     typeof previous === "string" ? parseStoredSnapshot(previous) : previous;
@@ -255,24 +275,33 @@ export function detectSchemaChange(
     };
   }
 
-  const previousBySignature = groupedBy(
+  const previousByComparisonKey = groupedBy(
     previousSnapshot.columns,
-    (column) => column.signature,
+    (column) => columnComparisonKey(column, options),
   );
-  const currentBySignature = groupedBy(
+  const currentByComparisonKey = groupedBy(
     current.columns,
-    (column) => column.signature,
+    (column) => columnComparisonKey(column, options),
   );
   const added = current.columns.filter(
-    (column) => !currentBySignature.get(column.signature)?.length ||
-      (previousBySignature.get(column.signature)?.length ?? 0) <
-        (currentBySignature.get(column.signature)?.length ?? 0),
+    (column) => {
+      const key = columnComparisonKey(column, options);
+      return (
+        !currentByComparisonKey.get(key)?.length ||
+        (previousByComparisonKey.get(key)?.length ?? 0) <
+          (currentByComparisonKey.get(key)?.length ?? 0)
+      );
+    },
   );
   const removed = previousSnapshot.columns.filter(
-    (column) =>
-      !previousBySignature.get(column.signature) ||
-      (currentBySignature.get(column.signature)?.length ?? 0) <
-        (previousBySignature.get(column.signature)?.length ?? 0),
+    (column) => {
+      const key = columnComparisonKey(column, options);
+      return (
+        !previousByComparisonKey.get(key) ||
+        (currentByComparisonKey.get(key)?.length ?? 0) <
+          (previousByComparisonKey.get(key)?.length ?? 0)
+      );
+    },
   );
 
   const previousBySemantic = groupedBy(
@@ -287,16 +316,18 @@ export function detectSchemaChange(
     previous: SchemaColumnSnapshot;
     current: SchemaColumnSnapshot;
   }[] = [];
-  for (const [key, previousColumns] of previousBySemantic) {
-    const currentColumns = currentBySemantic.get(key) ?? [];
-    for (const previousColumn of previousColumns) {
-      const currentColumn = currentColumns.find(
-        (candidate) =>
-          JSON.stringify(candidate.labels) ===
-          JSON.stringify(previousColumn.labels),
-      );
-      if (currentColumn && currentColumn.valueType !== previousColumn.valueType)
-        typeChanges.push({ previous: previousColumn, current: currentColumn });
+  if (!options.allowObservedValueTypeDrift) {
+    for (const [key, previousColumns] of previousBySemantic) {
+      const currentColumns = currentBySemantic.get(key) ?? [];
+      for (const previousColumn of previousColumns) {
+        const currentColumn = currentColumns.find(
+          (candidate) =>
+            JSON.stringify(candidate.labels) ===
+            JSON.stringify(previousColumn.labels),
+        );
+        if (currentColumn && currentColumn.valueType !== previousColumn.valueType)
+          typeChanges.push({ previous: previousColumn, current: currentColumn });
+      }
     }
   }
 
@@ -397,6 +428,20 @@ export function detectSchemaChange(
       typeChanges,
       renameCandidates,
       reason: "One or more previously approved semantic columns are missing.",
+    };
+  if (
+    options.allowObservedValueTypeDrift &&
+    previousSnapshot.dateColumnPresent === current.dateColumnPresent
+  )
+    return {
+      changed: false,
+      type: "UNCHANGED",
+      added: [],
+      removed: [],
+      typeChanges: [],
+      renameCandidates: [],
+      reason:
+        "Schema structure is unchanged; observed value types may vary between worksheets.",
     };
   return {
     changed: true,

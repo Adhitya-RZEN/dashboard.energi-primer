@@ -152,6 +152,20 @@ export function isAutomaticWorksheetReviewRetryable(input: {
   );
 }
 
+export function isCanonicalSchemaReviewRetryable(
+  input: {
+    status: string;
+    schemaHash: string | null;
+    schemaSnapshot: string | null;
+  },
+  openSchemaChangeTypes: readonly string[] = [],
+) {
+  return (
+    isAutomaticWorksheetReviewRetryable(input) &&
+    openSchemaChangeTypes.every((changeType) => changeType === "TYPE_CHANGE")
+  );
+}
+
 type Period = { month: number; year: number };
 
 function periodOrdinal(period: Period) {
@@ -189,8 +203,9 @@ export function isAfterCanonicalBBWorksheet(worksheetTitle: string) {
 
 /**
  * Automatic admission requires an exact semantic schema match with Juli26-BB.
- * `detectSchemaChange` ignores safe column reordering but blocks added,
- * missing, renamed, duplicate, ambiguous, or type-changed fields.
+ * Observed cell value types may vary between monthly files; the import plan
+ * still validates the actual values. `detectSchemaChange` blocks added,
+ * missing, renamed, duplicate, or ambiguous fields.
  */
 export function evaluateAutomaticWorksheet(
   worksheetTitle: string,
@@ -241,7 +256,11 @@ export function evaluateAutomaticWorksheet(
       mappingVersion: null,
     };
 
-  const schemaChange = detectSchemaChange(options.canonicalSchema, currentSchema);
+  const schemaChange = detectSchemaChange(
+    options.canonicalSchema,
+    currentSchema,
+    { allowObservedValueTypeDrift: true },
+  );
   if (schemaChange.changed)
     return {
       allowed: false,

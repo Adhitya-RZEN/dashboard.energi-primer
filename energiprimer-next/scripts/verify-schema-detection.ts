@@ -101,6 +101,24 @@ if (!typeChanged.changed || typeChanged.type !== "TYPE_CHANGE")
   throw new Error("Type change was not classified as TYPE_CHANGE.");
 checks.push("value type change requires review");
 
+const observedTypeDrift = detectSchemaChange(
+  base,
+  snapshot([column("BIOMASSA UNIT 1", { valueType: "mixed" })]),
+  { allowObservedValueTypeDrift: true },
+);
+if (observedTypeDrift.changed || observedTypeDrift.type !== "UNCHANGED")
+  throw new Error("Observed value type drift was not tolerated in compatibility mode.");
+checks.push("observed value type drift is tolerated in compatibility mode");
+
+const dateColumnChanged = detectSchemaChange(
+  base,
+  { ...base, dateColumnPresent: false, hash: "date-column-changed" },
+  { allowObservedValueTypeDrift: true },
+);
+if (!dateColumnChanged.changed || dateColumnChanged.type !== "SCHEMA_REVIEW")
+  throw new Error("Date column structure change was incorrectly tolerated.");
+checks.push("date column structure change still requires review");
+
 const ambiguous = detectSchemaChange(
   snapshot([column("ENERGY A"), column("ENERGY B")]),
   snapshot([column("ENERGY C"), column("ENERGY D")]),

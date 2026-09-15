@@ -5,6 +5,7 @@ import {
   BB_CANONICAL_MAPPING_PROFILE,
   BB_CANONICAL_MAPPING_VERSION,
   evaluateAutomaticWorksheet,
+  isCanonicalSchemaReviewRetryable,
   isAutomaticWorksheetReviewRetryable,
   isAfterCanonicalBBWorksheet,
   isAutomaticFutureBBWorksheet,
@@ -13,7 +14,10 @@ import {
 } from "../src/services/google-sheets/sync/bb-policy";
 import type { SchemaColumnSnapshot, SchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
 
-function column(label: string): SchemaColumnSnapshot {
+function column(
+  label: string,
+  valueType: SchemaColumnSnapshot["valueType"] = "numeric",
+): SchemaColumnSnapshot {
   const semanticKey = JSON.stringify({
     resource: "biomass",
     unit: "TON",
@@ -28,7 +32,7 @@ function column(label: string): SchemaColumnSnapshot {
     signature: JSON.stringify({
       semanticKey,
       labels: [label],
-      valueType: "numeric",
+      valueType,
     }),
     labels: [label],
     resource: "biomass",
@@ -38,7 +42,7 @@ function column(label: string): SchemaColumnSnapshot {
     isStock: false,
     isHop: false,
     isDate: false,
-    valueType: "numeric",
+    valueType,
   };
 }
 
@@ -94,6 +98,17 @@ assert.equal(approved.allowed, true);
 assert.equal(approved.gate, "APPROVED");
 assert.equal(approved.mappingProfile, BB_CANONICAL_MAPPING_PROFILE);
 assert.equal(approved.mappingVersion, BB_CANONICAL_MAPPING_VERSION);
+
+const observedTypeDriftApproved = evaluateAutomaticWorksheet(
+  "Agustus26-BB",
+  snapshot([column("BIOMASSA UNIT 1", "mixed")]),
+  {
+    canonicalSchema: canonical,
+    asOf: asOfSeptember,
+  },
+);
+assert.equal(observedTypeDriftApproved.allowed, true);
+assert.equal(observedTypeDriftApproved.gate, "APPROVED");
 
 const missingCanonical = evaluateAutomaticWorksheet("Agustus26-BB", canonical, {
   asOf: asOfSeptember,
@@ -156,6 +171,28 @@ assert.equal(
     schemaHash: "approved-hash",
     schemaSnapshot: JSON.stringify(canonical),
   }),
+  false,
+);
+assert.equal(
+  isCanonicalSchemaReviewRetryable(
+    {
+      status: "SCHEMA_REVIEW",
+      schemaHash: null,
+      schemaSnapshot: null,
+    },
+    ["TYPE_CHANGE"],
+  ),
+  true,
+);
+assert.equal(
+  isCanonicalSchemaReviewRetryable(
+    {
+      status: "SCHEMA_REVIEW",
+      schemaHash: null,
+      schemaSnapshot: null,
+    },
+    ["NEW_COLUMN"],
+  ),
   false,
 );
 globalProfileChecks.push("only pending canonical reviews are retried automatically");

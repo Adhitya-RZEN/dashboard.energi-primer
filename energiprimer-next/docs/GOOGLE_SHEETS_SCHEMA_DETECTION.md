@@ -42,8 +42,14 @@ sistem tidak memilih salah satunya secara diam-diam.
 | `NEW_COLUMN` | Semantic column baru | Hentikan dan status `SCHEMA_REVIEW`. |
 | `MISSING_COLUMN` | Column yang disetujui hilang | Hentikan dan status `SCHEMA_REVIEW`. |
 | `RENAME_CANDIDATE` | Removed/added column memiliki struktur mirip | Hentikan dan minta review. |
-| `TYPE_CHANGE` | Observed value type semantic column berubah | Hentikan dan minta review. |
+| `TYPE_CHANGE` | Observed value type semantic column berubah pada mode strict | Hentikan dan minta review. |
 | `SCHEMA_REVIEW` | Perubahan tidak dapat diklasifikasikan aman | Hentikan dan minta review. |
+
+Jalur scheduler otomatis menggunakan mode kompatibilitas untuk perbandingan
+lintas workbook: perubahan `numeric`, `empty`, `text`, atau `mixed` yang hanya
+berasal dari isi sel tidak dianggap perubahan struktur. Header semantic,
+keberadaan kolom, rename, duplicate, ambiguity, dan date column tetap harus
+match. Validasi parser/import plan tetap berjalan terhadap nilai aktual.
 
 Semua perubahan setelah snapshot pertama dicatat pada
 `sync_schema_changes` dengan hash sebelumnya, hash saat ini, ringkasan klasifikasi,
@@ -98,3 +104,6 @@ npm run sync:verify-schema -- --live
 - `src/services/google-sheets/sync/engine.ts`
 - `scripts/verify-schema-detection.ts`
 - `prisma/schema.prisma`
+
+Jalur scheduler otomatis juga memverifikasi bahwa perubahan observed value type
+lintas workbook tetap `UNCHANGED` selama struktur header dan date column sama.
