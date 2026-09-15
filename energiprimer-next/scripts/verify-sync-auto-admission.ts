@@ -5,9 +5,11 @@ import {
   BB_CANONICAL_MAPPING_PROFILE,
   BB_CANONICAL_MAPPING_VERSION,
   evaluateAutomaticWorksheet,
+  isAutomaticWorksheetReviewRetryable,
   isAfterCanonicalBBWorksheet,
   isAutomaticFutureBBWorksheet,
   missingRequiredMonthlyBBWorksheets,
+  resolveApprovedCanonicalSchema,
 } from "../src/services/google-sheets/sync/bb-policy";
 import type { SchemaColumnSnapshot, SchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
 
@@ -99,6 +101,65 @@ const missingCanonical = evaluateAutomaticWorksheet("Agustus26-BB", canonical, {
 assert.equal(missingCanonical.allowed, false);
 assert.equal(missingCanonical.gate, "CANONICAL_SCHEMA_UNAVAILABLE");
 
+const globalCanonical = resolveApprovedCanonicalSchema([
+  {
+    status: "ACTIVE",
+    worksheetTitle: " Juli 26 - BB ",
+    schemaSnapshot: JSON.stringify(canonical),
+    updatedAt: new Date("2026-08-30T11:36:21.000Z"),
+  },
+]);
+assert.equal(globalCanonical.status, "AVAILABLE");
+assert.equal(globalCanonical.schemaSnapshot, JSON.stringify(canonical));
+const globalProfileCheck = "same schema is accepted across a new workbook ID";
+const globalProfileChecks: string[] = [globalProfileCheck];
+const crossFileApproved = evaluateAutomaticWorksheet(
+  "Agustus26-BB",
+  canonical,
+  {
+    canonicalSchema: globalCanonical.schemaSnapshot,
+    asOf: asOfSeptember,
+  },
+);
+assert.equal(crossFileApproved.allowed, true);
+assert.equal(crossFileApproved.gate, "APPROVED");
+
+const ambiguousCanonical = resolveApprovedCanonicalSchema([
+  {
+    status: "ACTIVE",
+    worksheetTitle: "Juli26-BB",
+    schemaSnapshot: JSON.stringify(canonical),
+    updatedAt: new Date("2026-08-30T11:36:21.000Z"),
+  },
+  {
+    status: "ACTIVE",
+    worksheetTitle: "Juli26-BB",
+    schemaSnapshot: JSON.stringify(changed),
+    updatedAt: new Date("2026-09-01T11:36:21.000Z"),
+  },
+]);
+assert.equal(ambiguousCanonical.status, "AMBIGUOUS");
+assert.equal(ambiguousCanonical.schemaSnapshot, null);
+globalProfileChecks.push("conflicting active profiles are blocked");
+
+assert.equal(
+  isAutomaticWorksheetReviewRetryable({
+    status: "SCHEMA_REVIEW",
+    schemaHash: null,
+    schemaSnapshot: null,
+  }),
+  true,
+);
+assert.equal(
+  isAutomaticWorksheetReviewRetryable({
+    status: "SCHEMA_REVIEW",
+    schemaHash: "approved-hash",
+    schemaSnapshot: JSON.stringify(canonical),
+  }),
+  false,
+);
+globalProfileChecks.push("only pending canonical reviews are retried automatically");
+
 const schemaReview = evaluateAutomaticWorksheet("Agustus26-BB", changed, {
   canonicalSchema: canonical,
   asOf: asOfSeptember,
@@ -127,6 +188,7 @@ console.log(
         "future-dated worksheets are not imported early",
         "required monthly BB source of truth is exactly January-July 2026",
         "non-required registry worksheets are not required by BB policy",
+        ...globalProfileChecks,
       ],
     },
     null,

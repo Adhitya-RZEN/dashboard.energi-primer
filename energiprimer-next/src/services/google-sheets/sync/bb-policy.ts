@@ -1,7 +1,10 @@
 import { parseBBWorksheetName } from "@/services/google-sheets/dynamic/worksheet-resolver";
+import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/profiles";
+import { normalizeWorksheetName } from "@/services/google-sheets/dynamic/worksheet-resolver";
 
 import {
   detectSchemaChange,
+  parseSchemaSnapshot,
   type SchemaChangeResult,
   type SchemaSnapshot,
 } from "./schema-detection";
@@ -56,6 +59,98 @@ export type AutomaticWorksheetDecision = {
   mappingProfile: typeof BB_CANONICAL_MAPPING_PROFILE | null;
   mappingVersion: typeof BB_CANONICAL_MAPPING_VERSION | null;
 };
+
+export type ApprovedCanonicalSchemaCandidate = {
+  status: string;
+  worksheetTitle: string;
+  schemaSnapshot: string | null;
+  updatedAt?: Date;
+};
+
+export type ApprovedCanonicalSchemaResolution = {
+  status: "AVAILABLE" | "UNAVAILABLE" | "AMBIGUOUS";
+  schemaSnapshot: string | null;
+  schemaHash: string | null;
+  reason: string;
+};
+
+/**
+ * A schema approval belongs to the BB mapping profile, not to one workbook.
+ * Only an active, exact Juli26-BB worksheet can contribute an approval. If
+ * active workbooks disagree, fail closed instead of selecting one silently.
+ */
+export function resolveApprovedCanonicalSchema(
+  candidates: readonly ApprovedCanonicalSchemaCandidate[],
+): ApprovedCanonicalSchemaResolution {
+  const canonicalTitle = normalizeWorksheetName(BB_CANONICAL_WORKSHEET);
+  const valid = candidates
+    .filter(
+      (candidate) =>
+        candidate.status === "ACTIVE" &&
+        normalizeWorksheetName(candidate.worksheetTitle) === canonicalTitle,
+    )
+    .map((candidate) => {
+      const snapshot = parseSchemaSnapshot(candidate.schemaSnapshot);
+      return snapshot
+        ? { candidate, snapshot }
+        : null;
+    })
+    .filter(
+      (value): value is {
+        candidate: ApprovedCanonicalSchemaCandidate;
+        snapshot: SchemaSnapshot;
+      } => Boolean(value),
+    );
+
+  if (valid.length === 0)
+    return {
+      status: "UNAVAILABLE",
+      schemaSnapshot: null,
+      schemaHash: null,
+      reason: "No active Juli26-BB schema profile is available.",
+    };
+
+  const hashes = new Set(valid.map(({ snapshot }) => snapshot.hash));
+  if (hashes.size > 1)
+    return {
+      status: "AMBIGUOUS",
+      schemaSnapshot: null,
+      schemaHash: null,
+      reason: "Active Juli26-BB worksheets contain conflicting schema profiles.",
+    };
+
+  const latest = [...valid].sort(
+    (left, right) =>
+      (right.candidate.updatedAt?.getTime() ?? 0) -
+      (left.candidate.updatedAt?.getTime() ?? 0),
+  )[0];
+  if (!latest)
+    return {
+      status: "UNAVAILABLE",
+      schemaSnapshot: null,
+      schemaHash: null,
+      reason: "No active Juli26-BB schema profile is available.",
+    };
+
+  return {
+    status: "AVAILABLE",
+    schemaSnapshot: JSON.stringify(latest.snapshot),
+    schemaHash: latest.snapshot.hash,
+    reason: "An active Juli26-BB schema profile is available across workbooks.",
+  };
+}
+
+export function isAutomaticWorksheetReviewRetryable(input: {
+  status: string;
+  schemaHash: string | null;
+  schemaSnapshot: string | null;
+}) {
+  return (
+    input.status === "SCHEMA_REVIEW" &&
+    input.schemaHash === null &&
+    input.schemaSnapshot === null
+  );
+}
 
 type Period = { month: number; year: number };
 

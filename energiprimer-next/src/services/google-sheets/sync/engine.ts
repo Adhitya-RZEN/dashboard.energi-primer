@@ -3,6 +3,7 @@ import "server-only";
 import {
   parseBBWorksheetName,
   preferBBWorksheetName,
+  normalizeWorksheetName,
 } from "@/services/google-sheets/dynamic/worksheet-resolver";
 import {
   readAndParseDynamicWorksheet,
@@ -38,8 +39,10 @@ import {
 } from "./schema-detection";
 import {
   evaluateAutomaticWorksheet,
+  isAutomaticWorksheetReviewRetryable,
   isAfterCanonicalBBWorksheet,
   isAutomaticFutureBBWorksheet,
+  resolveApprovedCanonicalSchema,
 } from "./bb-policy";
 import { GoogleSheetsIntegrationError } from "@/lib/google-sheets";
 import { withDatabaseRetry, withSyncRetry } from "./retry";
@@ -166,12 +169,18 @@ async function markWorksheetValidated(worksheetId: bigint) {
 function selectedWorksheets(
   worksheets: Awaited<ReturnType<typeof prisma.syncWorksheet.findMany>>,
   options: IncrementalSyncOptions,
+  openSchemaReviewWorksheetIds: ReadonlySet<bigint> = new Set(),
 ) {
+  const scope = options.scope ??
+    (options.triggerType === "cron" ? "automatic" : "all");
   const withoutDisabledOrMissing = worksheets.filter(
     (worksheet) =>
       worksheet.status !== "DISABLED" &&
       worksheet.status !== "MISSING" &&
-      worksheet.status !== "SCHEMA_REVIEW",
+      (worksheet.status !== "SCHEMA_REVIEW" ||
+        scope === "automatic" &&
+          isAutomaticWorksheetReviewRetryable(worksheet) &&
+          !openSchemaReviewWorksheetIds.has(worksheet.id)),
   );
   if (options.worksheetKey) {
     return withoutDisabledOrMissing.filter(
@@ -204,8 +213,6 @@ function selectedWorksheets(
     Boolean(parseBBWorksheetName(worksheet.worksheetTitle)),
   );
   const preferred = preferredWorksheetsByPeriod(valid);
-  const scope = options.scope ??
-    (options.triggerType === "cron" ? "automatic" : "all");
   if (scope === "all") return preferred;
   if (scope === "automatic")
     return preferred.filter((worksheet) =>
@@ -224,6 +231,78 @@ function selectedWorksheets(
 type RegisteredWorksheet = Awaited<
   ReturnType<typeof prisma.syncWorksheet.findMany>
 >[number];
+
+async function loadApprovedCanonicalSchema() {
+  const candidates = await prisma.syncWorksheet.findMany({
+    where: {
+      status: "ACTIVE",
+      schemaSnapshot: { not: null },
+      normalizedTitle: normalizeWorksheetName(BB_CANONICAL_WORKSHEET),
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      status: true,
+      worksheetTitle: true,
+      schemaSnapshot: true,
+      updatedAt: true,
+    },
+  });
+  return resolveApprovedCanonicalSchema(candidates);
+}
+
+async function autoAdmitCanonicalWorksheet(
+  worksheet: RegisteredWorksheet | null,
+  approvedSchema: string | null,
+) {
+  if (!worksheet || !approvedSchema) return approvedSchema;
+  if (worksheet.status === "SCHEMA_REVIEW") {
+    const openSchemaChange = await prisma.syncSchemaChange.findFirst({
+      where: { worksheetId: worksheet.id, status: "OPEN" },
+      select: { id: true },
+    });
+    if (openSchemaChange) return null;
+  }
+  if (worksheet.schemaSnapshot) return approvedSchema;
+
+  let readResult: DynamicWorksheetReadResult;
+  try {
+    readResult = await withSyncRetry(() =>
+      readAndParseDynamicWorksheet(worksheet.worksheetTitle),
+    );
+  } catch {
+    await markWorksheetFailure(worksheet.id, "ERROR");
+    return null;
+  }
+
+  const currentSchema = buildSchemaSnapshot(readResult.parsed);
+  const schemaChange = detectSchemaChange(approvedSchema, currentSchema);
+  if (schemaChange.changed) {
+    await prisma.syncSchemaChange.create({
+      data: {
+        worksheetId: worksheet.id,
+        previousSchemaHash: null,
+        currentSchemaHash: currentSchema.hash,
+        changeType: schemaChange.type,
+        previousSchema: approvedSchema,
+        currentSchema: JSON.stringify(currentSchema),
+        status: "OPEN",
+        resolution: schemaChange.reason,
+      },
+    });
+    await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+    return null;
+  }
+
+  await prisma.syncWorksheet.update({
+    where: { id: worksheet.id },
+    data: {
+      status: "ACTIVE",
+      schemaHash: currentSchema.hash,
+      schemaSnapshot: JSON.stringify(currentSchema),
+    },
+  });
+  return JSON.stringify(currentSchema);
+}
 
 /**
  * The discovery registry can contain both a canonical and an abbreviated
@@ -640,19 +719,40 @@ export async function runGoogleSheetsIncrementalSync(
         where: { sourceId: source.id },
         orderBy: { worksheetTitle: "asc" },
       });
-      const selected = selectedWorksheets(worksheets, syncOptions);
-      const canonicalCandidates = preferredWorksheetsByPeriod(
-        worksheets.filter((worksheet) => {
-          const period = parseBBWorksheetName(worksheet.worksheetTitle);
-          return period?.month === 7 && period.year === 2026;
-        }),
+      const openSchemaReviewWorksheetIds =
+        syncOptions.scope === "automatic" ||
+        syncOptions.triggerType === "cron"
+          ? new Set(
+              (
+                await prisma.syncSchemaChange.findMany({
+                  where: {
+                    status: "OPEN",
+                    worksheetId: { in: worksheets.map((worksheet) => worksheet.id) },
+                  },
+                  select: { worksheetId: true },
+                })
+              ).map((change) => change.worksheetId),
+            )
+          : new Set<bigint>();
+      const selected = selectedWorksheets(
+        worksheets,
+        syncOptions,
+        openSchemaReviewWorksheetIds,
+      );
+      const canonicalCandidates = worksheets.filter(
+        (worksheet) =>
+          normalizeWorksheetName(worksheet.worksheetTitle) ===
+          normalizeWorksheetName(BB_CANONICAL_WORKSHEET),
       );
       const canonicalWorksheet =
-        canonicalCandidates.find(
-          (worksheet) =>
-            worksheet.worksheetTitle.trim().toLocaleLowerCase("en-US") ===
-            BB_CANONICAL_WORKSHEET.toLocaleLowerCase("en-US"),
-        ) ?? canonicalCandidates[0] ?? null;
+        canonicalCandidates.length === 1 ? canonicalCandidates[0] ?? null : null;
+      const canonicalResolution = await loadApprovedCanonicalSchema();
+      let canonicalSchema = canonicalResolution.schemaSnapshot;
+      if (canonicalCandidates.length > 1) canonicalSchema = null;
+      canonicalSchema = await autoAdmitCanonicalWorksheet(
+        canonicalWorksheet,
+        canonicalSchema,
+      );
       if (
         (syncOptions.worksheetKey || syncOptions.worksheetTitle) &&
         selected.length !== 1
@@ -701,7 +801,7 @@ export async function runGoogleSheetsIncrementalSync(
           const worksheetResult = await syncWorksheet(
             worksheet,
             syncOptions,
-            canonicalWorksheet?.schemaSnapshot ?? null,
+            canonicalSchema,
           );
           emitSyncDiagnostic({
             context: diagnostic,

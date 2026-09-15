@@ -23,11 +23,21 @@ private key, atau access token. Kolom diurutkan secara canonical sebelum SHA-256
 dibuat, sehingga perubahan urutan kolom saja tidak dianggap sebagai perubahan
 schema.
 
+## Lintas workbook
+
+Persetujuan schema menggunakan profil mapping `BB_CANONICAL_V1`, bukan
+`spreadsheet ID`. Snapshot `Juli26-BB` yang berstatus `ACTIVE` menjadi baseline
+global untuk workbook Google baru. Workbook baru tetap dicatat sebagai sumber
+terpisah untuk menjaga provenance, lalu `Juli26-BB`-nya dibaca satu kali dan
+otomatis di-admit bila fingerprint-nya sama. Jika ada beberapa snapshot
+canonical aktif dengan fingerprint berbeda, proses berhenti dan meminta review;
+sistem tidak memilih salah satunya secara diam-diam.
+
 ## Klasifikasi
 
 | Klasifikasi | Kondisi | Tindakan sync |
 | --- | --- | --- |
-| `NEW_SCHEMA` | Belum ada snapshot yang disetujui | Boleh diproses bila import plan valid, lalu snapshot disimpan. |
+| `NEW_SCHEMA` | Belum ada snapshot yang disetujui | Untuk sumber baru, gunakan profil `BB_CANONICAL_V1`; snapshot lokal hanya di-admit setelah fingerprint cocok. |
 | `UNCHANGED` | Fingerprint sama | Lanjutkan change detection row. |
 | `NEW_COLUMN` | Semantic column baru | Hentikan dan status `SCHEMA_REVIEW`. |
 | `MISSING_COLUMN` | Column yang disetujui hilang | Hentikan dan status `SCHEMA_REVIEW`. |

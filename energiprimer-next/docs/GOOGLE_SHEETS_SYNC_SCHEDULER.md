@@ -56,16 +56,21 @@ conditions hold:
    `Agustus26-BB` or `September26-BB`;
 2. the period is after the approved `Juli26-BB` boundary and is not later than
    the current UTC operational period;
-3. its semantic schema fingerprint exactly matches the approved `Juli26-BB`
-   schema; and
+3. its semantic schema fingerprint exactly matches the approved
+   `BB_CANONICAL_V1` profile. The profile is taken from an active `Juli26-BB`
+   snapshot across the registered workbooks, so a changed spreadsheet file ID
+   does not create a new schema baseline; and
 4. it passes the existing parser/import validation and duplicate stable-key
    checks.
 
-Therefore a newly added `Agustus26-BB` tab is discovered and processed by the
-next authorized cron invocation once August is due. A future-dated tab,
+Therefore a newly added workbook with a compatible `Juli26-BB` tab is checked
+once, automatically admitted, and its future monthly tabs are processed by
+the next authorized cron invocation once due. A future-dated tab,
 unrelated tab, duplicate period title, or schema-drifted tab is registered but
-not imported automatically. A schema-review state must be resolved explicitly
-before that worksheet can re-enter the automatic path. Historical/backfill
+not imported automatically. Conflicting active canonical profiles, missing
+required fields, renamed fields, type changes, and ambiguous mappings remain
+blocked. A schema-review state must be resolved explicitly before that
+worksheet can re-enter the automatic path. Historical/backfill
 synchronization remains a separately controlled operation and is not triggered
  by arbitrary request parameters.
 
