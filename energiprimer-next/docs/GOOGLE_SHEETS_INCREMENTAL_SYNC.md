@@ -11,6 +11,16 @@
 
 Status checkpoint: **S3 PASS**
 
+## Phase 4 controlled HTTP boundary (2026-09-16)
+
+The API route now separates method semantics. GET performs only target metadata
+verification, Google metadata discovery, or exact worksheet preflight and
+returns `write=NOT_EXECUTED`. POST requires `action=execute-import`, an exact
+worksheet, and the SHA-256 `importPlanId` returned by preflight. POST rebuilds
+the plan and rejects a stale or blocked hash before entering the existing sync
+engine. The Vercel GET cron therefore remains a read-only probe until an
+explicit POST is authorized.
+
 Dokumen ini menjelaskan mekanisme import incremental Phase 11. Google Sheets
 tetap menjadi source of truth, sedangkan PostgreSQL menyimpan state operasional
 dan hasil normalisasi untuk dibaca dashboard. Tidak ada penghapusan data sumber
@@ -110,6 +120,37 @@ The observed 199 registry rows are not the required monthly processing set.
 Non-required tabs remain visible in the registry and do not get deleted or
 treated as required monthly sources.
 
+## Canonical schema recognition and retry-safe re-admission
+
+`Juli26-BB` remains the existing `BB_CANONICAL_V1` mapping reference. For an
+explicit worksheet, canonical lookup uses the active `Juli26-BB` snapshot on
+the same `sync_source` first. If no local anchor exists, the resolver may use a
+single unambiguous global profile; conflicting global profiles remain blocked.
+This is source provenance selection, not a new mapping or a worksheet-specific
+exception.
+
+The schema fingerprint is structural: semantic labels/path metadata and date
+column presence are hashed after removing numeric sample values that were
+mistakenly carried into a header path. Observed value types remain in the
+snapshot for diagnostics and strict checks but do not change the structural
+hash. Existing stored v1 snapshots are normalized on read, so this correction
+does not require a database migration.
+
+When a new worksheet has an explicit empty marker at the canonical value cell,
+the parser records `missing` and does not choose a nearby numeric candidate.
+This preserves the established mapping and prevents a false
+`ambiguous_fields` validation block. A retryable registry `SCHEMA_REVIEW` with
+no approved schema/hash can therefore be prospectively revalidated by the
+read-only operator preflight; an authorized successful sync changes the
+worksheet to `ACTIVE` and resolves its open schema review in the same row-state
+transaction. Reviews with an approved snapshot, disabled/missing/error state,
+or a current structural mismatch remain blocked.
+
+The 2026-09-15 exact dry-runs for `Juli26-BB` and `Agustus26-BB` both passed:
+31 source rows, 352 candidate/valid records, 0 invalid rows, 0 potential
+duplicates, and `write=NOT_EXECUTED`. The two established parser warnings were
+preserved.
+
 ## Idempotensi verification
 
 Verifikasi live terbatas dilakukan terhadap worksheet `Juli26-BB` pada database
@@ -122,6 +163,31 @@ lokal:
 
 Hasil ini membuktikan bahwa pembacaan ulang tanpa perubahan source tidak
 menghasilkan duplicate normalized write.
+
+### Import transaction P2028 remediation (2026-09-15)
+
+The normalized importer retains one atomic transaction per selected worksheet,
+but no longer performs one Prisma `upsert` per normalized record. Staging
+rows and the eight row-heavy normalized targets use parameterized, set-oriented
+`INSERT ... ON CONFLICT DO UPDATE` batches of at most 200 rows. The existing
+target mismatch guard, cumulative persistence, and final successful import-run
+update remain in that same transaction. Batching reduces transaction duration
+without creating independently committed partial imports.
+
+The transaction timeout remains `30,000 ms`; P2028 is not retried. The
+successful import transaction is followed by the existing row-state,
+worksheet-registry, and sync-run finalization path. A transaction failure keeps
+those states unadvanced, rolls back staging/normalized writes, and records the
+failed import audit row outside the transaction. Source fingerprinting,
+worksheet identity, canonical mapping, and the no-delete policy are unchanged.
+
+The guarded disposable regression
+`npm run sync:verify-import-transaction:disposable` exercised both
+`Juli26-BB` and `Agustus26-BB` with 352 records each. Both completed in 14
+logical transaction calls (90/105 ms in the recorded run), repeated imports
+reused their successful run IDs, the forced target mismatch rolled back all
+staging/normalized changes, and the database reported zero duplicate business
+keys.
 
 Perintah:
 
@@ -139,13 +205,18 @@ diarahkan ke database production tanpa approval terpisah.
    yang hilang dari source dipertahankan untuk mencegah kehilangan data; aturan
    rekonsiliasi/archive membutuhkan keputusan bisnis.
 2. Duplicate business identity diblokir, bukan dipilih secara otomatis.
-3. After discovery, sync still calls the existing importer transactionally per
-   selected worksheet; Google network reads and discovery preparation remain
-   outside the database transaction.
-4. Manual/verification commit tetap local-only secara default. Endpoint cron
-   production baru boleh mengaktifkan target non-local setelah konfigurasi dan
-   approval deployment tersedia. Deployment is manual by the user, and any
-   Production sync requires a separate explicit approval.
+3. After discovery, sync calls the bulk-batched importer transactionally per
+   selected worksheet. The normalized transaction is still interactive and
+   retains a 30-second timeout, so database availability and pool capacity
+   remain operational prerequisites. Google network reads and discovery
+   preparation remain outside the database transaction; P2028 is not retried.
+4. Direct importer calls and verification scripts remain local-only by
+   default. The controlled local Production operator path is a separate,
+   explicit `sheets:sync -- --worksheet=<title> --production` flow: it verifies
+   the live Supabase transaction-pooler identity before discovery and again at
+   the normalized-write boundary. No target is selected from an arbitrary
+   request parameter, and no write is permitted without the explicit worksheet
+   and Production target flags.
 
 ## Files utama
 
@@ -153,6 +224,24 @@ diarahkan ke database production tanpa approval terpisah.
 - `src/services/google-sheets/sync/change-detection.ts`
 - `src/services/google-sheets/sync/commit-scope.ts`
 - `src/services/google-sheets/sync/engine.ts`
+- `src/services/google-sheets/sync/operator-contract.ts`
+- `src/services/google-sheets/sync/production-target.ts`
+- `src/services/google-sheets/sync/preflight.ts`
+- `src/services/google-sheets/sync/post-write-verification.ts`
 - `src/services/google-sheets/import/commit.ts`
-- `scripts/verify-incremental-sync.ts`
+- `src/services/google-sheets/import/bulk-upserts.ts`
+- `scripts/verify-import-transaction-disposable.ts`
+- `scripts/run-google-sheets-sync.ts`
+
+## Phase 5 canonical target and durable execution
+
+Before a Production write, the sync now resolves the canonical business
+identity against the normalized target tables and emits deterministic
+`INSERT`/`UPDATE`/`NO-OP`/`SKIP`/`BLOCK` differences. Approved writable items
+are partitioned into bounded batches and associated with an immutable durable
+plan snapshot; committed batches are skipped on restart, known rollbacks can be
+retried in the exact scope, and unknown outcomes require read-only
+reconciliation. No DELETE is generated. Production remains blocked until the
+separate ledger rollout and explicit canary authorization are complete. See
+`docs/PHASE5_CANONICAL_TARGET_STATE_DURABLE_LEDGER_RESULT.md` for evidence.
 

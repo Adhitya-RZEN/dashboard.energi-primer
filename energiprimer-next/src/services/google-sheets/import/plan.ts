@@ -11,6 +11,8 @@ import {
 import type {
   DynamicDailyRecord,
   DynamicParserResult,
+  MappingApprovalContext,
+  MappingAuthorization,
   HeaderPath,
   ResolvedValue,
   StructureAnalysis,
@@ -30,6 +32,10 @@ import type {
   SolarConsumptionImportRecord,
   SolarReceiptImportRecord,
 } from "./types";
+import {
+  approvedMappingContractForWorksheet,
+} from "../canonical/mapping-profiles";
+import { mappingApprovalForContract } from "../canonical/mapping-contract";
 
 export const APPROVED_BIOMASS_TARGET = 70_020;
 
@@ -54,6 +60,20 @@ const REQUIRED_SUPPLIER_CODES = [
 
 type UnitNumber = 1 | 2 | 3;
 
+function structuralPathAuthorization(
+  path: HeaderPath | null,
+  mappingApproval: MappingApprovalContext | undefined,
+  expectedUnit?: UnitNumber,
+): MappingAuthorization {
+  if (!path) return "BLOCKED";
+  if (expectedUnit !== undefined && path.unitNumber !== expectedUnit)
+    return "REVIEW_REQUIRED";
+  return mappingApproval?.approvalState === "APPROVED" &&
+    mappingApproval.allowStructural
+    ? "APPROVED_STRUCTURAL"
+    : "REVIEW_REQUIRED";
+}
+
 function utcDate(year: number, month: number, day: number) {
   return new Date(Date.UTC(year, month - 1, day));
 }
@@ -67,11 +87,38 @@ function dateFromRecord(record: DynamicDailyRecord, fallbackMonth: number, fallb
 function sourceFromResolved(
   worksheet: string,
   resolved: ResolvedValue | undefined,
+  parsed?: DynamicParserResult,
 ): ImportSource {
+  const granularity =
+    resolved?.sourceGranularity ?? resolved?.source?.granularity ??
+    (resolved?.source?.address ? "CELL" : "RANGE");
+  const sourceAddress =
+    granularity === "CELL" ? (resolved?.source?.address ?? null) : null;
+  const policyFallback =
+    resolved?.writeAuthorization === "APPROVED_POLICY_FALLBACK";
+  const sourceCell = sourceAddress
+    ? parsed?.scannedCells.find((cell) => cell.address === resolved?.source?.address)
+    : null;
   return {
     worksheet,
-    cell: resolved?.source?.address ?? null,
-    row: null,
+    cell: sourceAddress,
+    row: granularity === "CELL" || granularity === "ROW" ? sourceCell?.row ?? null : null,
+    column:
+      granularity === "CELL" ? sourceCell?.column ?? null : null,
+    rawDisplayValue:
+      granularity !== "CELL" || sourceCell?.rawValue === null || sourceCell?.rawValue === undefined
+        ? null
+        : String(sourceCell.rawValue),
+    rawDisplayValues: resolved?.rawDisplayValues,
+    sourceAddresses: resolved?.sourceAddresses,
+    sourceGranularity: policyFallback ? "WORKSHEET" : granularity,
+    observationKind: policyFallback
+      ? "POLICY_FALLBACK"
+      : sourceAddress
+        ? "SOURCE_CELL"
+        : "SOURCE_RANGE",
+    mappingSourceKind: policyFallback ? "POLICY_FALLBACK" : "SEMANTIC_PATH",
+    mappingAuthorization: resolved?.writeAuthorization ?? "REVIEW_REQUIRED",
   };
 }
 
@@ -149,9 +196,46 @@ function scannedCellAt(parsed: DynamicParserResult, address: string) {
   return parsed.scannedCells.find((cell) => cell.address === address) ?? null;
 }
 
+function sourceFromScannedCell(
+  parsed: DynamicParserResult,
+  address: string | null,
+  row: number | null,
+  options: {
+    mappingAuthorization?: MappingAuthorization;
+    sourceGranularity?: ImportSource["sourceGranularity"];
+    sourceAddresses?: readonly string[];
+    rawDisplayValues?: readonly { address: string; value: string | null }[];
+  } = {},
+): ImportSource {
+  const sourceGranularity = options.sourceGranularity ?? (address ? "CELL" : "RANGE");
+  const sourceCell = sourceGranularity === "CELL" && address
+    ? scannedCellAt(parsed, address)
+    : null;
+  const cell = address ? scannedCellAt(parsed, address) : null;
+  return {
+    worksheet: parsed.worksheet.name,
+    cell: sourceGranularity === "CELL" ? address : null,
+    row:
+      sourceGranularity === "CELL" || sourceGranularity === "ROW"
+        ? sourceCell?.row ?? row
+        : null,
+    column: sourceGranularity === "CELL" ? sourceCell?.column ?? null : null,
+    rawDisplayValue:
+      sourceGranularity !== "CELL" || cell?.rawValue === null || cell?.rawValue === undefined
+        ? null
+        : String(cell.rawValue),
+    rawDisplayValues: options.rawDisplayValues,
+    sourceAddresses: options.sourceAddresses,
+    sourceGranularity,
+    observationKind: sourceGranularity === "CELL" && address ? "SOURCE_CELL" : "SOURCE_RANGE",
+    mappingAuthorization: options.mappingAuthorization ?? "REVIEW_REQUIRED",
+  };
+}
+
 function numericLegacyCell(
   parsed: DynamicParserResult,
   address: string,
+  mappingAuthorization: MappingAuthorization = "REVIEW_REQUIRED",
 ): LegacyResolvedCell | null {
   const cell = scannedCellAt(parsed, address);
   if (!cell) return null;
@@ -164,12 +248,21 @@ function numericLegacyCell(
       worksheet: parsed.worksheet.name,
       cell: cell.address,
       row: cell.row,
+      column: cell.column,
+      rawDisplayValue:
+        cell.rawValue === null || cell.rawValue === undefined
+          ? null
+          : String(cell.rawValue),
+      observationKind: "SOURCE_CELL",
+      mappingSourceKind: "PHYSICAL_REFERENCE",
+      mappingAuthorization,
     },
   };
 }
 
 function tonaseBiomassCumulativeCell(
   result: DynamicWorksheetReadResult,
+  mappingAuthorization: MappingAuthorization = "REVIEW_REQUIRED",
 ): LegacyResolvedCell | null {
   const parsed = result.parsed;
   const section = parsed.scannedCells.find(
@@ -201,6 +294,14 @@ function tonaseBiomassCumulativeCell(
         worksheet: parsed.worksheet.name,
         cell: candidate.address,
         row: candidate.row,
+        column: candidate.column,
+        rawDisplayValue:
+          candidate.rawValue === null || candidate.rawValue === undefined
+            ? null
+            : String(candidate.rawValue),
+        observationKind: "SOURCE_CELL",
+        mappingSourceKind: "PHYSICAL_REFERENCE",
+        mappingAuthorization,
       },
     };
   }
@@ -215,6 +316,7 @@ function isApprovedLegacyWorksheet(worksheet: string) {
 
 function approvedLegacyFallbacks(
   result: DynamicWorksheetReadResult,
+  mappingApproval?: MappingApprovalContext,
 ): {
   coalReceipt: LegacyResolvedCell | null;
   solarReceipt: LegacyResolvedCell | null;
@@ -225,10 +327,14 @@ function approvedLegacyFallbacks(
   // remain in NEEDS_REVIEW; physical coordinates are never generalized.
   if (!isApprovedLegacyWorksheet(result.effective.worksheet))
     return { coalReceipt: null, solarReceipt: null, cumulative: null };
+  const mappingAuthorization: MappingAuthorization =
+    mappingApproval?.approvalState === "APPROVED" && mappingApproval.allowExact
+      ? "APPROVED_EXACT"
+      : "REVIEW_REQUIRED";
   return {
-    coalReceipt: numericLegacyCell(result.parsed, "I42"),
-    solarReceipt: numericLegacyCell(result.parsed, "CC42"),
-    cumulative: tonaseBiomassCumulativeCell(result),
+    coalReceipt: numericLegacyCell(result.parsed, "I42", mappingAuthorization),
+    solarReceipt: numericLegacyCell(result.parsed, "CC42", mappingAuthorization),
+    cumulative: tonaseBiomassCumulativeCell(result, mappingAuthorization),
   };
 }
 
@@ -273,6 +379,7 @@ function dailySource(
   parsed: DynamicParserResult,
   record: DynamicDailyRecord,
   path: HeaderPath | null,
+  mappingAuthorization: MappingAuthorization,
 ): ImportSource {
   const row = dailyRowForRecord(parsed, record);
   const cell =
@@ -285,12 +392,22 @@ function dailySource(
   return {
     worksheet: parsed.worksheet.name,
     cell: cell?.address ?? null,
-    row: cell?.row ?? row,
+    row: cell?.address ? cell.row : null,
+    column: cell?.address ? cell.column : null,
+    rawDisplayValue:
+      cell?.rawValue === null || cell?.rawValue === undefined
+        ? null
+        : String(cell.rawValue),
+    observationKind: cell?.address ? "SOURCE_CELL" : "SOURCE_RANGE",
+    sourceGranularity: cell?.address ? "CELL" : "RANGE",
+    mappingAuthorization,
   };
 }
 
-function rawValue(value: number | null) {
-  return value === null ? null : String(value);
+function stagingRawValue(source: ImportSource) {
+  // A normalized number is never an acceptable substitute for the source
+  // display value. Missing source evidence remains null and is reviewable.
+  return source.rawDisplayValue ?? null;
 }
 
 function stagingRecord(input: {
@@ -313,7 +430,7 @@ function stagingRecord(input: {
     readingDate: input.readingDate ?? null,
     unitCode: input.unitCode ?? null,
     supplierCode: input.supplierCode ?? null,
-    rawValue: rawValue(input.value),
+    rawValue: stagingRawValue(input.source),
     normalizedValue: input.value,
     contentHashSeed: input.contentHashSeed ?? null,
     valueUnit: input.unit,
@@ -323,27 +440,32 @@ function stagingRecord(input: {
   };
 }
 
-function buildRows(result: DynamicWorksheetReadResult) {
+function buildRows(
+  result: DynamicWorksheetReadResult,
+  options: { mappingApproval?: MappingApprovalContext } = {},
+) {
   const parsed = result.parsed;
   const structure = parsed.structures[0];
   if (!structure) throw new Error("Semantic structure tidak tersedia.");
 
   const effectivePeriod = utcDate(result.effective.year, result.effective.month, 1);
-  const legacyFallbacks = approvedLegacyFallbacks(result);
+  const legacyFallbacks = approvedLegacyFallbacks(result, options.mappingApproval);
   const series = parsed.normalized.series;
   const receiptRows: BiomassReceiptImportRecord[] = extractBiomassReceiptImportRows(
     parsed.scannedCells,
     structure,
+    options.mappingApproval,
   ).map((row) => ({
     periodStart: effectivePeriod,
     supplierCode: row.supplierCode,
     supplierName: row.supplierName,
     quantityTon: row.value,
-    source: {
-      worksheet: parsed.worksheet.name,
-      cell: row.sourceAddress,
-      row: row.sourceRow,
-    },
+    source: sourceFromScannedCell(parsed, row.sourceAddress, row.sourceRow, {
+      mappingAuthorization: row.mappingAuthorization,
+      sourceGranularity: row.sourceGranularity,
+      sourceAddresses: row.sourceAddresses,
+      rawDisplayValues: row.rawDisplayValues,
+    }),
   }));
 
   const coalConsumptionRows: CoalConsumptionImportRecord[] = [];
@@ -360,6 +482,23 @@ function buildRows(result: DynamicWorksheetReadResult) {
   const hopPaths = [1, 2, 3].map((unit) => hopPath(structure, unit as UnitNumber));
   const solarDailyPath = solarPath(parsed);
   const stock = stockPath(structure);
+  const biomassPathAuthorizations = biomassPaths.map((path, index) =>
+    structuralPathAuthorization(path, options.mappingApproval, (index + 1) as UnitNumber),
+  );
+  const coalPathAuthorizations = coalPaths.map((path, index) =>
+    structuralPathAuthorization(path, options.mappingApproval, (index + 1) as UnitNumber),
+  );
+  const hopPathAuthorizations = hopPaths.map((path, index) =>
+    structuralPathAuthorization(path, options.mappingApproval, (index + 1) as UnitNumber),
+  );
+  const solarDailyAuthorization = structuralPathAuthorization(
+    solarDailyPath,
+    options.mappingApproval,
+  );
+  const stockAuthorization = structuralPathAuthorization(
+    stock,
+    options.mappingApproval,
+  );
 
   for (const record of series) {
     const readingDate = dateFromRecord(
@@ -378,7 +517,12 @@ function buildRows(result: DynamicWorksheetReadResult) {
         readingDate,
         unitNumber,
         quantityTon,
-        source: dailySource(parsed, record, biomassPaths[index]),
+        source: dailySource(
+          parsed,
+          record,
+          biomassPaths[index],
+          biomassPathAuthorizations[index] ?? "BLOCKED",
+        ),
       });
     }
 
@@ -393,7 +537,12 @@ function buildRows(result: DynamicWorksheetReadResult) {
         readingDate,
         unitNumber,
         quantityTon,
-        source: dailySource(parsed, record, coalPaths[index]),
+        source: dailySource(
+          parsed,
+          record,
+          coalPaths[index],
+          coalPathAuthorizations[index] ?? "BLOCKED",
+        ),
       });
     }
     if (record.stock !== null && record.coal !== null) {
@@ -401,14 +550,19 @@ function buildRows(result: DynamicWorksheetReadResult) {
         readingDate,
         closingStock: record.stock,
         consumed: record.coal,
-        source: dailySource(parsed, record, stock),
+        source: dailySource(parsed, record, stock, stockAuthorization),
       });
     }
 
     solarConsumptionRows.push({
       readingDate,
       quantityLiter: record.solar,
-      source: dailySource(parsed, record, solarDailyPath),
+      source: dailySource(
+        parsed,
+        record,
+        solarDailyPath,
+        solarDailyAuthorization,
+      ),
     });
 
     const hopValues = [record.hop1, record.hop2, record.hop3];
@@ -418,7 +572,12 @@ function buildRows(result: DynamicWorksheetReadResult) {
         readingDate,
         unitNumber,
         hopDays,
-        source: dailySource(parsed, record, hopPaths[index]),
+        source: dailySource(
+          parsed,
+          record,
+          hopPaths[index],
+          hopPathAuthorizations[index] ?? "BLOCKED",
+        ),
       });
     }
   }
@@ -430,7 +589,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
           {
             periodStart: effectivePeriod,
             quantityLiter: solarReceiptResolved.value,
-            source: sourceFromResolved(parsed.worksheet.name, solarReceiptResolved),
+            source: sourceFromResolved(parsed.worksheet.name, solarReceiptResolved, parsed),
           },
         ]
       : legacyFallbacks.solarReceipt
@@ -450,7 +609,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
           {
             periodStart: effectivePeriod,
             quantityTon: coalReceiptResolved.value,
-            source: sourceFromResolved(parsed.worksheet.name, coalReceiptResolved),
+            source: sourceFromResolved(parsed.worksheet.name, coalReceiptResolved, parsed),
           },
         ]
       : legacyFallbacks.coalReceipt
@@ -470,7 +629,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
           {
             targetYear: result.effective.year,
             targetTon: targetResolved.value,
-            source: sourceFromResolved(parsed.worksheet.name, targetResolved),
+            source: sourceFromResolved(parsed.worksheet.name, targetResolved, parsed),
           },
         ]
       : isApprovedLegacyWorksheet(result.effective.worksheet)
@@ -482,6 +641,14 @@ function buildRows(result: DynamicWorksheetReadResult) {
                 worksheet: parsed.worksheet.name,
                 cell: null,
                 row: null,
+                rawDisplayValue: null,
+                observationKind: "POLICY_FALLBACK",
+                mappingSourceKind: "POLICY_FALLBACK",
+                mappingAuthorization:
+                  options.mappingApproval?.approvalState === "APPROVED" &&
+                  options.mappingApproval.allowPolicyFallback
+                    ? "APPROVED_POLICY_FALLBACK"
+                    : "REVIEW_REQUIRED",
               },
             },
           ]
@@ -494,7 +661,7 @@ function buildRows(result: DynamicWorksheetReadResult) {
           {
             periodStart: effectivePeriod,
             cumulativeTon: cumulativeResolved.value,
-            source: sourceFromResolved(parsed.worksheet.name, cumulativeResolved),
+            source: sourceFromResolved(parsed.worksheet.name, cumulativeResolved, parsed),
           },
         ]
       : legacyFallbacks.cumulative
@@ -709,8 +876,9 @@ function buildStagingRows(input: ReturnType<typeof buildRows>) {
 
 export function buildGoogleSheetsImportPlanFromReadResult(
   result: DynamicWorksheetReadResult,
+  options: { mappingApproval?: MappingApprovalContext } = {},
 ): GoogleSheetsImportPlan {
-  const rows = buildRows(result);
+  const rows = buildRows(result, options);
   const blockingIssues = validatePlan(rows, result);
   const stagingRows = buildStagingRows(rows);
   const requestedPeriod = utcDate(result.requested.year, result.requested.month, 1);
@@ -756,6 +924,31 @@ export async function buildGoogleSheetsImportPlan(query: {
   month: number;
   year: number;
 }): Promise<GoogleSheetsImportPlan> {
-  const result = await readAndParseDynamicBBWorksheet(query);
-  return buildGoogleSheetsImportPlanFromReadResult(result);
+  const monthName = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ][query.month - 1];
+  const expectedWorksheet = monthName
+    ? `${monthName}${String(query.year).slice(-2)}-BB`
+    : "";
+  const mapping = expectedWorksheet
+    ? approvedMappingContractForWorksheet(expectedWorksheet)
+    : null;
+  const mappingApproval = mapping
+    ? mappingApprovalForContract(mapping)
+    : undefined;
+  const result = await readAndParseDynamicBBWorksheet(query, DYNAMIC_SCAN_RANGE, {
+    mappingApproval,
+  });
+  return buildGoogleSheetsImportPlanFromReadResult(result, { mappingApproval });
 }

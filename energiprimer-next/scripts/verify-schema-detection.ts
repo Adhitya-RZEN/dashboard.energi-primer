@@ -127,6 +127,27 @@ if (!ambiguous.changed || ambiguous.type !== "SCHEMA_REVIEW")
   throw new Error("Ambiguous rename was not classified as SCHEMA_REVIEW.");
 checks.push("ambiguous mapping requires review");
 
+const dynamicHeaderValue = detectSchemaChange(
+  snapshot([
+    {
+      ...column("HSD"),
+      labels: ["HSD", "COAL HANDLING", "BIOMASSA", "4.451"],
+    },
+  ]),
+  snapshot([
+    {
+      ...column("HSD"),
+      labels: ["HSD", "COAL HANDLING", "BIOMASSA", "7.967"],
+    },
+  ]),
+  { allowObservedValueTypeDrift: true },
+);
+if (dynamicHeaderValue.changed || dynamicHeaderValue.type !== "UNCHANGED")
+  throw new Error(
+    "Changing numeric cell content embedded in a header path was treated as schema drift.",
+  );
+checks.push("numeric cell content is excluded from canonical header comparison");
+
 const duplicateHeader = detectSchemaChange(
   base,
   snapshot([base.columns[0], column("BIOMASSA UNIT 1")]),

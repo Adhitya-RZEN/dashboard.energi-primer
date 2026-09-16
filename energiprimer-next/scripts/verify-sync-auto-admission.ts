@@ -13,6 +13,7 @@ import {
   resolveApprovedCanonicalSchema,
 } from "../src/services/google-sheets/sync/bb-policy";
 import type { SchemaColumnSnapshot, SchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
+import { parseSchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
 
 function column(
   label: string,
@@ -56,6 +57,8 @@ function snapshot(columns: readonly SchemaColumnSnapshot[]): SchemaSnapshot {
 }
 
 const canonical = snapshot([column("BIOMASSA UNIT 1")]);
+const normalizedCanonical = parseSchemaSnapshot(JSON.stringify(canonical));
+if (!normalizedCanonical) throw new Error("Canonical fixture could not be normalized.");
 const changed = snapshot([...canonical.columns, column("BIOMASSA UNIT 2")]);
 const asOfSeptember = { month: 9, year: 2026 } as const;
 const asOfAugust = { month: 8, year: 2026 } as const;
@@ -125,7 +128,7 @@ const globalCanonical = resolveApprovedCanonicalSchema([
   },
 ]);
 assert.equal(globalCanonical.status, "AVAILABLE");
-assert.equal(globalCanonical.schemaSnapshot, JSON.stringify(canonical));
+assert.equal(globalCanonical.schemaSnapshot, JSON.stringify(normalizedCanonical));
 const globalProfileCheck = "same schema is accepted across a new workbook ID";
 const globalProfileChecks: string[] = [globalProfileCheck];
 const crossFileApproved = evaluateAutomaticWorksheet(
@@ -156,6 +159,38 @@ const ambiguousCanonical = resolveApprovedCanonicalSchema([
 assert.equal(ambiguousCanonical.status, "AMBIGUOUS");
 assert.equal(ambiguousCanonical.schemaSnapshot, null);
 globalProfileChecks.push("conflicting active profiles are blocked");
+
+const sourceScopedCanonical = resolveApprovedCanonicalSchema(
+  [
+    {
+      sourceId: BigInt(20),
+      status: "ACTIVE",
+      worksheetTitle: "Juli26-BB",
+      schemaSnapshot: JSON.stringify(canonical),
+      updatedAt: new Date("2026-08-30T11:36:21.000Z"),
+    },
+    {
+      sourceId: BigInt(99),
+      status: "ACTIVE",
+      worksheetTitle: "Juli26-BB",
+      schemaSnapshot: JSON.stringify(changed),
+      updatedAt: new Date("2026-09-01T11:36:21.000Z"),
+    },
+  ],
+  { sourceId: BigInt(20) },
+);
+assert.equal(
+  sourceScopedCanonical.status,
+  "AVAILABLE",
+  "same-source canonical profile wins over an unrelated conflicting profile",
+);
+assert.equal(
+  sourceScopedCanonical.schemaSnapshot,
+  JSON.stringify(normalizedCanonical),
+);
+globalProfileChecks.push(
+  "explicit worksheet recognition prefers its same-source canonical anchor",
+);
 
 assert.equal(
   isAutomaticWorksheetReviewRetryable({

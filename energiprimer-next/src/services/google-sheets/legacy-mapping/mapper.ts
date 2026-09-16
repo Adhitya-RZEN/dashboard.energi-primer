@@ -829,6 +829,7 @@ export function mapLegacyWorksheet(input: LegacyMappingInput): LegacyMappingResu
       issues,
       input.existingSyncRows ?? [],
     ),
+    writeAuthorization: "COMPARISON_ONLY",
     importGate,
     plan: input.plan,
   };

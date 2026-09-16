@@ -6,6 +6,7 @@ import { resolveAnchorValue } from "../value-resolver";
 import type {
   DetectedAnchor,
   DynamicFieldKey,
+  MappingApprovalContext,
   ResolvedValue,
   ScannedCell,
   StructureAnalysis,
@@ -48,6 +49,7 @@ function chooseResolution(
       source: null,
       status: "ambiguous",
       candidates: [...best.candidates, ...second.candidates],
+      writeAuthorization: "BLOCKED",
       note: `Duplicate anchor ${field} menghasilkan candidate bernilai berbeda.`,
     };
   }
@@ -60,6 +62,7 @@ function resolveField(
   regions: readonly TableRegion[],
   worksheet: string,
   structure: StructureAnalysis | undefined,
+  mappingApproval: MappingApprovalContext | undefined,
 ) {
   const matches = anchorsForKey(anchors, field);
   if (!matches.length)
@@ -71,6 +74,7 @@ function resolveField(
         nearestRegion(regions, anchor, "dashboard"),
         worksheet,
         structure,
+        { mappingApproval },
       ),
     ),
     field,
@@ -94,6 +98,7 @@ function resolveCoalCurrent(
   regions: readonly TableRegion[],
   worksheet: string,
   structure: StructureAnalysis | undefined,
+  mappingApproval: MappingApprovalContext | undefined,
 ): { value: ResolvedValue; warning?: string } {
   const current = anchors
     .filter(isCoalCurrentAnchor)
@@ -123,6 +128,7 @@ function resolveCoalCurrent(
     nearestRegion(regions, selected, "dashboard"),
     worksheet,
     structure,
+    { mappingApproval },
   );
   return {
     value: warning ? { ...value, note: warning } : value,
@@ -136,6 +142,7 @@ export function parseDashboardTable(
   regions: readonly TableRegion[],
   worksheet: string,
   structure?: StructureAnalysis,
+  mappingApproval?: MappingApprovalContext,
 ): DashboardParseResult {
   const fields: Partial<Record<DynamicFieldKey, ResolvedValue>> = {};
   const warnings: string[] = [];
@@ -155,6 +162,7 @@ export function parseDashboardTable(
         regions,
         worksheet,
         structure,
+        mappingApproval,
       );
       fields[definition.field] = resolved.value;
       if (resolved.warning) warnings.push(resolved.warning);
@@ -166,6 +174,7 @@ export function parseDashboardTable(
       regions,
       worksheet,
       structure,
+      mappingApproval,
     );
   }
 

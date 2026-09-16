@@ -2,6 +2,7 @@ import type {
   AnchorMatchType,
   ConfidenceLevel,
   DetectedAnchor,
+  MappingAuthorization,
   ResolvedSource,
   ResolvedValue,
   ValueCandidate,
@@ -56,7 +57,13 @@ export function resolvedSource(
   address: string,
   anchor: DetectedAnchor,
 ): ResolvedSource {
-  return { sheet, address, anchor: anchor.cell.address };
+  return {
+    sheet,
+    address,
+    anchor: anchor.cell.address,
+    matchType: anchor.matchType,
+    granularity: "CELL",
+  };
 }
 
 export function unavailableValue(
@@ -71,6 +78,7 @@ export function unavailableValue(
     source: null,
     status: "missing",
     candidates,
+    writeAuthorization: "BLOCKED",
     note,
   };
 }
@@ -81,6 +89,7 @@ export function resolvedValue(
   source: ResolvedSource,
   candidates: readonly ValueCandidate[],
   note?: string,
+  writeAuthorization: MappingAuthorization = "REVIEW_REQUIRED",
 ): ResolvedValue {
   const confidence = confidenceFromScore(score);
   return {
@@ -91,6 +100,7 @@ export function resolvedValue(
     source,
     status: "resolved",
     candidates,
+    writeAuthorization,
     note,
   };
 }

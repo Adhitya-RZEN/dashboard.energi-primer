@@ -540,3 +540,74 @@ model BiomassCumulativeSnapshot {
   @@unique([periodStart])
   @@map("biomass_cumulative_snapshots")
 }
+
+/// Durable Phase 5 execution ledger. The plan snapshot is immutable evidence;
+/// business target rows remain owned by the canonical normalized models above.
+model CanonicalImportRun {
+  id                BigInt                 @id @default(autoincrement()) @db.BigInt
+  planId            String                 @unique @map("plan_id") @db.VarChar(128)
+  planHash          String                 @unique @map("plan_hash") @db.VarChar(128)
+  importRunId       String                 @map("import_run_id") @db.VarChar(255)
+  sourceKey         String                 @map("source_key") @db.VarChar(128)
+  spreadsheetId     String                 @map("spreadsheet_id") @db.VarChar(255)
+  sheetId           String                 @map("sheet_id") @db.VarChar(255)
+  worksheetTitle    String                 @map("worksheet_title") @db.VarChar(255)
+  sourceRange       String                 @map("source_range") @db.VarChar(255)
+  effectivePeriod   DateTime?              @map("effective_period") @db.Date
+  mappingProfile    String                 @map("mapping_profile") @db.VarChar(128)
+  mappingVersion    String                 @map("mapping_version") @db.VarChar(128)
+  schemaVersion     String                 @map("schema_version") @db.VarChar(128)
+  parserVersion     String                 @map("parser_version") @db.VarChar(128)
+  schemaFingerprint String?                @map("schema_fingerprint") @db.VarChar(128)
+  sourceManifest    String                 @map("source_manifest") @db.Text
+  planSnapshot      String                 @map("plan_snapshot") @db.Text
+  status            String                 @db.VarChar(32)
+  approvalState     String                 @map("approval_state") @db.VarChar(32)
+  totalItems        Int                    @map("total_items")
+  plannedInsert     Int                    @default(0) @map("planned_insert")
+  plannedUpdate     Int                    @default(0) @map("planned_update")
+  plannedSkip       Int                    @default(0) @map("planned_skip")
+  plannedBlock      Int                    @default(0) @map("planned_block")
+  attemptCount      Int                    @default(0) @map("attempt_count")
+  executionId       String?                @map("execution_id") @db.VarChar(128)
+  startedAt         DateTime?              @map("started_at") @db.Timestamp(3)
+  heartbeatAt       DateTime?              @map("heartbeat_at") @db.Timestamp(3)
+  completedAt       DateTime?              @map("completed_at") @db.Timestamp(3)
+  failureCode       String?                @map("failure_code") @db.VarChar(64)
+  failureSummary    String?                @map("failure_summary") @db.Text
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamp(3)
+  batches           CanonicalImportBatch[]
+
+  @@index([sourceKey, createdAt])
+  @@index([status, updatedAt])
+  @@map("canonical_import_runs")
+}
+
+model CanonicalImportBatch {
+  id                  BigInt             @id @default(autoincrement()) @db.BigInt
+  runId               BigInt             @map("run_id") @db.BigInt
+  batchNumber         Int                @map("batch_number")
+  planHash            String             @map("plan_hash") @db.VarChar(128)
+  itemCount           Int                @map("item_count")
+  itemManifest        String             @map("item_manifest") @db.Text
+  status              String             @db.VarChar(32)
+  attemptCount        Int                @default(0) @map("attempt_count")
+  executionId         String?            @map("execution_id") @db.VarChar(128)
+  startedAt           DateTime?          @map("started_at") @db.Timestamp(3)
+  heartbeatAt         DateTime?          @map("heartbeat_at") @db.Timestamp(3)
+  completedAt         DateTime?          @map("completed_at") @db.Timestamp(3)
+  committedItemCount  Int                @default(0) @map("committed_item_count")
+  retryable           Boolean            @default(true)
+  failureCode         String?            @map("failure_code") @db.VarChar(64)
+  failureSummary      String?            @map("failure_summary") @db.Text
+  observationSnapshot String?            @map("observation_snapshot") @db.Text
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamp(3)
+  run                 CanonicalImportRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+
+  @@unique([runId, batchNumber])
+  @@index([runId, status])
+  @@index([planHash])
+  @@map("canonical_import_batches")
+}

@@ -55,14 +55,13 @@ Browser
                                       and the path-based Google config gate passes)
 
 Vercel Cron or an authorized operator
-  └── GET/POST /api/sync/google-sheets
+  ├── GET /api/sync/google-sheets (read-only discovery / preflight)
+  └── POST /api/sync/google-sheets (explicit action + canonical plan hash)
           └── CRON_SECRET check
-                  └── Google metadata → source bootstrap → lease
-                         → registry snapshot → pure preparation → persistence
-                                → dynamic reader/parser/normalizer
-                                  → import plan and validation gates
-                                          → staging and normalized PostgreSQL upserts
-                                                  → sync row state / monitoring
+                  └── Google metadata → deterministic mapping → validation
+                         → immutable plan → admission
+                                → bounded compatibility writer (POST only)
+                                      → row state / monitoring → read-only verification
 ```
 
 Supabase migration/recovery experiments are retained only in operator scripts
@@ -371,8 +370,10 @@ Request
   → check allowed deployment environment
   → check CRON_SECRET exists
   → constant-time bearer comparison
+  → verify Supabase Production target and required tables (read-only)
   → runGoogleSheetsIncrementalSync({ triggerType: "cron", scope: "automatic",
-                                     allowNonLocalDatabase: true })
+                                     databaseTarget: "SUPABASE_PRODUCTION",
+                                     productionTarget })
   → discovery / lease / read / parse / validate / commit
   → JSON counters or generic error
 ```
@@ -404,7 +405,10 @@ User submits email/password
 
 The proxy persists dashboard query filters in HTTP-only cookies and invokes Auth.js only for the dashboard matcher. The protected layout is the broader server authorization boundary for page routes. UI hiding in `NavigationMenu` is not treated as authorization; direct page access is protected by the layout.
 
-The sync API is a separate machine-to-machine boundary: deployment gate, bearer `CRON_SECRET`, constant-time comparison, then sync. Auth.js user sessions do not protect it. The route retains `allowNonLocalDatabase: true` only after the explicit production/local-development gate; Preview and unknown deployment identities are denied.
+The sync API is a separate machine-to-machine boundary: deployment gate, bearer
+`CRON_SECRET`, constant-time comparison, read-only Supabase Production target
+verification, then sync. Auth.js user sessions do not protect it. Preview and
+unknown deployment identities are denied.
 
 ## 11. External integration map
 
@@ -465,7 +469,11 @@ Vercel runtime (intended)
   → Google Sheets + remote PostgreSQL
 ```
 
-The manual import commit guard only allows loopback `DATABASE_URL` with database name `dashboard_pln` unless the caller passes `allowNonLocalDatabase`. The cron route passes that override only after the deployment-environment gate (production/development allowed; preview/unknown denied).
+The manual import commit guard allows loopback `DATABASE_URL` with database
+name `dashboard_pln` by default. A non-local import must instead pass the
+positively verified `SUPABASE_PRODUCTION` target; the cron route does so only
+after its deployment and bearer gates, and the local operator does so only
+after its explicit target/worksheet gates.
 
 There is no current `.github` CI workflow evidence. Local TypeScript/lint/build
 and read-only migration/preflight results are release gates, but a disposable
@@ -566,6 +574,20 @@ resources, WebSocket, analytics, iframe, or framework/dependency changes
 require CSP regression. The active source set remains exactly seven worksheets
 from Januari26-BB through Juli26-BB, while the 199-row registry is metadata
 inventory rather than 199 required monthly imports.
+
+## Phase 5 canonical target-state and ledger boundary
+
+The Google Sheets write path now has a canonical target-state adapter and
+deterministic target diff before admission. The approved plan is immutable and
+its writable items use a bounded durable batch ledger with conservative restart
+recovery and read-only target reconciliation. The existing bulk importer remains
+the compatibility writer behind that boundary. Production ledger tables are a
+pending application migration artifact only; the separately governed
+`prisma/production/` history and live Production schema were not changed.
+Production canary execution is explicitly blocked until the ledger rollout,
+narrow scope, approval reference, and exact authorization are supplied. The
+current result is in
+`docs/PHASE5_CANONICAL_TARGET_STATE_DURABLE_LEDGER_RESULT.md`.
 
 ## 23. Phase 6V live CSP artifact verification
 

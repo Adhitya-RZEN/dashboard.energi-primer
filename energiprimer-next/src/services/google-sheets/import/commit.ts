@@ -1,19 +1,27 @@
 import "server-only";
 
+import { performance } from "node:perf_hooks";
+
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import { contentHashForStagingRows } from "../sync/identity";
+import {
+  assertVerifiedSupabaseProductionTarget,
+  verifySupabaseProductionTarget,
+  type SyncDatabaseTarget,
+  type VerifiedSupabaseProductionTarget,
+} from "../sync/production-target";
+import { assertProductionCanaryAuthorization } from "../sync/production-canary";
+import { verifyCanonicalLedgerCapability } from "../canonical/ledger-prisma-store";
+import { classifyRecoveryFailure } from "../canonical/recovery";
+import {
+  IMPORT_TRANSACTION_BATCH_SIZE,
+  upsertBulkCumulativeRows,
+  upsertBulkNormalizedRows,
+} from "./bulk-upserts";
 import type {
-  BiomassConsumptionImportRecord,
-  BiomassReceiptImportRecord,
-  CoalConsumptionImportRecord,
-  CoalReceiptImportRecord,
-  CoalStockImportRecord,
   GoogleSheetsImportPlan,
-  HopImportRecord,
   ImportStagingRecord,
-  SolarConsumptionImportRecord,
-  SolarReceiptImportRecord,
 } from "./types";
 
 const UNIT_CODES = {
@@ -22,13 +30,11 @@ const UNIT_CODES = {
   3: "PLTU-3",
 } as const;
 
+export const IMPORT_TRANSACTION_TIMEOUT_MS = 30_000;
+export const IMPORT_TRANSACTION_SAFETY_BUDGET_MS = 22_500;
+
 function decimal(value: number | null) {
   return value === null ? null : new Prisma.Decimal(String(value));
-}
-
-function decimalAtScale(value: number | null, scale: number) {
-  const parsed = decimal(value);
-  return parsed?.toDecimalPlaces(scale) ?? null;
 }
 
 function unitNumber(unit: { code: string; name: string }) {
@@ -56,7 +62,27 @@ async function resolveUnitIds() {
   return resolved;
 }
 
-function assertDatabaseTarget(allowNonLocalDatabase: boolean) {
+export async function assertImportDatabaseTarget(options: ImportCommitOptions) {
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    const requestedTarget = assertVerifiedSupabaseProductionTarget(
+      options.productionTarget,
+    );
+    const verifiedTarget = await verifySupabaseProductionTarget({
+      rawUrl: process.env.DATABASE_URL,
+      connectionVariable: "DATABASE_URL",
+    });
+    if (verifiedTarget.fingerprint !== requestedTarget.fingerprint)
+      throw new Error("Verified Supabase Production target changed before write.");
+    return;
+  }
+
+  const allowNonLocalDatabase =
+    options.databaseTarget === "LOCAL" ? false : options.allowNonLocalDatabase;
+  if (allowNonLocalDatabase === true)
+    throw new Error(
+      "Non-local import writes require a positively verified database target.",
+    );
+
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl) throw new Error("DATABASE_URL is not configured.");
   let parsed: URL;
@@ -65,7 +91,6 @@ function assertDatabaseTarget(allowNonLocalDatabase: boolean) {
   } catch {
     throw new Error("DATABASE_URL is invalid.");
   }
-  if (allowNonLocalDatabase) return;
   const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
   const databaseName = parsed.pathname.replace(/^\//, "");
   if (!localHosts.has(parsed.hostname) || databaseName !== "dashboard_pln") {
@@ -89,7 +114,7 @@ function stagingData(
       entityType: row.entityType,
       sourceWorksheet: row.source.worksheet,
       sourceRow: row.source.row,
-      sourceColumn: null,
+      sourceColumn: row.source.column ?? null,
       sourceAddress: row.source.cell,
       periodStart: row.periodStart,
       readingDate: row.readingDate,
@@ -104,220 +129,14 @@ function stagingData(
   });
 }
 
-async function upsertBiomassReceipts(
-  tx: Prisma.TransactionClient,
-  rows: readonly BiomassReceiptImportRecord[],
-  importRunId: bigint,
-) {
-  for (const row of rows) {
-    await tx.biomassReceipt.upsert({
-      where: {
-        periodStart_supplierCode: {
-          periodStart: row.periodStart,
-          supplierCode: row.supplierCode,
-        },
-      },
-      create: {
-        importRunId,
-        periodStart: row.periodStart,
-        supplierCode: row.supplierCode,
-        supplierName: row.supplierName,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        supplierName: row.supplierName,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
-async function upsertCoalReceipts(
-  tx: Prisma.TransactionClient,
-  rows: readonly CoalReceiptImportRecord[],
-  importRunId: bigint,
-) {
-  for (const row of rows) {
-    await tx.coalReceipt.upsert({
-      where: { periodStart: row.periodStart },
-      create: {
-        importRunId,
-        periodStart: row.periodStart,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
-async function upsertCoalConsumption(
-  tx: Prisma.TransactionClient,
-  rows: readonly CoalConsumptionImportRecord[],
-  unitIds: Map<1 | 2 | 3, bigint>,
-) {
-  for (const row of rows) {
-    const unitId = unitIds.get(row.unitNumber);
-    if (!unitId) throw new Error(`Unit ${row.unitNumber} is not available.`);
-    await tx.coalConsumption.upsert({
-      where: { unitId_date: { unitId, date: row.readingDate } },
-      create: {
-        unitId,
-        date: row.readingDate,
-        coalUsed: decimalAtScale(row.quantityTon, 2),
-      },
-      update: {
-        coalUsed: decimalAtScale(row.quantityTon, 2),
-      },
-    });
-  }
-}
-
-async function upsertCoalStock(
-  tx: Prisma.TransactionClient,
-  rows: readonly CoalStockImportRecord[],
-) {
-  for (const row of rows) {
-    if (row.closingStock === null || row.consumed === null) continue;
-    await tx.coalStock.upsert({
-      where: { date: row.readingDate },
-      create: {
-        date: row.readingDate,
-        consumed: decimalAtScale(row.consumed, 2) as Prisma.Decimal,
-        closingStock: decimalAtScale(row.closingStock, 2) as Prisma.Decimal,
-      },
-      update: {
-        consumed: decimalAtScale(row.consumed, 2) as Prisma.Decimal,
-        closingStock: decimalAtScale(row.closingStock, 2) as Prisma.Decimal,
-      },
-    });
-  }
-}
-
-async function upsertBiomassConsumption(
-  tx: Prisma.TransactionClient,
-  rows: readonly BiomassConsumptionImportRecord[],
-  importRunId: bigint,
-  unitIds: Map<1 | 2 | 3, bigint>,
-) {
-  for (const row of rows) {
-    const unitId = unitIds.get(row.unitNumber);
-    if (!unitId) throw new Error(`Unit ${row.unitNumber} is not available.`);
-    await tx.biomassConsumption.upsert({
-      where: {
-        unitId_readingDate: { unitId, readingDate: row.readingDate },
-      },
-      create: {
-        importRunId,
-        unitId,
-        readingDate: row.readingDate,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        quantityTon: decimal(row.quantityTon),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
-async function upsertSolarConsumption(
-  tx: Prisma.TransactionClient,
-  rows: readonly SolarConsumptionImportRecord[],
-  importRunId: bigint,
-) {
-  for (const row of rows) {
-    await tx.solarConsumption.upsert({
-      where: { readingDate: row.readingDate },
-      create: {
-        importRunId,
-        readingDate: row.readingDate,
-        quantityLiter: decimal(row.quantityLiter),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        quantityLiter: decimal(row.quantityLiter),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
-async function upsertSolarReceipt(
-  tx: Prisma.TransactionClient,
-  rows: readonly SolarReceiptImportRecord[],
-  importRunId: bigint,
-) {
-  for (const row of rows) {
-    await tx.solarReceipt.upsert({
-      where: { periodStart: row.periodStart },
-      create: {
-        importRunId,
-        periodStart: row.periodStart,
-        quantityLiter: decimal(row.quantityLiter),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        quantityLiter: decimal(row.quantityLiter),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
-async function upsertHop(
-  tx: Prisma.TransactionClient,
-  rows: readonly HopImportRecord[],
-  importRunId: bigint,
-  unitIds: Map<1 | 2 | 3, bigint>,
-) {
-  for (const row of rows) {
-    const unitId = unitIds.get(row.unitNumber);
-    if (!unitId) throw new Error(`Unit ${row.unitNumber} is not available.`);
-    await tx.hopReading.upsert({
-      where: { unitId_readingDate: { unitId, readingDate: row.readingDate } },
-      create: {
-        importRunId,
-        unitId,
-        readingDate: row.readingDate,
-        hopDays: decimalAtScale(row.hopDays, 2),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-      update: {
-        importRunId,
-        hopDays: decimalAtScale(row.hopDays, 2),
-        sourceSheet: row.source.worksheet,
-        sourceCell: row.source.cell,
-      },
-    });
-  }
-}
-
 export type ImportCommitOptions = {
-  /** Manual CLI imports stay local-only; the authenticated sync orchestrator may opt in. */
+  /** Legacy local-only flag retained for existing local callers. */
   allowNonLocalDatabase?: boolean;
+  /** A non-local write must identify the approved target explicitly. */
+  databaseTarget?: SyncDatabaseTarget;
+  productionTarget?: VerifiedSupabaseProductionTarget;
+  /** Only the canonical batch adapter may invoke the Production writer. */
+  canonicalBatch?: true;
   source?: string;
 };
 
@@ -327,7 +146,18 @@ export async function commitGoogleSheetsImportPlan(
 ) {
   if (plan.status !== "READY_FOR_IMPORT")
     throw new Error("Import plan has blocking validation issues.");
-  assertDatabaseTarget(options.allowNonLocalDatabase === true);
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    if (options.canonicalBatch !== true)
+      throw new Error("Production writes must enter through a canonical durable batch.");
+    assertProductionCanaryAuthorization(plan.summary.totalRows);
+  }
+  await assertImportDatabaseTarget(options);
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    if (process.env.CANONICAL_IMPORT_LEDGER_ENABLED !== "true")
+      throw new Error("Production writes require the Phase 5 durable ledger.");
+    if (!(await verifyCanonicalLedgerCapability()))
+      throw new Error("The Phase 5 durable ledger tables are unavailable on Production.");
+  }
   const source = options.source ?? "google_sheets_dynamic";
   const checksum = contentHashForStagingRows(plan.stagingRows);
   const existingSuccessfulRun = await prisma.spreadsheetImportRun.findFirst({
@@ -349,6 +179,8 @@ export async function commitGoogleSheetsImportPlan(
       status: "SUCCESS" as const,
       importRunId: existingSuccessfulRun.id.toString(),
       importedRows: existingSuccessfulRun.importedRows,
+      transactionDurationMs: 0,
+      transactionStatementCount: 0,
     };
   const unitIds = await resolveUnitIds();
   const importRun = await prisma.spreadsheetImportRun.create({
@@ -366,35 +198,37 @@ export async function commitGoogleSheetsImportPlan(
   });
 
   try {
+    let transactionStatementCount = 0;
+    const transactionStartedAt = performance.now();
     await prisma.$transaction(
       async (tx) => {
-        await tx.spreadsheetImportStaging.createMany({
-          data: stagingData(plan.stagingRows, importRun.id),
-        });
-        await upsertBiomassReceipts(tx, plan.receiptRows, importRun.id);
-        await upsertCoalReceipts(tx, plan.coalReceiptRows, importRun.id);
-        await upsertCoalConsumption(
+        let statementCount = 0;
+        for (
+          let offset = 0;
+          offset < plan.stagingRows.length;
+          offset += IMPORT_TRANSACTION_BATCH_SIZE
+        ) {
+          await tx.spreadsheetImportStaging.createMany({
+            data: stagingData(
+              plan.stagingRows.slice(
+                offset,
+                offset + IMPORT_TRANSACTION_BATCH_SIZE,
+              ),
+              importRun.id,
+            ),
+          });
+          statementCount += 1;
+        }
+        statementCount += await upsertBulkNormalizedRows(
           tx,
-          plan.coalConsumptionRows,
-          unitIds,
-        );
-        await upsertCoalStock(tx, plan.coalStockRows);
-        await upsertBiomassConsumption(
-          tx,
-          plan.biomassConsumptionRows,
+          plan,
           importRun.id,
           unitIds,
         );
-        await upsertSolarConsumption(
-          tx,
-          plan.solarConsumptionRows,
-          importRun.id,
-        );
-        await upsertSolarReceipt(tx, plan.solarReceiptRows, importRun.id);
-        await upsertHop(tx, plan.hopRows, importRun.id, unitIds);
 
         for (const row of plan.targetRows) {
           const targetTon = new Prisma.Decimal(String(row.targetTon));
+          statementCount += 1;
           const existing = await tx.biomassTarget.findUnique({
             where: { targetYear: row.targetYear },
             select: { targetTon: true },
@@ -421,26 +255,14 @@ export async function commitGoogleSheetsImportPlan(
               status: "approved",
             },
           });
+          statementCount += 1;
         }
 
-        for (const row of plan.cumulativeRows) {
-          await tx.biomassCumulativeSnapshot.upsert({
-            where: { periodStart: row.periodStart },
-            create: {
-              importRunId: importRun.id,
-              periodStart: row.periodStart,
-              cumulativeTon: decimal(row.cumulativeTon),
-              source: `Google Sheets ${row.source.worksheet}`,
-              sourceCell: row.source.cell,
-            },
-            update: {
-              importRunId: importRun.id,
-              cumulativeTon: decimal(row.cumulativeTon),
-              source: `Google Sheets ${row.source.worksheet}`,
-              sourceCell: row.source.cell,
-            },
-          });
-        }
+        statementCount += await upsertBulkCumulativeRows(
+          tx,
+          plan.cumulativeRows,
+          importRun.id,
+        );
 
         await tx.spreadsheetImportRun.update({
           where: { id: importRun.id },
@@ -452,24 +274,40 @@ export async function commitGoogleSheetsImportPlan(
             message: `Imported ${plan.summary.totalRows} validated rows from ${plan.effective.worksheet}.`,
           },
         });
+        statementCount += 1;
+        transactionStatementCount = statementCount;
       },
-      { timeout: 30_000 },
+      { timeout: IMPORT_TRANSACTION_TIMEOUT_MS },
+    );
+    const transactionDurationMs = Math.round(
+      performance.now() - transactionStartedAt,
     );
     return {
       status: "SUCCESS" as const,
       importRunId: importRun.id.toString(),
       importedRows: plan.summary.totalRows,
+      transactionDurationMs,
+      transactionStatementCount,
     };
   } catch (error) {
-    await prisma.spreadsheetImportRun.update({
-      where: { id: importRun.id },
-      data: {
-        status: "FAILED",
-        rejectedRows: plan.summary.totalRows,
-        completedAt: new Date(),
-        message: "Import transaction failed; no normalized rows were committed.",
-      },
-    });
+    const recovery = classifyRecoveryFailure(error);
+    const unknownOutcome = recovery.status === "RECONCILIATION_REQUIRED";
+    try {
+      await prisma.spreadsheetImportRun.update({
+        where: { id: importRun.id },
+        data: {
+          status: unknownOutcome ? "RECONCILIATION_REQUIRED" : "FAILED",
+          // An unknown outcome is not equivalent to a fully rejected plan.
+          rejectedRows: unknownOutcome ? 0 : plan.summary.totalRows,
+          completedAt: new Date(),
+          message: unknownOutcome
+            ? "Import transaction outcome is unknown; reconciliation is required before retry."
+            : "Import transaction failed; the bounded transaction was rolled back.",
+        },
+      });
+    } catch {
+      // Preserve the original commit error if the audit update is unavailable.
+    }
     throw error;
   }
 }

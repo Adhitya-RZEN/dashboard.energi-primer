@@ -14,19 +14,82 @@ const schemaPath = path.join(
   "production",
   "schema.prisma",
 );
-const migrationPath = path.join(
+const migrationsDirectory = path.join(
   projectDirectory,
   "prisma",
   "production",
   "migrations",
-  expectedMigrationName,
-  "migration.sql",
 );
 
-function parseModelTables(schema) {
-  return [...schema.matchAll(/model\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g)].map(
-    ([, modelName, body]) => body.match(/@@map\("([^"]+)"\)/)?.[1] ?? modelName,
-  );
+// These tables are deliberately retained compatibility/framework/operational
+// objects. They remain expected schema objects, but are reported separately
+// from the canonical business and synchronization tables.
+const COMPATIBILITY_TABLES = new Set([
+  "users",
+  "user_audit_logs",
+  "password_reset_tokens",
+  "sessions",
+  "cache",
+  "cache_locks",
+  "jobs",
+  "job_batches",
+  "failed_jobs",
+  "coal_stock",
+  "coal_quality",
+  "coal_consumption",
+  "power_generation",
+  "kpi_targets",
+  "spreadsheet_import_logs",
+]);
+
+function parsePrismaModels(schema) {
+  const modelMatches = [
+    ...schema.matchAll(/model\s+([A-Za-z0-9_]+)\s*\{([\s\S]*?)\n\}/g),
+  ];
+  const modelNames = new Set(modelMatches.map(([, modelName]) => modelName));
+  return modelMatches.map(([, modelName, body]) => {
+    const tableName = body.match(/@@map\("([^"]+)"\)/)?.[1] ?? modelName;
+    const columns = [];
+    for (const line of body.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("@@")) continue;
+      const field = trimmed.match(
+        /^([A-Za-z0-9_]+)\s+([A-Za-z0-9_]+)(\[\])?(\?)?(?:\s+(.*))?$/,
+      );
+      if (!field || field[3] || field[2] === "Unsupported") continue;
+      const [, fieldName, fieldType, , nullable, attributes = ""] = field;
+      if (modelNames.has(fieldType) || /@relation\(/.test(attributes)) continue;
+      const columnName = attributes.match(/@map\("([^"]+)"\)/)?.[1] ?? fieldName;
+      const dbType = attributes.match(/@db\.([A-Za-z]+)(?:\(([^)]+)\))?/);
+      let token = fieldType;
+      if (dbType) {
+        token = `${dbType[1].toUpperCase()}${dbType[2] ? `(${dbType[2]})` : ""}`;
+      } else if (fieldType === "BigInt") {
+        token = "BIGINT";
+      } else if (fieldType === "Int") {
+        token = "INTEGER";
+      } else if (fieldType === "String") {
+        token = "TEXT";
+      } else if (fieldType === "Boolean") {
+        token = "BOOLEAN";
+      } else if (fieldType === "DateTime") {
+        token = "TIMESTAMP(3)";
+      }
+      const hasDefault = /@default\(/.test(attributes) || /autoincrement\(\)/.test(attributes);
+      columns.push({
+        name: columnName,
+        definition: `${token}${nullable ? "" : " NOT NULL"}${hasDefault ? " DEFAULT 0" : ""}`,
+        required: !nullable,
+        hasDefault,
+      });
+    }
+    return {
+      name: tableName,
+      modelName,
+      columns,
+      hasPrimaryKey: /\s@id(?:\s|\(|$)/.test(body),
+    };
+  });
 }
 
 function parseArtifact(artifact) {
@@ -49,7 +112,11 @@ function parseArtifact(artifact) {
         };
       })
       .filter(Boolean);
-    return { name, columns };
+    return {
+      name,
+      columns,
+      hasPrimaryKey: /\bPRIMARY KEY\b/.test(body),
+    };
   });
 
   return {
@@ -62,7 +129,7 @@ function parseArtifact(artifact) {
     ),
     foreignKeys: [
       ...artifact.matchAll(
-        /ALTER TABLE "([^"]+)" ADD CONSTRAINT "([^"]+)" FOREIGN KEY \(([^)]+)\) REFERENCES "([^"]+)"\(([^)]+)\) ON DELETE (\w+) ON UPDATE (\w+)/g,
+        /ALTER TABLE\s+"([^"]+)"\s+ADD CONSTRAINT\s+"([^"]+)"\s+FOREIGN KEY\s+\(([^)]+)\)\s+REFERENCES\s+"([^"]+)"\s*\(([^)]+)\)\s+ON DELETE\s+(\w+)\s+ON UPDATE\s+(\w+)/g,
       ),
     ].map(
       ([, tableName, name, columns, referencedTable, referencedColumns, onDelete, onUpdate]) => ({
@@ -80,7 +147,7 @@ function parseArtifact(artifact) {
 
 function expectedType(definition) {
   const token = definition.match(
-    /^(BIGSERIAL|BIGINT|SMALLINT|INTEGER|TEXT|BOOLEAN|DATE|TIMESTAMP\(\d+\)|VARCHAR\(\d+\)|DECIMAL\(\d+,\d+\))/,
+    /^(BIGSERIAL|BIGINT|SMALLINT|INTEGER|TEXT|BOOLEAN|DATE|TIMESTAMP\(\d+\)|VARCHAR\(\d+\)|DECIMAL\(\d+,\d+\)|JSONB)/,
   )?.[1];
   if (!token) return null;
   if (token === "BIGSERIAL" || token === "BIGINT") return ["bigint", "int8"];
@@ -89,6 +156,7 @@ function expectedType(definition) {
   if (token === "TEXT") return ["text", "text"];
   if (token === "BOOLEAN") return ["boolean", "bool"];
   if (token === "DATE") return ["date", "date"];
+  if (token === "JSONB") return ["jsonb", "jsonb"];
   if (token.startsWith("TIMESTAMP")) {
     return ["timestamp without time zone", "timestamp"];
   }
@@ -134,6 +202,11 @@ function sha256(value) {
   return crypto.createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function safeInspectionError(error) {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return message.replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[redacted-database-url]");
+}
+
 const result = {
   status: "FAIL",
   mode: "read-only post-migration schema verification",
@@ -151,16 +224,47 @@ if (!process.env.SUPABASE_DIRECT_URL) {
   result.failures.push("target is not an approved Direct Connection shape");
 } else {
   const schema = fs.readFileSync(schemaPath, "utf8");
-  const artifact = fs
-    .readFileSync(migrationPath, "utf8")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n");
-  const expectedModelTables = parseModelTables(schema);
-  const parsedArtifact = parseArtifact(artifact);
-  const artifactMarker = artifact.indexOf("-- CreateSchema");
-  const expectedMigrationChecksum =
-    artifactMarker >= 0 ? sha256(artifact.slice(artifactMarker)) : null;
-  const expectedTables = parsedArtifact.tables.map((table) => table.name);
+  const prismaModels = parsePrismaModels(schema);
+  const expectedModelTables = prismaModels.map((model) => model.name);
+  const migrationDirectories = fs
+    .readdirSync(migrationsDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const migrationArtifacts = migrationDirectories.map((migrationName) => {
+    const migration = fs
+      .readFileSync(path.join(migrationsDirectory, migrationName, "migration.sql"), "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+    return { name: migrationName, sql: migration, checksum: sha256(migration) };
+  });
+  const historyArtifact = migrationArtifacts.map((migration) => migration.sql).join("\n");
+  const parsedArtifact = parseArtifact(historyArtifact);
+  const expectedMigrationChecksums = new Map(
+    migrationArtifacts.map((migration) => [migration.name, migration.checksum]),
+  );
+  const expectedMigrationChecksum = expectedMigrationChecksums.get(expectedMigrationName) ?? null;
+  const expectedTables = [...new Set(expectedModelTables)];
+  const historyTables = [...new Set(parsedArtifact.tables.map((table) => table.name))];
+  const expectedCurrentObjects = expectedTables.filter((name) => !COMPATIBILITY_TABLES.has(name));
+  const expectedCompatibilityObjects = expectedTables.filter((name) => COMPATIBILITY_TABLES.has(name));
+  result.checks.localContract = {
+    prismaModelCount: expectedModelTables.length,
+    expectedApplicationTables: expectedTables.length,
+    expectedCurrentObjects,
+    expectedCompatibilityObjects,
+    migrationHistory: migrationArtifacts.map((migration) => migration.name),
+    migrationHistoryTables: historyTables.length,
+    schemaTablesMissingFromMigrationHistory: expectedTables.filter(
+      (name) => !historyTables.includes(name),
+    ),
+  };
+  if (
+    expectedModelTables.length !== expectedTables.length ||
+    result.checks.localContract.schemaTablesMissingFromMigrationHistory.length > 0
+  ) {
+    result.failures.push("Prisma model and migration-history table inventories disagree");
+  }
   const client = createClient(process.env.SUPABASE_DIRECT_URL);
 
   try {
@@ -187,26 +291,30 @@ if (!process.env.SUPABASE_DIRECT_URL) {
     `;
     const actualTables = tableRows.map((row) => row.table_name);
     const appTables = actualTables.filter((name) => name !== "_prisma_migrations");
+    const missingExpectedTables = expectedTables.filter((name) => !appTables.includes(name));
+    const unexpectedApplicationTables = appTables.filter((name) => !expectedTables.includes(name));
+    const expectedObjectSet = new Set(expectedTables);
     result.checks.tables = {
       expectedApplicationTables: expectedTables.length,
       actualApplicationTables: appTables.length,
-      allExpectedPresent: expectedTables.every((name) => appTables.includes(name)),
-      noUnexpectedApplicationTables: appTables.every((name) => expectedTables.includes(name)),
+      allExpectedPresent: missingExpectedTables.length === 0,
+      noUnexpectedApplicationTables: unexpectedApplicationTables.length === 0,
+      expectedCurrentObjects,
+      expectedCompatibilityObjects,
+      missingExpectedTables,
+      unexpectedApplicationTables,
+      expectedObjectSetSize: expectedObjectSet.size,
       prismaMigrationsPresent: actualTables.includes("_prisma_migrations"),
     };
     if (
-      expectedTables.length !== 30 ||
-      appTables.length !== 30 ||
+      expectedTables.length !== appTables.length ||
       !result.checks.tables.allExpectedPresent ||
       !result.checks.tables.noUnexpectedApplicationTables ||
       !result.checks.tables.prismaMigrationsPresent
     ) {
       result.failures.push("application table or Prisma metadata inventory mismatch");
     }
-    if (
-      expectedModelTables.length !== 30 ||
-      expectedModelTables.some((name) => !expectedTables.includes(name))
-    ) {
+    if (expectedModelTables.some((name) => !expectedTables.includes(name))) {
       result.failures.push("Prisma model table inventory mismatch");
     }
 
@@ -224,7 +332,7 @@ if (!process.env.SUPABASE_DIRECT_URL) {
     }
     const columnFailures = [];
     let expectedColumnCount = 0;
-    for (const table of parsedArtifact.tables) {
+    for (const table of prismaModels) {
       expectedColumnCount += table.columns.length;
       const actualTableColumns = actualColumns.get(table.name) ?? new Map();
       if (actualTableColumns.size !== table.columns.length) {
@@ -292,15 +400,15 @@ if (!process.env.SUPABASE_DIRECT_URL) {
     });
     result.checks.constraints = {
       primaryKeys: Number(primaryKeyRows[0].count),
-      expectedPrimaryKeys: 30,
+      expectedPrimaryKeys: prismaModels.filter((model) => model.hasPrimaryKey).length,
       foreignKeys: foreignKeyRows.length,
       expectedForeignKeys: parsedArtifact.foreignKeys.length,
       foreignKeyNamesAndActionsMatch:
         foreignKeyParity && actualForeignKeyNames.size === parsedArtifact.foreignKeys.length,
     };
     if (
-      result.checks.constraints.primaryKeys !== 30 ||
-      result.checks.constraints.foreignKeys !== 19 ||
+      result.checks.constraints.primaryKeys !== result.checks.constraints.expectedPrimaryKeys ||
+      result.checks.constraints.foreignKeys !== result.checks.constraints.expectedForeignKeys ||
       !result.checks.constraints.foreignKeyNamesAndActionsMatch
     ) {
       result.failures.push("primary-key or foreign-key inventory/action parity failed");
@@ -325,26 +433,45 @@ if (!process.env.SUPABASE_DIRECT_URL) {
     };
     if (missingIndexes.length > 0 || !uniqueIndexParity) result.failures.push("index or unique-index parity failed");
 
-    const migrationRows = await client.$queryRawUnsafe(
-      'SELECT migration_name, checksum, finished_at, rolled_back_at FROM "_prisma_migrations" WHERE migration_name = $1',
-      expectedMigrationName,
-    );
+    const migrationRows = await client.$queryRaw`
+      SELECT migration_name, checksum, finished_at, rolled_back_at
+      FROM "_prisma_migrations"
+      ORDER BY migration_name
+    `;
+    const expectedMigrationNames = migrationArtifacts.map((migration) => migration.name);
+    const migrationByName = new Map(migrationRows.map((row) => [row.migration_name, row]));
+    const missingMigrations = expectedMigrationNames.filter((name) => !migrationByName.has(name));
+    const unexpectedMigrations = migrationRows
+      .map((row) => row.migration_name)
+      .filter((name) => !expectedMigrationChecksums.has(name));
+    const migrationParity = expectedMigrationNames.every((name) => {
+      const row = migrationByName.get(name);
+      return (
+        row &&
+        row.finished_at !== null &&
+        row.rolled_back_at === null &&
+        row.checksum === expectedMigrationChecksums.get(name)
+      );
+    });
+    result.checks.prismaMigrations = {
+      expectedNames: expectedMigrationNames,
+      appliedNames: migrationRows.map((row) => row.migration_name),
+      missingMigrations,
+      unexpectedMigrations,
+      parity: migrationParity && unexpectedMigrations.length === 0,
+    };
+    const baselineRow = migrationByName.get(expectedMigrationName);
     result.checks.prismaMigration = {
       expectedMigration: expectedMigrationName,
       expectedChecksum: expectedMigrationChecksum,
-      matchingRows: migrationRows.length,
-      finished: migrationRows.length === 1 && migrationRows[0].finished_at !== null,
-      notRolledBack: migrationRows.length === 1 && migrationRows[0].rolled_back_at === null,
+      matchingRows: baselineRow ? 1 : 0,
+      finished: baselineRow !== undefined && baselineRow.finished_at !== null,
+      notRolledBack: baselineRow !== undefined && baselineRow.rolled_back_at === null,
       checksumMatches:
-        migrationRows.length === 1 && migrationRows[0].checksum === expectedMigrationChecksum,
+        baselineRow?.checksum === expectedMigrationChecksum,
     };
-    if (
-      migrationRows.length !== 1 ||
-      migrationRows[0].finished_at === null ||
-      migrationRows[0].rolled_back_at !== null ||
-      migrationRows[0].checksum !== expectedMigrationChecksum
-    ) {
-      result.failures.push("production baseline migration is not recorded as finished");
+    if (!result.checks.prismaMigrations.parity) {
+      result.failures.push("production migration history does not match local production migrations");
     }
 
     const nonEmptyTables = [];
@@ -368,7 +495,8 @@ if (!process.env.SUPABASE_DIRECT_URL) {
     }
     result.checks.biomassStockAbsent = !expectedTables.includes("biomass_stock");
     if (!result.checks.biomassStockAbsent) result.failures.push("BIOMASS_STOCK is unexpectedly present");
-  } catch {
+  } catch (error) {
+    result.readOnlyInspectionError = safeInspectionError(error);
     result.failures.push("read-only post-migration inspection failed");
   } finally {
     await client.$disconnect().catch(() => {});

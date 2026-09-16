@@ -243,9 +243,15 @@ Important server modules:
 - `src/services/google-sheets/sync/engine.ts`: discovery-to-commit orchestration.
 - `src/services/google-sheets/import/plan.ts`: typed plan and validation gates.
 - `src/services/google-sheets/import/commit.ts`: database guard and upserts.
-- `src/app/api/sync/google-sheets/route.ts`: remote-capable write trigger.
+- `src/app/api/sync/google-sheets/route.ts`: deployment-gated Production write
+  trigger with read-only Supabase target verification.
 
-The sync route checks the deployment environment before `CRON_SECRET` and constant-time bearer authorization, then passes `allowNonLocalDatabase: true` only within the allowed production/local-development boundary. Preview and unknown deployment identities are denied before the write-capable engine runs.
+The sync route checks the deployment environment before `CRON_SECRET` and
+constant-time bearer authorization, then positively verifies the configured
+Supabase Production database identity and required tables before passing the
+verified target to the engine. Preview and unknown deployment identities are
+denied before the write-capable engine runs. The local operator command has a
+separate explicit worksheet and Production target gate.
 
 ## 7. Database
 
@@ -327,7 +333,7 @@ Supabase RLS/policies are UNKNOWN and must be verified before any browser Supaba
 | Google Sheets API v4 | Workbook discovery/read/import | Service-account JSON or env credential mode; private key is server-only |
 | Auth.js | Credential/JWT session | `AUTH_SECRET` and standard Auth.js env must be deployment-managed |
 | Vercel | Intended hosting and cron | `vercel.json` runs sync at `0 22 * * *` (06:00 WITA daily); verify environment isolation |
-| Supabase | Operator/migration work | Not active application authentication; browser access is not enabled |
+| Supabase | Production PostgreSQL runtime and operator/migration work | Pooler target is verified read-only before sync writes; browser access is not enabled |
 
 No secret values may be copied into commits, docs, logs, issue text, or agent responses. Local credential files were detected during the audit; treat them as sensitive.
 

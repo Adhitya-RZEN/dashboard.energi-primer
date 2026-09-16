@@ -166,6 +166,8 @@ export type LegacyMappingResult = {
   identity: IdentitySummary;
   issues: readonly MappingIssue[];
   dryRun: DryRunSummary;
+  /** Legacy mapping is an audit/comparison result, never write authority. */
+  writeAuthorization: "COMPARISON_ONLY";
   importGate: ImportGate;
   plan: GoogleSheetsImportPlan;
 };

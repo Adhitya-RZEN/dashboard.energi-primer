@@ -65,6 +65,7 @@ export function parseDynamicWorksheet(
     tables,
     options.worksheetName,
     structure,
+    options.mappingApproval,
   );
   const target = parseTargetTable(
     scannedCells,
@@ -73,6 +74,7 @@ export function parseDynamicWorksheet(
     options.worksheetName,
     structure,
     worksheet.year || options.year || 0,
+    options.mappingApproval,
   );
   const historical = parseHistoricalTable(
     scannedCells,
@@ -81,6 +83,7 @@ export function parseDynamicWorksheet(
     options.worksheetName,
     worksheet.year || options.year || 0,
     structure,
+    options.mappingApproval,
   );
   const daily =
     worksheet.isValid && worksheet.month > 0 && worksheet.year > 0
@@ -117,6 +120,7 @@ export function parseDynamicWorksheet(
     structure,
     options.worksheetName,
     daily.columns,
+    options.mappingApproval,
   );
   const normalized = normalizeDynamicOverview({
     fields: dashboard.fields,

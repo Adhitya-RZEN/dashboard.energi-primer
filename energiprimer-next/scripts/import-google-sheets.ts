@@ -1,6 +1,6 @@
 import { GoogleSheetsIntegrationError } from "../src/lib/google-sheets";
 import { commitGoogleSheetsImportPlan } from "../src/services/google-sheets/import/commit";
-import { buildGoogleSheetsImportPlan } from "../src/services/google-sheets/import/plan";
+import { prepareWorksheetPreflight } from "../src/services/google-sheets/sync/preflight";
 
 function argument(name: string, fallback: number) {
   const prefix = `--${name}=`;
@@ -23,14 +23,33 @@ async function main() {
   }
   const month = argument("month", 7);
   const year = argument("year", 2026);
-  const plan = await buildGoogleSheetsImportPlan({ month, year });
-  if (plan.status !== "READY_FOR_IMPORT") {
+  const monthName = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ][month - 1];
+  if (!monthName) throw new Error("Bulan import tidak valid.");
+  const preflight = await prepareWorksheetPreflight({
+    worksheet: `${monthName}${String(year).slice(-2)}-BB`,
+  });
+  const plan = preflight.plan;
+  if (preflight.status !== "READY" || plan.status !== "READY_FOR_IMPORT" || !preflight.canonicalPlan) {
     console.log(
       JSON.stringify(
         {
           status: "NEEDS_REVIEW",
           databaseWrites: 0,
           blockingIssues: plan.blockingIssues,
+          canonicalPlanError: preflight.canonicalPlanError,
           warnings: plan.warnings,
         },
         null,

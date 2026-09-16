@@ -14,6 +14,19 @@
 > hardening is implemented locally. Production deployment and Production sync
 > remain outside this phase; see the Phase 6J implementation report.
 
+> **Importer remediation update (2026-09-15):** The normalized import path now
+> uses parameterized set-oriented upserts in bounded 200-row batches inside
+> the existing atomic per-worksheet transaction. The transaction timeout was
+> not increased, P2028 is not retried, and Production write remains a separate
+> approval step.
+
+> **Phase 4 controlled-execution update (2026-09-16):** The scheduled GET
+> route is now a read-only discovery/preflight probe. Production writes require
+> an authenticated JSON POST with an explicit `execute-import` action and the
+> current canonical plan hash; blocked or stale plans fail closed. See
+> `PHASE4_CONTROLLED_IMPORT_EXECUTION_RESULT.md` for the current boundary and
+> readiness record.
+
 Status checkpoint: **S7 PASS WITH WARNINGS**
 
 ## Security boundary
@@ -58,6 +71,9 @@ together; partial configuration fails fast.
 - Discovery preparation is pure and outside the persistence transaction.
 - Current worksheet registry values use one parameterized set-oriented write;
   missing worksheet keys use one homogeneous `updateMany`.
+- Normalized importer staging and row-heavy target writes use parameterized
+  batches of at most 200 rows while retaining one atomic transaction per
+  worksheet. The 30,000 ms importer timeout remains unchanged.
 - The discovery transaction timeout remains 60 seconds. P2028 is classified for
   diagnostics and is not included in automatic retry.
 - Lease renewal occurs before each worksheet to protect long-running backfills.
@@ -98,10 +114,11 @@ together; partial configuration fails fast.
    domain data but do not have persisted sync row states/schema approval in the
    existing registry. They must not be presented as fully idempotent until a
    separately approved registry reconciliation is completed.
-3. Existing normalized importer upserts remain sequential inside their own
-   transaction. This discovery hardening removes the per-worksheet sequential
-   registry upserts, but normalized import duration still needs load testing
-   before expanding historical backfills.
+3. The normalized importer now uses bounded set-oriented batches inside its
+   atomic transaction; the transaction remains interactive with a 30-second
+   timeout. The disposable 352-row Juli/Agustus fixture completed in 90/105 ms,
+   but Production latency and pool behavior still require read-only observation
+   after deployment before a separately authorized write.
 4. The import-run table has no unique checksum constraint. The source lease
    protects the normal sync orchestrator; direct concurrent importer calls
    still require operational serialization or a future additive constraint
@@ -119,6 +136,7 @@ together; partial configuration fails fast.
 ```bash
 npm run sync:verify-config
 npm run sync:verify-discovery:disposable
+npm run sync:verify-import-transaction:disposable
 npm run sync:verify-cron-auth
 npm run sync:verify-auto-admission
 npm run sync:verify-diagnostics
@@ -127,8 +145,11 @@ npm run sync:verify-schema -- --live
 npm run sync:verify-incremental -- --live
 ```
 
-All live commands above use the local environment/database only. Production
-credential and database validation remain a deployment-stage manual check. The
+The importer disposable command requires an explicitly marked loopback
+PostgreSQL target on port 55432 and never accepts `.env.local` Production
+credentials. The other live commands above use the local environment/database
+only. Production credential and database validation remain a deployment-stage
+manual check. The
 Phase 6J write-capable discovery matrix requires disposable PostgreSQL; an
 unavailable disposable target is a BLOCKED result, never a Production
 substitute.

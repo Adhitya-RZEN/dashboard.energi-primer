@@ -7,6 +7,19 @@
 > `PHASE6J_IMPLEMENTATION_REPORT_2026-09-04.md`. Statements below that say a
 > capability is not yet implemented are historical evidence, not the current
 > runtime contract.
+>
+> The normalized importer P2028 remediation completed on 2026-09-15 is
+> documented in `GOOGLE_SHEETS_SYNC_AUDIT.md`,
+> `GOOGLE_SHEETS_INCREMENTAL_SYNC.md`, and
+> `GOOGLE_SHEETS_SYNC_HARDENING.md`. The historical sequential-upsert
+> description below is not the current importer implementation.
+
+> **Phase 4 method-boundary update (2026-09-16):** The current HTTP route is
+> documented in `PHASE4_CONTROLLED_IMPORT_EXECUTION_RESULT.md`. Its GET path
+> is read-only discovery/preflight with `write=NOT_EXECUTED`; only an
+> authenticated JSON POST with an admitted canonical plan hash may enter the
+> bounded writer. The historical statements below about a missing route or
+> scheduler remain S1 evidence, not the current runtime contract.
 
 Tanggal audit: 2026-08-30  
 Scope: audit arsitektur existing sebelum implementasi Phase 11.  

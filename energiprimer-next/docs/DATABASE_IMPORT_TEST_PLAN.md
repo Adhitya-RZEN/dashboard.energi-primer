@@ -8,6 +8,15 @@ database lokal sudah diterapkan. Migration, staging, transactional import, idemp
 parity, dan dashboard PostgreSQL sudah lulus untuk Juli 2026. Database production dan
 deployment belum disentuh.
 
+**P2028 remediation execution update (2026-09-15):** the normalized importer
+now uses parameterized set-oriented writes in bounded 200-row batches while
+keeping staging, normalized data, target validation, cumulative data, and the
+successful import-run marker atomic per worksheet. The timeout remains 30
+seconds; P2028 is not retried. A guarded disposable PostgreSQL test passed for
+both Juli26-BB and Agustus26-BB with 352 records each, rollback, idempotency,
+and zero duplicate business-key groups. Production write remains **NOT
+EXECUTED**.
+
 Test dijalankan bertahap. Dry-run dan unit test tidak boleh menulis database production. Integration test yang membutuhkan write harus menggunakan database staging/isolated yang telah disetujui.
 
 ## 1. Test safety dan baseline
@@ -69,6 +78,9 @@ Test dijalankan bertahap. Dry-run dan unit test tidak boleh menulis database pro
 | DB-010 | Baris invalid | Tidak masuk tabel operasional; error report tersedia |
 | DB-011 | Import log | Status, row count, worksheet, dan waktu tercatat |
 | DB-012 | Referential integrity | Tidak ada orphan unit/reference |
+| DB-013 | P2028 remediation, 352 rows | Transaction completes within the unchanged 30-second timeout; P2028 is not reproduced |
+| DB-014 | Juli26-BB dan Agustus26-BB bulk import | Each 352-row fixture uses bounded writes and creates no duplicate business keys |
+| DB-015 | Failure after bulk writes | Staging and normalized rows roll back; failed import metadata remains auditable |
 
 ## 5. Test data parity
 
@@ -170,7 +182,12 @@ Migration dan write test pada database lokal yang disetujui sudah dijalankan:
 
 - migration baseline + additive migration: PASS;
 - staging dan transactional import Juli 2026: PASS;
+- bulk transaction Juli26-BB dan Agustus26-BB (352 rows masing-masing): PASS;
+- importer transaction duration: 90/105 ms recorded locally, 14 logical calls,
+  within the `<=22,500 ms` safety budget;
 - import ulang worksheet yang sama: PASS, tidak menambah normalized duplicate;
+- forced target mismatch rollback: PASS, normalized state unchanged;
+- business-key duplicate group check: PASS, `0`;
 - parity PostgreSQL terhadap baseline Google Sheets: PASS dengan precision note coal legacy;
 - dashboard PostgreSQL overview verification: PASS.
 

@@ -107,3 +107,65 @@ npm run sync:verify-schema -- --live
 
 Jalur scheduler otomatis juga memverifikasi bahwa perubahan observed value type
 lintas workbook tetap `UNCHANGED` selama struktur header dan date column sama.
+
+## Agustus26-BB canonical recognition fix — 2026-09-15
+
+Audit read-only menemukan dua penyebab yang terpisah dari business mapping:
+
+1. Lookup canonical lama menggabungkan seluruh workbook. Production registry
+   memiliki dua `Juli26-BB` aktif dengan hash berbeda, sehingga anchor Juli pada
+   source yang juga memiliki `Agustus26-BB` ikut tertutup oleh hasil global
+   `AMBIGUOUS`, lalu preflight melaporkannya sebagai
+   `CANONICAL_SCHEMA_UNAVAILABLE`. Resolver sekarang memilih anchor Juli aktif
+   dari source yang sama untuk worksheet eksplisit. Konflik pada source yang
+   sama atau fallback global yang konflik tetap diblokir.
+2. Agustus memiliki placeholder eksplisit `-` pada value dashboard Unit 1
+   (`Y56`). Resolver sebelumnya melewati placeholder itu lalu membandingkan
+   angka dari baris dashboard lain, sehingga menghasilkan `ambiguous_fields`.
+   Placeholder sekarang dipertahankan sebagai `missing`; tidak ada angka dari
+   baris lain yang ditebak dan mapping Unit 1/2/3 tidak berubah.
+
+Schema v1 juga dinormalisasi untuk backward compatibility. Angka murni yang
+terbawa ke `HeaderPath.labels` oleh sample cell, seperti `4.451`/`7.967` pada
+label HSD, dikeluarkan dari fingerprint. Hash sekarang merepresentasikan
+struktur semantic (header/path metadata dan date-column presence); observed
+`valueType` tetap disimpan untuk strict diagnostics, tetapi tidak mengubah
+structural hash. Snapshot registry lama dinormalisasi saat dibaca, sehingga
+tidak diperlukan migration atau metadata write untuk recognition ini.
+
+Hasil live exact read pada `A1:ZZ500`:
+
+| Worksheet | Sheet ID | Header paths | Data rows | Schema hash | Parser |
+| --- | ---: | ---: | ---: | --- | --- |
+| `Juli26-BB` | `1692973815` | 108 | 31 | `2bed9745…` | all required fields resolved |
+| `Agustus26-BB` | `321088799` | 108 | 31 | `2bed9745…` | Unit 1 explicit `-` is missing, not ambiguous |
+
+Kedua worksheet menghasilkan 352 candidate records dan 352 valid records,
+zero invalid rows, zero duplicate stable keys, dan mempertahankan dua warning
+yang sudah menjadi perilaku parser: duplicate/typo Unit 2 pada blok current
+ketiga dinormalisasi menurut urutan fisik, serta total konsumsi dashboard
+dibandingkan dengan total semantic Unit 1–3. `Juli26-BB` dry-run menghasilkan
+`schemaClassification=UNCHANGED`; `Agustus26-BB` menghasilkan
+`schemaClassification=APPROVED`; keduanya `status=PASS` dengan
+`write=NOT_EXECUTED`.
+
+Registry Agustus masih terlihat sebagai `SCHEMA_REVIEW` pada dry-run karena
+dry-run tidak memutasi registry. Karena record tersebut tidak memiliki approved
+schema/hash dan current read lulus canonical validation, preflight
+memperlakukan review itu sebagai retryable prospective admission. A production
+retry resolves its open review and status atomically with the row-state/schema
+transaction; non-retryable review states remain blocked.
+
+Commands used:
+
+```bash
+npm.cmd run sync:verify-auto-admission
+npm.cmd run dynamic:verify
+npm.cmd run sync:verify-schema
+npm.cmd run sheets:sync -- --worksheet="Juli26-BB" --production --dry-run
+npm.cmd run sheets:sync -- --worksheet="Agustus26-BB" --production --dry-run
+```
+
+Semua check di atas lulus. Kedua dry-run hanya melakukan Google read dan
+Production identity/registry SELECT; tidak ada registry, lease, sync-run,
+staging, normalized-data, atau Google Sheets write.

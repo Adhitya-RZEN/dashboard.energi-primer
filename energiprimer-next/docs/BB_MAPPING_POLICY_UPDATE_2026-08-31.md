@@ -779,6 +779,36 @@ menutup `UNRESOLVED`/`PROVENANCE_GAP` per worksheet. Phase 7 tidak boleh memilih
 winner, mengisi fallback speculative, membagi nilai monthly menjadi daily, atau
 mengimpor hasil dry-run ini tanpa approval.
 
+## Addendum — Agustus26-BB canonical recognition — 2026-09-15
+
+The established BB mapping policy is unchanged: `Juli26-BB` remains the
+`BB_CANONICAL_V1` reference, and Unit 1/2/3 semantics, supplier mapping,
+monthly-consumption definition, and the two existing parser warnings remain
+intact. The correction was limited to the sync safety layer.
+
+- Canonical lookup now prefers an active `Juli26-BB` approval from the same
+  registered Google source when an explicit worksheet is being verified. A
+  conflicting profile on that source, or an ambiguous global fallback, still
+  fails closed.
+- Agustus `Y56` contains an explicit `-`. It is now treated as a missing value;
+  nearby dashboard numbers are not substituted, so it no longer creates
+  `ambiguous_fields` for `biomassUnit1Current`.
+- Numeric sample values accidentally carried into header labels are excluded
+  from the structural fingerprint. Both live worksheets now resolve to
+  structural hash `2bed9745…` without a mapping allowlist or Agustus-specific
+  business rule.
+
+Read-only exact dry-run evidence:
+
+| Worksheet | Status | Schema | Source rows | Records | Invalid | Duplicates | Write |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| `Juli26-BB` | PASS | UNCHANGED | 31 | 352/352 | 0 | 0 | NOT_EXECUTED |
+| `Agustus26-BB` | PASS | APPROVED | 31 | 352/352 | 0 | 0 | NOT_EXECUTED |
+
+The Agustus registry row remains `SCHEMA_REVIEW` in this report because the
+dry-run is read-only. No schema migration, mapping change, registry write,
+normalized-data write, or Production write was performed.
+
 ### Phase 6 conclusion
 
 Inventory dan evidence mapping telah selesai. Hasilnya bukan “semua worksheet

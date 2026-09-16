@@ -1,9 +1,29 @@
+import type { MappingAuthorization } from "../dynamic/types";
+
 export type ImportValue = number | null;
 
 export type ImportSource = {
   worksheet: string;
   cell: string | null;
   row: number | null;
+  /** Immutable worksheet identity when source metadata is available. */
+  sheetId?: string | null;
+  /** Exact bounded range when the observation is an aggregate. */
+  sourceRange?: string | null;
+  /** Source column number when the adapter can determine it. */
+  column?: number | null;
+  /** Exact display value returned by the source reader. */
+  rawDisplayValue?: string | null;
+  /** Exact component evidence for an aggregate observation. */
+  rawDisplayValues?: readonly { address: string; value: string | null }[];
+  sourceAddresses?: readonly string[];
+  sourceGranularity?: "CELL" | "ROW" | "RANGE" | "WORKSHEET" | "WORKBOOK";
+  /** Optional run correlation when the adapter is invoked inside a known run. */
+  importRunId?: string | null;
+  observationKind?: "SOURCE_CELL" | "SOURCE_RANGE" | "POLICY_FALLBACK";
+  mappingSourceKind?: "SEMANTIC_PATH" | "PHYSICAL_REFERENCE" | "POLICY_FALLBACK";
+  /** Candidate/approval state carried into the canonical write boundary. */
+  mappingAuthorization?: MappingAuthorization;
 };
 
 export type BiomassReceiptImportRecord = {

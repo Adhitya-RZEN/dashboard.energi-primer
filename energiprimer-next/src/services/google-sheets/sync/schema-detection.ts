@@ -70,7 +70,11 @@ export type SchemaComparisonOptions = {
 function canonicalLabels(labels: readonly string[]) {
   return labels
     .map((label) => normalizeCellText(label))
-    .filter(Boolean);
+    .filter(Boolean)
+    // Structure analysis can carry a numeric sample value as a path label
+    // when a sheet has no explicit header in that column. It is cell content,
+    // not a schema label, and must not make identical monthly layouts drift.
+    .filter((label) => parseNumericValue(label).status !== "numeric");
 }
 
 function semanticKey(path: HeaderPath) {
@@ -85,12 +89,21 @@ function semanticKey(path: HeaderPath) {
   });
 }
 
-function columnSignature(path: HeaderPath, valueType: SchemaValueType) {
+function schemaColumnSignature(
+  semanticKeyValue: string,
+  labels: readonly string[],
+  valueType: SchemaValueType,
+) {
   return JSON.stringify({
-    semanticKey: semanticKey(path),
-    labels: canonicalLabels(path.labels),
+    semanticKey: semanticKeyValue,
+    labels,
     valueType,
   });
+}
+
+function columnSignature(path: HeaderPath, valueType: SchemaValueType) {
+  const labels = canonicalLabels(path.labels);
+  return schemaColumnSignature(semanticKey(path), labels, valueType);
 }
 
 function valueTypeForColumn(
@@ -116,16 +129,73 @@ function valueTypeForColumn(
   return "mixed";
 }
 
+function structuralColumnKey(column: SchemaColumnSnapshot) {
+  return JSON.stringify({
+    semanticKey: column.semanticKey,
+    labels: column.labels,
+  });
+}
+
 function hashSnapshot(input: Omit<SchemaSnapshot, "hash">) {
+  const structuralInput = {
+    version: input.version,
+    dateColumnPresent: input.dateColumnPresent,
+    columns: input.columns
+      .map((column) => ({
+        semanticKey: column.semanticKey,
+        labels: column.labels,
+        resource: column.resource,
+        unit: column.unit,
+        unitNumber: column.unitNumber,
+        isTotal: column.isTotal,
+        isStock: column.isStock,
+        isHop: column.isHop,
+        isDate: column.isDate,
+      }))
+      .sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      ),
+  };
   return createHash("sha256")
-    .update(JSON.stringify(input))
+    .update(JSON.stringify(structuralInput))
     .digest("hex");
 }
 
+function normalizeSnapshot(snapshot: SchemaSnapshot): SchemaSnapshot {
+  const columns = snapshot.columns
+    .map((column) => {
+      const labels = canonicalLabels(column.labels);
+      return {
+        ...column,
+        labels,
+        signature: schemaColumnSignature(
+          column.semanticKey,
+          labels,
+          column.valueType,
+        ),
+      } satisfies SchemaColumnSnapshot;
+    })
+    .sort(
+      (a, b) =>
+        structuralColumnKey(a).localeCompare(structuralColumnKey(b)) ||
+        a.signature.localeCompare(b.signature),
+    );
+  const snapshotWithoutHash: Omit<SchemaSnapshot, "hash"> = {
+    version: 1,
+    dateColumnPresent: snapshot.dateColumnPresent,
+    columns,
+  };
+  return {
+    ...snapshotWithoutHash,
+    hash: hashSnapshot(snapshotWithoutHash),
+  };
+}
+
 /**
- * Creates a schema fingerprint from semantic headers and observed value types.
- * Spreadsheet row numbers, column letters, cell addresses, and values are
- * deliberately excluded so sorting rows does not look like a schema change.
+ * Creates a structural schema fingerprint from semantic headers and path
+ * metadata. Observed value types stay in the snapshot for strict diagnostics,
+ * but cell content is deliberately excluded from the fingerprint so monthly
+ * values cannot look like a layout change.
  */
 export function buildSchemaSnapshot(
   parsed: DynamicParserResult,
@@ -164,10 +234,10 @@ export function buildSchemaSnapshot(
     dateColumnPresent: structure.dateColumn !== null,
     columns,
   };
-  return {
+  return normalizeSnapshot({
     ...snapshotWithoutHash,
     hash: hashSnapshot(snapshotWithoutHash),
-  };
+  });
 }
 
 function labelTokens(column: SchemaColumnSnapshot) {
@@ -235,7 +305,7 @@ function parseStoredSnapshot(value: string | null | undefined) {
       !Array.isArray(snapshot.columns)
     )
       return null;
-    return snapshot as SchemaSnapshot;
+    return normalizeSnapshot(snapshot as SchemaSnapshot);
   } catch {
     return null;
   }
@@ -252,38 +322,28 @@ export function detectSchemaChange(
 ): SchemaChangeResult {
   const previousSnapshot =
     typeof previous === "string" ? parseStoredSnapshot(previous) : previous;
+  const currentSnapshot = normalizeSnapshot(current);
   if (!previousSnapshot) {
     return {
       changed: false,
       type: "NEW_SCHEMA",
-      added: current.columns,
+      added: currentSnapshot.columns,
       removed: [],
       typeChanges: [],
       renameCandidates: [],
       reason: "No approved schema snapshot exists yet.",
     };
   }
-  if (previousSnapshot.hash === current.hash) {
-    return {
-      changed: false,
-      type: "UNCHANGED",
-      added: [],
-      removed: [],
-      typeChanges: [],
-      renameCandidates: [],
-      reason: "Schema fingerprint is unchanged.",
-    };
-  }
-
+  const normalizedPrevious = normalizeSnapshot(previousSnapshot);
   const previousByComparisonKey = groupedBy(
-    previousSnapshot.columns,
+    normalizedPrevious.columns,
     (column) => columnComparisonKey(column, options),
   );
   const currentByComparisonKey = groupedBy(
-    current.columns,
+    currentSnapshot.columns,
     (column) => columnComparisonKey(column, options),
   );
-  const added = current.columns.filter(
+  const added = currentSnapshot.columns.filter(
     (column) => {
       const key = columnComparisonKey(column, options);
       return (
@@ -293,7 +353,7 @@ export function detectSchemaChange(
       );
     },
   );
-  const removed = previousSnapshot.columns.filter(
+  const removed = normalizedPrevious.columns.filter(
     (column) => {
       const key = columnComparisonKey(column, options);
       return (
@@ -305,11 +365,11 @@ export function detectSchemaChange(
   );
 
   const previousBySemantic = groupedBy(
-    previousSnapshot.columns,
+    normalizedPrevious.columns,
     (column) => column.semanticKey,
   );
   const currentBySemantic = groupedBy(
-    current.columns,
+    currentSnapshot.columns,
     (column) => column.semanticKey,
   );
   const typeChanges: {
@@ -364,8 +424,8 @@ export function detectSchemaChange(
     }
   }
 
-  const previousDuplicateHeaders = duplicateHeaderGroups(previousSnapshot.columns);
-  const currentDuplicateHeaders = duplicateHeaderGroups(current.columns);
+  const previousDuplicateHeaders = duplicateHeaderGroups(normalizedPrevious.columns);
+  const currentDuplicateHeaders = duplicateHeaderGroups(currentSnapshot.columns);
   if (
     currentDuplicateHeaders.length > previousDuplicateHeaders.length ||
     added.some((column) => column.labels.length === 0)
@@ -430,8 +490,27 @@ export function detectSchemaChange(
       reason: "One or more previously approved semantic columns are missing.",
     };
   if (
+    added.length === 0 &&
+    removed.length === 0 &&
+    typeChanges.length === 0 &&
+    renameCandidates.length === 0 &&
+    normalizedPrevious.dateColumnPresent === currentSnapshot.dateColumnPresent
+  )
+    return {
+      changed: false,
+      type: "UNCHANGED",
+      added: [],
+      removed: [],
+      typeChanges: [],
+      renameCandidates: [],
+      reason:
+        normalizedPrevious.hash === currentSnapshot.hash
+          ? "Schema fingerprint is unchanged."
+          : "Schema structure is unchanged; non-structural snapshot details may vary.",
+    };
+  if (
     options.allowObservedValueTypeDrift &&
-    previousSnapshot.dateColumnPresent === current.dateColumnPresent
+    normalizedPrevious.dateColumnPresent === currentSnapshot.dateColumnPresent
   )
     return {
       changed: false,

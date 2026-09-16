@@ -13,7 +13,12 @@ import {
   buildGoogleSheetsImportPlanFromReadResult,
 } from "@/services/google-sheets/import/plan";
 import {
+  approvedMappingContractForWorksheet,
+  mappingApprovalForContract,
+} from "@/services/google-sheets/canonical/index";
+import {
   commitGoogleSheetsImportPlan,
+  assertImportDatabaseTarget,
 } from "@/services/google-sheets/import/commit";
 import { prisma } from "@/lib/prisma";
 
@@ -39,6 +44,7 @@ import {
 } from "./schema-detection";
 import {
   evaluateAutomaticWorksheet,
+  isCanonicalBBWorksheet,
   isCanonicalSchemaReviewRetryable,
   isAutomaticWorksheetReviewRetryable,
   isAfterCanonicalBBWorksheet,
@@ -47,8 +53,17 @@ import {
 } from "./bb-policy";
 import { GoogleSheetsIntegrationError } from "@/lib/google-sheets";
 import { withDatabaseRetry, withSyncRetry } from "./retry";
+import { classifyRecoveryFailure } from "@/services/google-sheets/canonical/recovery";
+import {
+  executeDurableCanonicalPlan,
+} from "@/services/google-sheets/canonical/ledger";
+import { PrismaCanonicalLedgerStore } from "@/services/google-sheets/canonical/ledger-prisma-store";
+import { createCompatibilityCanonicalBatchRepository } from "@/services/google-sheets/canonical/compatibility-repository";
+import { sourceKeyForCanonicalRecord } from "@/services/google-sheets/canonical/compatibility-adapter";
+import { buildTargetAwareCanonicalPlan } from "./canonical-target-planning";
 import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/profiles";
 import { classifySyncError } from "./error-classification";
+import { assertProductionCanaryAuthorization } from "./production-canary";
 import {
   createSyncRequestId,
   diagnosticDurationMs,
@@ -57,9 +72,18 @@ import {
   type SyncDiagnosticContext,
 } from "./diagnostic-core";
 import { safeSyncErrorDetails, withSyncDiagnostic } from "./diagnostics";
+import type {
+  SyncDatabaseTarget,
+  VerifiedSupabaseProductionTarget,
+} from "./production-target";
 
 export type SyncTriggerType = "manual" | "cron" | "verification";
-export type SyncRunStatus = "SUCCESS" | "PARTIAL" | "FAILED" | "LOCKED";
+export type SyncRunStatus =
+  | "SUCCESS"
+  | "PARTIAL"
+  | "FAILED"
+  | "RECONCILIATION_REQUIRED"
+  | "LOCKED";
 
 export type IncrementalSyncOptions = {
   triggerType?: SyncTriggerType;
@@ -67,19 +91,30 @@ export type IncrementalSyncOptions = {
   worksheetKey?: string;
   scope?: "current" | "all" | "automatic";
   allowNonLocalDatabase?: boolean;
+  databaseTarget?: SyncDatabaseTarget;
+  productionTarget?: VerifiedSupabaseProductionTarget;
+  expectedPlanFingerprint?: string;
+  /** Canonical plan hash admitted by the explicit POST boundary. */
+  expectedCanonicalPlanId?: string;
+  /** Stable canonical import id used to reproduce the admitted plan hash. */
+  canonicalImportRunId?: string;
+  /** Required only for the explicit Phase 5 durable execution boundary. */
+  durableLedger?: "REQUIRED" | "DISABLED";
   requestId?: string;
 };
 
 export type WorksheetSyncResult = {
   worksheetKey: string;
   worksheetTitle: string;
-  status: "SUCCESS" | "FAILED" | "SCHEMA_REVIEW";
+  status: "SUCCESS" | "FAILED" | "RECONCILIATION_REQUIRED" | "SCHEMA_REVIEW";
   rowsScanned: number;
   inserted: number;
   updated: number;
   skipped: number;
   failed: number;
   error?: string;
+  errorCode?: string;
+  recovery?: ReturnType<typeof classifyRecoveryFailure>;
 };
 
 export type IncrementalSyncResult = {
@@ -147,6 +182,14 @@ async function persistRowStates(input: {
         rowCount: input.rowCount,
       },
     });
+    await tx.syncSchemaChange.updateMany({
+      where: { worksheetId: input.worksheetId, status: "OPEN" },
+      data: {
+        status: "RESOLVED",
+        resolution:
+          "Automatically resolved: the worksheet passed canonical schema and import validation on retry.",
+      },
+    });
     }, { timeout: 30_000 }));
 }
 
@@ -174,14 +217,16 @@ function selectedWorksheets(
 ) {
   const scope = options.scope ??
     (options.triggerType === "cron" ? "automatic" : "all");
+  const explicitWorksheet = Boolean(options.worksheetKey || options.worksheetTitle);
   const withoutDisabledOrMissing = worksheets.filter(
     (worksheet) =>
       worksheet.status !== "DISABLED" &&
       worksheet.status !== "MISSING" &&
       (worksheet.status !== "SCHEMA_REVIEW" ||
-        scope === "automatic" &&
+        (explicitWorksheet && isAutomaticWorksheetReviewRetryable(worksheet)) ||
+        (scope === "automatic" &&
           isAutomaticWorksheetReviewRetryable(worksheet) &&
-          !openSchemaReviewWorksheetIds.has(worksheet.id)),
+          !openSchemaReviewWorksheetIds.has(worksheet.id))),
   );
   if (options.worksheetKey) {
     return withoutDisabledOrMissing.filter(
@@ -189,18 +234,6 @@ function selectedWorksheets(
     );
   }
   if (options.worksheetTitle) {
-    const requestedPeriod = parseBBWorksheetName(options.worksheetTitle);
-    if (requestedPeriod) {
-      return preferredWorksheetsByPeriod(
-        withoutDisabledOrMissing.filter((worksheet) => {
-          const period = parseBBWorksheetName(worksheet.worksheetTitle);
-          return (
-            period?.month === requestedPeriod.month &&
-            period.year === requestedPeriod.year
-          );
-        }),
-      );
-    }
     const requestedTitle = options.worksheetTitle
       .trim()
       .toLocaleLowerCase("en-US");
@@ -233,7 +266,7 @@ type RegisteredWorksheet = Awaited<
   ReturnType<typeof prisma.syncWorksheet.findMany>
 >[number];
 
-async function loadApprovedCanonicalSchema() {
+async function loadApprovedCanonicalSchema(sourceId?: bigint) {
   const candidates = await prisma.syncWorksheet.findMany({
     where: {
       status: "ACTIVE",
@@ -242,13 +275,14 @@ async function loadApprovedCanonicalSchema() {
     },
     orderBy: { updatedAt: "desc" },
     select: {
+      sourceId: true,
       status: true,
       worksheetTitle: true,
       schemaSnapshot: true,
       updatedAt: true,
     },
   });
-  return resolveApprovedCanonicalSchema(candidates);
+  return resolveApprovedCanonicalSchema(candidates, { sourceId });
 }
 
 async function autoAdmitCanonicalWorksheet(
@@ -270,10 +304,15 @@ async function autoAdmitCanonicalWorksheet(
     return null;
   if (worksheet.schemaSnapshot) return approvedSchema;
 
+  const mapping = approvedMappingContractForWorksheet(worksheet.worksheetTitle);
+  if (!mapping) return null;
+
   let readResult: DynamicWorksheetReadResult;
   try {
     readResult = await withSyncRetry(() =>
-      readAndParseDynamicWorksheet(worksheet.worksheetTitle),
+      readAndParseDynamicWorksheet(worksheet.worksheetTitle, undefined, {
+        mappingApproval: mappingApprovalForContract(mapping),
+      }),
     );
   } catch {
     await markWorksheetFailure(worksheet.id, "ERROR");
@@ -370,6 +409,9 @@ async function syncWorksheet(
   worksheet: Awaited<ReturnType<typeof prisma.syncWorksheet.findMany>>[number],
   options: IncrementalSyncOptions,
   canonicalSchema: string | null,
+  importRunId: string,
+  sourceKey: string,
+  spreadsheetId: string,
 ): Promise<WorksheetSyncResult> {
   const base = {
     worksheetKey: worksheet.worksheetKey,
@@ -392,11 +434,29 @@ async function syncWorksheet(
     };
   }
 
+  const mapping = approvedMappingContractForWorksheet(worksheet.worksheetTitle);
+  if (!mapping) {
+    await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+    return {
+      ...base,
+      status: "SCHEMA_REVIEW",
+      rowsScanned: 0,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 1,
+      error: "mapping_profile_unavailable",
+    };
+  }
+  const mappingApproval = mappingApprovalForContract(mapping);
+
   let readResult: DynamicWorksheetReadResult;
   const worksheetReadStartedAt = diagnosticNow();
   try {
     readResult = await withSyncRetry(() =>
-      readAndParseDynamicWorksheet(worksheet.worksheetTitle),
+      readAndParseDynamicWorksheet(worksheet.worksheetTitle, undefined, {
+        mappingApproval,
+      }),
     );
   } catch (error) {
     if (diagnostic) {
@@ -421,8 +481,29 @@ async function syncWorksheet(
     };
   }
 
-  const plan = buildGoogleSheetsImportPlanFromReadResult(readResult);
+  const plan = buildGoogleSheetsImportPlanFromReadResult(readResult, {
+    mappingApproval,
+  });
   const schemaSnapshot = buildSchemaSnapshot(readResult.parsed);
+  const actualPlanFingerprint = `${schemaSnapshot.hash}:${contentHashForStagingRows(
+    plan.stagingRows,
+  )}`;
+  if (
+    options.expectedPlanFingerprint &&
+    options.expectedPlanFingerprint !== actualPlanFingerprint
+  ) {
+    await markWorksheetFailure(worksheet.id, "ERROR");
+    return {
+      ...base,
+      status: "FAILED",
+      rowsScanned: plan.stagingRows.length,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 1,
+      error: "preflight_source_changed",
+    };
+  }
   const automaticGate = isAfterCanonicalBBWorksheet(worksheet.worksheetTitle)
     ? evaluateAutomaticWorksheet(worksheet.worksheetTitle, schemaSnapshot, {
         canonicalSchema,
@@ -457,7 +538,13 @@ async function syncWorksheet(
   }
   const schemaChange =
     automaticGate?.schemaChange ??
-    detectSchemaChange(worksheet.schemaSnapshot, schemaSnapshot);
+    detectSchemaChange(
+      worksheet.schemaSnapshot,
+      schemaSnapshot,
+      isCanonicalBBWorksheet(worksheet.worksheetTitle)
+        ? { allowObservedValueTypeDrift: true }
+        : {},
+    );
   if (schemaChange.changed) {
     await prisma.syncSchemaChange.create({
       data: {
@@ -499,6 +586,73 @@ async function syncWorksheet(
     };
   }
 
+  let canonicalPlan: Awaited<ReturnType<typeof buildTargetAwareCanonicalPlan>>["canonicalPlan"];
+  try {
+    const period = parseBBWorksheetName(worksheet.worksheetTitle);
+    if (!period) throw new Error("Worksheet period could not be reconstructed.");
+    const targetAware = await buildTargetAwareCanonicalPlan({
+      importRunId: options.canonicalImportRunId?.trim() || importRunId,
+      plan,
+      sourceKey,
+      spreadsheetId,
+      sheetId: worksheet.worksheetKey,
+      worksheetTitle: worksheet.worksheetTitle,
+      effectivePeriod: { month: period.month, year: period.year },
+      sourceRange: plan.sourceRange,
+      schemaFingerprint: schemaSnapshot.hash,
+      mapping,
+    });
+    canonicalPlan = targetAware.canonicalPlan;
+    if (
+      options.expectedCanonicalPlanId &&
+      canonicalPlan.planId !== options.expectedCanonicalPlanId
+    ) {
+      throw new Error("canonical_plan_id_mismatch");
+    }
+  } catch (error) {
+    await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+    return {
+      ...base,
+      status: "SCHEMA_REVIEW",
+      rowsScanned: plan.stagingRows.length,
+      inserted: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 1,
+      error:
+        error instanceof Error
+          ? `canonical_mapping_review:${error.message}`
+          : "canonical_mapping_review",
+    };
+  }
+
+  if (
+    canonicalPlan.operationCounts.BLOCK > 0 ||
+    canonicalPlan.blockingIssues.length > 0 ||
+    canonicalPlan.approvalState !== "APPROVED"
+  ) {
+    await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+    return {
+      ...base,
+      status: "SCHEMA_REVIEW",
+      rowsScanned: plan.stagingRows.length,
+      inserted: canonicalPlan.operationCounts.INSERT,
+      updated: canonicalPlan.operationCounts.UPDATE,
+      skipped: canonicalPlan.operationCounts.SKIP,
+      failed: canonicalPlan.operationCounts.BLOCK,
+      error: "canonical_target_state_blocked",
+      errorCode: "TARGET_STATE_BLOCKED",
+    };
+  }
+
+  // Keep the write boundary fail-closed even when the engine is invoked
+  // directly instead of through the explicit POST/CLI admission wrappers.
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    assertProductionCanaryAuthorization(canonicalPlan.items.length);
+    if (options.durableLedger !== "REQUIRED")
+      throw new Error("Production writes require the Phase 5 durable ledger.");
+  }
+
   await markWorksheetValidated(worksheet.id);
   const existing = await prisma.syncRowState.findMany({
     where: { worksheetId: worksheet.id },
@@ -519,25 +673,69 @@ async function syncWorksheet(
     };
   }
 
+  const canonicalBySourceKey = new Map(
+    canonicalPlan.items.map((item) => [sourceKeyForCanonicalRecord(item.record), item]),
+  );
+  const canonicalChanges = classification.changes.map((change) => {
+    const item = canonicalBySourceKey.get(change.sourceKey);
+    if (!item) throw new Error("canonical_target_identity_unmapped");
+    return {
+      ...change,
+      action:
+        item.operation === "INSERT" || item.operation === "UPDATE"
+          ? item.operation
+          : "SKIP" as const,
+    };
+  });
+  if (canonicalChanges.length !== canonicalPlan.items.length) {
+    throw new Error("canonical_target_identity_count_mismatch");
+  }
   const changedKeys = new Set(
-    classification.changes
-      .filter((change) => change.action !== "SKIP")
-      .map((change) => change.sourceKey),
+    canonicalPlan.items
+      .filter((item) => item.operation === "INSERT" || item.operation === "UPDATE")
+      .map((item) => sourceKeyForCanonicalRecord(item.record)),
   );
   const writePlan = filterImportPlanToSourceKeys(plan, changedKeys);
   try {
     if (changedKeys.size > 0) {
-      await withSyncDiagnostic(
-        diagnostic,
-        "import_transaction",
-        () =>
-          withDatabaseRetry(() =>
-            commitGoogleSheetsImportPlan(writePlan, {
-              allowNonLocalDatabase: options.allowNonLocalDatabase === true,
-              source: "google_sheets_sync",
+      if (options.durableLedger === "REQUIRED") {
+        if (process.env.CANONICAL_IMPORT_LEDGER_ENABLED !== "true") {
+          throw new Error("canonical_durable_ledger_not_enabled");
+        }
+        const repository = createCompatibilityCanonicalBatchRepository({
+          basePlan: plan,
+          allowNonLocalDatabase: options.allowNonLocalDatabase === true,
+          databaseTarget: options.databaseTarget,
+          productionTarget: options.productionTarget,
+        });
+        const durableResult = await withSyncDiagnostic(
+          diagnostic,
+          "import_transaction",
+          () =>
+            executeDurableCanonicalPlan(canonicalPlan, {
+              store: new PrismaCanonicalLedgerStore(),
+              repository,
+              reconcileTarget: repository.reconcileTarget,
             }),
-          ),
-      );
+        );
+        if (durableResult.status !== "COMMITTED") {
+          throw new Error(durableResult.reason ?? "canonical_durable_execution_failed");
+        }
+      } else {
+        await withSyncDiagnostic(
+          diagnostic,
+          "import_transaction",
+          () =>
+            withDatabaseRetry(() =>
+              commitGoogleSheetsImportPlan(writePlan, {
+                allowNonLocalDatabase: options.allowNonLocalDatabase === true,
+                databaseTarget: options.databaseTarget,
+                productionTarget: options.productionTarget,
+                source: "google_sheets_sync",
+              }),
+            ),
+        );
+      }
     } else if (diagnostic) {
       emitSyncDiagnostic({
         context: diagnostic,
@@ -557,21 +755,30 @@ async function syncWorksheet(
           worksheetSchemaHash: schemaSnapshot.hash,
           worksheetSchemaSnapshot: JSON.stringify(schemaSnapshot),
           rowCount: plan.stagingRows.length,
-          rows: classification.changes,
+          rows: canonicalChanges,
           now: new Date(),
         }),
     );
   } catch (error) {
+    const recovery = classifyRecoveryFailure(error);
+    const requiresReconciliation =
+      recovery.status === "RECONCILIATION_REQUIRED";
     await markWorksheetFailure(worksheet.id, "ERROR");
     return {
       ...base,
-      status: "FAILED",
+      status: requiresReconciliation
+        ? "RECONCILIATION_REQUIRED"
+        : "FAILED",
       rowsScanned: plan.stagingRows.length,
-      inserted: classification.inserted,
-      updated: classification.updated,
-      skipped: classification.skipped,
+      inserted: canonicalPlan.operationCounts.INSERT,
+      updated: canonicalPlan.operationCounts.UPDATE,
+      skipped: canonicalPlan.operationCounts.SKIP,
       failed: 1,
-      error: safeErrorMessage(error),
+      error: requiresReconciliation
+        ? "reconciliation_required"
+        : safeErrorMessage(error),
+      errorCode: recovery.errorCode,
+      recovery,
     };
   }
 
@@ -579,9 +786,9 @@ async function syncWorksheet(
     ...base,
     status: "SUCCESS",
     rowsScanned: plan.stagingRows.length,
-    inserted: classification.inserted,
-    updated: classification.updated,
-    skipped: classification.skipped,
+    inserted: canonicalPlan.operationCounts.INSERT,
+    updated: canonicalPlan.operationCounts.UPDATE,
+    skipped: canonicalPlan.operationCounts.SKIP,
     failed: 0,
   };
 }
@@ -589,6 +796,22 @@ async function syncWorksheet(
 export async function runGoogleSheetsIncrementalSync(
   options: IncrementalSyncOptions = {},
 ): Promise<IncrementalSyncResult> {
+  // Validate the target before source discovery can create or update registry
+  // rows. Production is re-verified again by the commit boundary immediately
+  // before normalized writes.
+  await assertImportDatabaseTarget({
+    allowNonLocalDatabase: options.allowNonLocalDatabase,
+    databaseTarget: options.databaseTarget,
+    productionTarget: options.productionTarget,
+  });
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    // The explicit wrappers perform the same check after their read-only
+    // preflight. Keep this early guard for direct engine callers so an
+    // unauthorized Production invocation cannot persist discovery metadata.
+    assertProductionCanaryAuthorization(0);
+    if (options.durableLedger !== "REQUIRED")
+      throw new Error("Production writes require the Phase 5 durable ledger.");
+  }
   const requestId = options.requestId ?? createSyncRequestId();
   const syncOptions = { ...options, requestId };
   const diagnostic: SyncDiagnosticContext = { requestId };
@@ -768,7 +991,14 @@ export async function runGoogleSheetsIncrementalSync(
       );
       const canonicalWorksheet =
         canonicalCandidates.length === 1 ? canonicalCandidates[0] ?? null : null;
-      const canonicalResolution = await loadApprovedCanonicalSchema();
+      // An explicit operator verification may use the canonical anchor from
+      // its registered source. Automatic cron keeps the global conflict
+      // fail-closed policy when workbooks disagree.
+      const canonicalResolution = await loadApprovedCanonicalSchema(
+        syncOptions.worksheetKey || syncOptions.worksheetTitle
+          ? source.id
+          : undefined,
+      );
       let canonicalSchema = canonicalResolution.schemaSnapshot;
       if (canonicalCandidates.length > 1) canonicalSchema = null;
       canonicalSchema = await autoAdmitCanonicalWorksheet(
@@ -824,6 +1054,9 @@ export async function runGoogleSheetsIncrementalSync(
             worksheet,
             syncOptions,
             canonicalSchema,
+            syncRun.id.toString(),
+            prepared.sourceKey,
+            prepared.externalId,
           );
           emitSyncDiagnostic({
             context: diagnostic,
@@ -873,8 +1106,15 @@ export async function runGoogleSheetsIncrementalSync(
         (total, result) => total + result.failed,
         0,
       );
-      const status: SyncRunStatus =
-        failed === 0 ? "SUCCESS" : failed < selected.length ? "PARTIAL" : "FAILED";
+      const status: SyncRunStatus = worksheetResults.some(
+        (result) => result.status === "RECONCILIATION_REQUIRED",
+      )
+        ? "RECONCILIATION_REQUIRED"
+        : failed === 0
+          ? "SUCCESS"
+          : failed < selected.length
+            ? "PARTIAL"
+            : "FAILED";
       fallbackStage = "sync_run_finalize";
       await withSyncDiagnostic(
         diagnostic,
@@ -915,6 +1155,11 @@ export async function runGoogleSheetsIncrementalSync(
       };
     } catch (error) {
       const safeError = safeErrorMessage(error);
+      const recovery = classifyRecoveryFailure(error);
+      const runStatus: SyncRunStatus =
+        recovery.status === "RECONCILIATION_REQUIRED"
+          ? "RECONCILIATION_REQUIRED"
+          : "FAILED";
       emitSyncDiagnostic({
         context: diagnostic,
         stage: fallbackStage,
@@ -926,7 +1171,7 @@ export async function runGoogleSheetsIncrementalSync(
         await prisma.syncRun.update({
           where: { id: syncRunId },
           data: {
-            status: "FAILED",
+            status: runStatus,
             finishedAt: new Date(),
             durationMs: Date.now() - startedAt,
             errorSummary: safeError,

@@ -16,6 +16,8 @@ import {
 import type {
   DetectedAnchor,
   HeaderPath,
+  MappingAuthorization,
+  MappingApprovalContext,
   ResolvedValue,
   ScannedCell,
   StructureAnalysis,
@@ -73,7 +75,24 @@ function candidateReasons(
 
 export type ValueResolverOptions = {
   parse?: (raw: unknown) => NumericParseResult;
+  includeEmpty?: boolean;
+  mappingApproval?: MappingApprovalContext;
 };
+
+function authorizationForAnchor(
+  anchor: DetectedAnchor,
+  mappingApproval: MappingApprovalContext | undefined,
+): MappingAuthorization {
+  if (!mappingApproval || mappingApproval.approvalState !== "APPROVED")
+    return "REVIEW_REQUIRED";
+  if (anchor.matchType === "exact" && mappingApproval.allowExact)
+    return "APPROVED_EXACT";
+  // Alias matches are structural evidence. Pattern/context matches remain
+  // candidates because they can be produced by heuristic discovery.
+  if (anchor.matchType === "alias" && mappingApproval.allowStructural)
+    return "APPROVED_STRUCTURAL";
+  return "REVIEW_REQUIRED";
+}
 
 function makeCandidates(
   anchor: DetectedAnchor,
@@ -130,7 +149,9 @@ function makeCandidates(
         header,
       } satisfies ValueCandidate;
     })
-    .filter((candidate) => candidate.status !== "empty")
+    .filter(
+      (candidate) => options.includeEmpty || candidate.status !== "empty",
+    )
     .sort(
       (a, b) =>
         b.score - a.score ||
@@ -150,7 +171,29 @@ export function resolveAnchorValue(
     return unavailableValue(
       `Tidak ditemukan table boundary untuk anchor ${anchor.label}.`,
     );
-  const candidates = makeCandidates(anchor, region, structure, options);
+  const allCandidates = makeCandidates(anchor, region, structure, {
+    ...options,
+    includeEmpty: true,
+  });
+  const directEmpty = allCandidates.filter(
+    (candidate) =>
+      candidate.status === "empty" &&
+      candidate.cell.row === anchor.cell.row &&
+      candidate.unit !== null,
+  );
+  if (directEmpty.length > 0) {
+    return {
+      ...unavailableValue(
+        `Explicit empty value for ${anchor.label} is treated as missing; nearby row values are not candidates.`,
+        directEmpty,
+      ),
+      status: "missing",
+    };
+  }
+
+  const candidates = allCandidates.filter(
+    (candidate) => candidate.status !== "empty",
+  );
   const numeric = candidates.filter(
     (candidate) => candidate.status === "numeric" && candidate.value !== null,
   );
@@ -185,6 +228,7 @@ export function resolveAnchorValue(
       source: null,
       status: "ambiguous",
       candidates: numeric,
+      writeAuthorization: "BLOCKED",
       note: `Beberapa candidate bernilai berbeda memiliki score berdekatan untuk ${anchor.label}.`,
     };
   }
@@ -199,6 +243,7 @@ export function resolveAnchorValue(
       source: null,
       status: "ambiguous",
       candidates: numeric,
+      writeAuthorization: "BLOCKED",
       note: `Confidence ${confidence.toFixed(2)} di bawah batas resolusi untuk ${anchor.label}.`,
     };
   }
@@ -211,6 +256,7 @@ export function resolveAnchorValue(
     confidenceLevel(confidence) === "WARNING"
       ? `Anchor ${anchor.label} terdeteksi melalui konteks dengan confidence warning.`
       : undefined,
+    authorizationForAnchor(anchor, options.mappingApproval),
   );
 }
 

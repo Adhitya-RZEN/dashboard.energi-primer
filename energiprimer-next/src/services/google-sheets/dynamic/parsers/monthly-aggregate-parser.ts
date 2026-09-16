@@ -4,6 +4,8 @@ import { normalizeSupplierIdentity } from "../../legacy-mapping/profiles";
 import type {
   DynamicSemanticAggregates,
   HeaderPath,
+  MappingApprovalContext,
+  MappingAuthorization,
   ResolvedValue,
   ScannedCell,
   StructureAnalysis,
@@ -31,7 +33,27 @@ export type BiomassReceiptImportRow = {
   sourceRow: number | null;
   sourceColumn: number;
   sourceAddress: string | null;
+  sourceAddresses: readonly string[];
+  rawDisplayValues: readonly { address: string; value: string | null }[];
+  sourceGranularity: "CELL" | "RANGE";
+  mappingAuthorization: MappingAuthorization;
 };
+
+function aggregateAuthorization(
+  mappingApproval: MappingApprovalContext | undefined,
+): MappingAuthorization {
+  return mappingApproval?.approvalState === "APPROVED" &&
+    mappingApproval.allowStructural
+    ? "APPROVED_STRUCTURAL"
+    : "REVIEW_REQUIRED";
+}
+
+function rawDisplayValues(cells: readonly ScannedCell[]) {
+  return cells.map((cell) => ({
+    address: cell.address,
+    value: cell.rawValue === null ? null : String(cell.rawValue),
+  }));
+}
 
 function cellAt(cells: readonly ScannedCell[], row: number, column: number) {
   return (
@@ -109,6 +131,7 @@ function aggregateFromSummaryRow(
   worksheet: string,
   marker: ScannedCell | null,
   spec: MonthlyAggregateSpec,
+  mappingApproval?: MappingApprovalContext,
 ): ResolvedValue {
   if (!marker || !spec.columns.length) {
     return unavailableValue(spec.emptyNote);
@@ -134,11 +157,19 @@ function aggregateFromSummaryRow(
       confidence: 0,
       level: "UNRESOLVED",
       source: source
-        ? { sheet: worksheet, address: source.address, anchor: marker.address }
+        ? {
+            sheet: worksheet,
+            address: null,
+            anchor: marker.address,
+            granularity: "RANGE",
+          }
         : null,
       status: "malformed",
       candidates: [],
       sourceAddresses,
+      rawDisplayValues: rawDisplayValues([...numericCells, ...malformedCells]),
+      sourceGranularity: "RANGE",
+      writeAuthorization: "BLOCKED",
       note: `${spec.label} memiliki nilai malformed pada ${malformedCells.map((cell) => cell.address).join(", ")}.`,
     };
   }
@@ -150,9 +181,12 @@ function aggregateFromSummaryRow(
       ),
       source: {
         sheet: worksheet,
-        address: marker.address,
+        address: null,
         anchor: marker.address,
+        granularity: "RANGE",
       },
+      sourceGranularity: "RANGE",
+      writeAuthorization: "BLOCKED",
     };
   }
 
@@ -172,12 +206,16 @@ function aggregateFromSummaryRow(
     level: "HIGH",
     source: {
       sheet: worksheet,
-      address: numericCells[0].address,
+      address: null,
       anchor: marker.address,
+      granularity: "RANGE",
     },
     status: "resolved",
     candidates: [],
     sourceAddresses,
+    rawDisplayValues: rawDisplayValues([...numericCells, ...malformedCells]),
+    sourceGranularity: "RANGE",
+    writeAuthorization: aggregateAuthorization(mappingApproval),
     note:
       `${spec.label} dijumlahkan dari ${numericCells.length} kolom semantic pada baris ${marker.address}.` +
       (emptyCount > 0
@@ -192,6 +230,7 @@ function aggregateFromDataRows(
   worksheet: string,
   rows: readonly number[],
   spec: MonthlyAggregateSpec,
+  mappingApproval?: MappingApprovalContext,
 ): ResolvedValue {
   if (!rows.length || !spec.columns.length) {
     return unavailableValue(spec.emptyNote);
@@ -218,13 +257,17 @@ function aggregateFromDataRows(
       source: sourceCells[0]
         ? {
             sheet: worksheet,
-            address: sourceCells[0].address,
-            anchor: sourceCells[0].address,
+            address: null,
+            anchor: "DATA_ROWS",
+            granularity: "RANGE",
           }
         : null,
       status: "malformed",
       candidates: [],
       sourceAddresses: sourceCells.map((cell) => cell.address),
+      rawDisplayValues: rawDisplayValues(sourceCells),
+      sourceGranularity: "RANGE",
+      writeAuthorization: "BLOCKED",
       note: `${spec.label} memiliki nilai malformed pada ${malformedCells.map((cell) => cell.address).join(", ")}.`,
     };
   }
@@ -239,8 +282,6 @@ function aggregateFromDataRows(
     (sum, cell) => sum + (parseNumericValue(cell.rawValue).value ?? 0),
     0,
   );
-  const first = numericCells[0];
-  const last = numericCells[numericCells.length - 1];
   const malformedNote = malformedCells.length
     ? ` ${malformedCells.length} cell malformed diabaikan.`
     : "";
@@ -251,12 +292,16 @@ function aggregateFromDataRows(
     level: "HIGH",
     source: {
       sheet: worksheet,
-      address: first.address,
-      anchor: `${first.address}..${last.address}`,
+      address: null,
+      anchor: "DATA_ROWS",
+      granularity: "RANGE",
     },
     status: "resolved",
     candidates: [],
     sourceAddresses: sourceCells.map((cell) => cell.address),
+    rawDisplayValues: rawDisplayValues(sourceCells),
+    sourceGranularity: "RANGE",
+    writeAuthorization: aggregateAuthorization(mappingApproval),
     note: `${spec.label} dihitung dengan menjumlahkan ${numericCells.length} cell numerik dari baris data tabel.${malformedNote}`,
   };
 }
@@ -374,7 +419,13 @@ function supplierImportValue(
   cells: readonly ScannedCell[],
   rows: readonly number[],
   column: number,
-): Omit<BiomassReceiptImportRow, "supplierCode" | "supplierName" | "sourceColumn"> {
+): Omit<
+  BiomassReceiptImportRow,
+  | "supplierCode"
+  | "supplierName"
+  | "sourceColumn"
+  | "mappingAuthorization"
+> {
   const matching = rows
     .map((row) => cellAt(cells, row, column))
     .filter((cell): cell is ScannedCell => cell !== null);
@@ -384,20 +435,30 @@ function supplierImportValue(
   const numeric = matching.filter(
     (cell) => parseNumericValue(cell.rawValue).status === "numeric",
   );
+  const addresses = matching.map((cell) => cell.address);
+  const rawValues = rawDisplayValues(matching);
+  const granularity: "CELL" | "RANGE" =
+    matching.length === 1 ? "CELL" : "RANGE";
   if (!numeric.length && malformed.length) {
     return {
       value: null,
       status: "malformed",
-      sourceRow: malformed[0].row,
-      sourceAddress: malformed[0].address,
+      sourceRow: granularity === "CELL" ? malformed[0].row : null,
+      sourceAddress: granularity === "CELL" ? malformed[0].address : null,
+      sourceAddresses: addresses,
+      rawDisplayValues: rawValues,
+      sourceGranularity: granularity,
     };
   }
   if (!numeric.length) {
     return {
       value: null,
       status: "empty",
-      sourceRow: rows[0] ?? null,
+      sourceRow: null,
       sourceAddress: null,
+      sourceAddresses: addresses,
+      rawDisplayValues: rawValues,
+      sourceGranularity: granularity,
     };
   }
   return {
@@ -406,8 +467,11 @@ function supplierImportValue(
       0,
     ),
     status: "numeric",
-    sourceRow: numeric[0].row,
-    sourceAddress: numeric[0].address,
+    sourceRow: granularity === "CELL" ? numeric[0].row : null,
+    sourceAddress: granularity === "CELL" ? numeric[0].address : null,
+    sourceAddresses: addresses,
+    rawDisplayValues: rawValues,
+    sourceGranularity: granularity,
   };
 }
 
@@ -418,6 +482,7 @@ function supplierImportValue(
 export function extractBiomassReceiptImportRows(
   cells: readonly ScannedCell[],
   structure: StructureAnalysis,
+  mappingApproval?: MappingApprovalContext,
 ): BiomassReceiptImportRow[] {
   const suppliers = supplierColumns(structure, cells);
   const marker = chooseSummaryMarker(
@@ -426,10 +491,16 @@ export function extractBiomassReceiptImportRows(
     suppliers.map(({ column }) => column),
   );
   const rows = marker ? [marker.row] : structure.dataRows;
-  return suppliers.map(({ code, name, column }) => ({
+  return suppliers.map(({ code, name, column, kind }) => ({
     supplierCode: code,
     supplierName: name,
     sourceColumn: column,
+    mappingAuthorization:
+      mappingApproval?.approvalState === "APPROVED" &&
+      mappingApproval.allowStructural &&
+      kind === "CANONICAL"
+        ? "APPROVED_STRUCTURAL"
+        : "REVIEW_REQUIRED",
     ...supplierImportValue(cells, rows, column),
   }));
 }
@@ -443,6 +514,7 @@ export function parseMonthlyBiomassAggregates(
     biomassUnit2: number | null;
     biomassUnit3: number | null;
   },
+  mappingApproval?: MappingApprovalContext,
 ): DynamicSemanticAggregates {
   const detectedSuppliers = supplierColumns(structure, cells);
   const supplier = detectedSuppliers.map(({ column }) => column);
@@ -474,6 +546,7 @@ export function parseMonthlyBiomassAggregates(
     worksheet,
     marker,
     supplierSpec,
+    mappingApproval,
   );
   const calculatedSupplier =
     summarySupplier.status === "missing" && structure.dataRows.length
@@ -482,6 +555,7 @@ export function parseMonthlyBiomassAggregates(
           worksheet,
           structure.dataRows,
           supplierSpec,
+          mappingApproval,
         )
       : summarySupplier;
   // A partial legacy schema is still calculated from the supplier columns
@@ -509,6 +583,7 @@ export function parseMonthlyBiomassAggregates(
         emptyNote:
           "Kolom Biomassa Unit 1–3 belum tersedia untuk menghitung total pemakaian bulanan.",
       },
+      mappingApproval,
     ),
   };
 }

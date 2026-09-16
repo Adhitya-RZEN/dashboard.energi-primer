@@ -4,6 +4,7 @@ import { unavailableValue } from "../confidence";
 import { resolveAnchorValue } from "../value-resolver";
 import type {
   DetectedAnchor,
+  MappingApprovalContext,
   ResolvedValue,
   ScannedCell,
   StructureAnalysis,
@@ -27,6 +28,7 @@ export function parseHistoricalTable(
   worksheet: string,
   year: number,
   structure?: StructureAnalysis,
+  mappingApproval?: MappingApprovalContext,
 ): HistoricalParseResult {
   const matches = anchorsForKey(anchors, "biomassCumulative");
   if (!matches.length)
@@ -50,6 +52,7 @@ export function parseHistoricalTable(
         nearestRegion(regions, anchor, "dashboard"),
       worksheet,
       structure,
+      { mappingApproval },
     ),
   );
   const result =

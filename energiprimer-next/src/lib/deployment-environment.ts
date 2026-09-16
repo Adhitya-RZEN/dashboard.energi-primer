@@ -41,9 +41,10 @@ export function isPreviewEnvironment(
 }
 
 /**
- * Google Sheets sync is write-capable in Production and keeps its existing
- * behavior in local development. Vercel Preview and unknown deployment
- * identities are denied before authentication or the sync engine runs.
+ * Google Sheets sync permits explicit POST execution in Production and keeps
+ * its existing behavior in local development. Vercel Preview and unknown
+ * deployment identities are denied before authentication or the sync engine
+ * runs.
  */
 export function isSyncAllowedEnvironment(
   environment: EnvironmentVariables = process.env,

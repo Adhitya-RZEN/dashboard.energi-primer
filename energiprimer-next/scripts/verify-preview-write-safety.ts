@@ -35,31 +35,52 @@ const routePath = fileURLToPath(
   new URL("../src/app/api/sync/google-sheets/route.ts", import.meta.url),
 );
 const routeSource = readFileSync(routePath, "utf8");
+const enginePath = fileURLToPath(
+  new URL("../src/services/google-sheets/sync/engine.ts", import.meta.url),
+);
+const engineSource = readFileSync(enginePath, "utf8");
 const environmentGate = routeSource.indexOf(
   "if (!isSyncAllowedEnvironment()) return disabledForDeploymentEnvironment();",
 );
 const cronSecretCheck = routeSource.indexOf(
   "if (!process.env.CRON_SECRET)",
 );
-const syncInvocation = routeSource.indexOf(
-  "const result = await runGoogleSheetsIncrementalSync",
-);
+const getStart = routeSource.indexOf("export async function GET");
+const postStart = routeSource.indexOf("export async function POST");
+const getBody = routeSource.slice(getStart, postStart);
+const postBody = routeSource.slice(postStart);
 
 assert.ok(environmentGate >= 0, "sync route must contain the environment gate");
 assert.ok(cronSecretCheck > environmentGate, "environment gate must precede cron authentication");
-assert.ok(syncInvocation > environmentGate, "environment gate must precede sync invocation");
+assert.ok(getStart >= 0 && postStart > getStart, "sync route must separate GET and POST handlers");
+assert.match(getBody, /prepareWorksheetPreflight|prepareGoogleSheetsWorksheetDiscovery/u);
+assert.doesNotMatch(getBody, /runGoogleSheetsIncrementalSync|commitGoogleSheetsImportPlan|executeControlledWorksheetImport/u);
+assert.match(postBody, /executeControlledWorksheetImport|parseControlledImportRequest/u);
 assert.match(routeSource, /status: "DISABLED"/u);
 assert.match(routeSource, /status: 403/u);
+const directProductionGuard = engineSource.indexOf(
+  'assertProductionCanaryAuthorization(0)',
+);
+const discoveryPersistence = engineSource.indexOf(
+  "await persistGoogleSheetsWorksheetDiscovery(",
+);
+assert.ok(
+  directProductionGuard >= 0 &&
+    discoveryPersistence > directProductionGuard,
+  "direct Production engine calls must pass the canary gate before discovery persistence",
+);
 
 console.log(JSON.stringify({
   status: "PASS",
   checks: [
     "Preview deployment is denied before cron authentication",
-    "Preview deployment is denied before sync engine invocation",
+    "GET remains read-only and contains no sync writer invocation",
+    "POST contains the explicit controlled execution boundary",
     "Production deployment remains allowed by the environment policy",
     "Development without VERCEL_ENV preserves existing behavior",
     "Unknown deployment identity is denied fail-closed",
     "Production without deployment identity is denied fail-closed",
+    "Direct Production engine calls are gated before discovery persistence",
   ],
   databaseWrites: 0,
 }, null, 2));

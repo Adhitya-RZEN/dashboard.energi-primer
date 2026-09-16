@@ -75,6 +75,27 @@ export type AnchorDefinition = {
 
 export type AnchorMatchType = "exact" | "alias" | "pattern" | "context";
 
+/**
+ * A parser candidate is not write authority.  The canonical mapping layer
+ * supplies this immutable approval context when a source profile has passed
+ * its registry and schema gates.
+ */
+export type MappingAuthorization =
+  | "APPROVED_EXACT"
+  | "APPROVED_STRUCTURAL"
+  | "APPROVED_POLICY_FALLBACK"
+  | "REVIEW_REQUIRED"
+  | "BLOCKED";
+
+export type MappingApprovalContext = {
+  profile: string;
+  mappingVersion: string;
+  approvalState: "APPROVED" | "PROPOSED" | "REVIEW" | "BLOCKED";
+  allowExact: boolean;
+  allowStructural: boolean;
+  allowPolicyFallback: boolean;
+};
+
 export type DetectedAnchor = {
   key: AnchorKey;
   label: string;
@@ -133,8 +154,10 @@ export type ConfidenceLevel = "HIGH" | "WARNING" | "UNRESOLVED";
 
 export type ResolvedSource = {
   sheet: string;
-  address: string;
+  address: string | null;
   anchor: string;
+  matchType?: AnchorMatchType;
+  granularity?: "CELL" | "ROW" | "RANGE" | "WORKSHEET" | "WORKBOOK";
 };
 
 export type ResolvedValue<T = number> = {
@@ -145,11 +168,18 @@ export type ResolvedValue<T = number> = {
   source: ResolvedSource | null;
   status: "resolved" | "missing" | "malformed" | "ambiguous";
   candidates: readonly ValueCandidate[];
+  /** Explicit mapping authorization; missing values are treated as review-only. */
+  writeAuthorization?: MappingAuthorization;
+  mappingProfile?: string;
+  mappingVersion?: string;
   /**
    * Optional when a value is derived from more than one cell, for example a
    * monthly total assembled from semantic supplier/unit columns.
    */
   sourceAddresses?: readonly string[];
+  /** Exact display values for each component of an aggregate, when available. */
+  rawDisplayValues?: readonly { address: string; value: string | null }[];
+  sourceGranularity?: "CELL" | "ROW" | "RANGE" | "WORKSHEET" | "WORKBOOK";
   note?: string;
 };
 
@@ -233,6 +263,7 @@ export type DynamicParserOptions = {
   year?: number;
   rowOffset?: number;
   columnOffset?: number;
+  mappingApproval?: MappingApprovalContext;
 };
 
 export type DynamicFieldDefinition = AnchorDefinition & {

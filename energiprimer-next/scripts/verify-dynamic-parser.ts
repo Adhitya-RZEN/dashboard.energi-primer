@@ -7,6 +7,13 @@ import {
   resolveBBWorksheet,
 } from "../src/services/google-sheets/dynamic/index";
 import { buildGoogleSheetsImportPlanFromReadResult } from "../src/services/google-sheets/import/plan";
+import {
+  BB_CANONICAL_MAPPING_CONTRACT,
+  mappingApprovalForContract,
+} from "../src/services/google-sheets/canonical/mapping-contract";
+import { buildApprovedCanonicalPlanForCompatibility } from "../src/services/google-sheets/canonical/compatibility";
+import { mapLegacyWorksheet } from "../src/services/google-sheets/legacy-mapping/mapper";
+import { buildSchemaSnapshot } from "../src/services/google-sheets/sync/schema-detection";
 import type {
   DynamicSheetValue,
   LegacyBaseline,
@@ -275,6 +282,113 @@ function runStaticTests() {
   assert.equal(regressionSolar?.quantityLiter, 854);
   assert.equal(regressionSolar?.source.cell, "M2");
 
+  const approvedMapping = mappingApprovalForContract(
+    BB_CANONICAL_MAPPING_CONTRACT,
+  );
+  const approvedRegression = parseDynamicWorksheet(regressionFixture(), {
+    worksheetName: "Juli26-BB",
+    mappingApproval: approvedMapping,
+  });
+  const approvedPlan = buildGoogleSheetsImportPlanFromReadResult(
+    importReadResult(approvedRegression),
+    { mappingApproval: approvedMapping },
+  );
+  assert.equal(approvedPlan.status, "READY_FOR_IMPORT");
+  assert.ok(
+    approvedPlan.stagingRows.every(
+      (row) =>
+        row.source.mappingAuthorization === "APPROVED_STRUCTURAL" ||
+        row.source.mappingAuthorization === "APPROVED_EXACT" ||
+        row.source.mappingAuthorization === "APPROVED_POLICY_FALLBACK",
+    ),
+  );
+  const canonicalRegressionPlan = buildApprovedCanonicalPlanForCompatibility({
+    importRunId: "dynamic-regression-run",
+    plan: approvedPlan,
+    sourceKey: "source-workbook-1",
+    spreadsheetId: "spreadsheet-1",
+    sheetId: "sheet-7",
+    worksheetTitle: "Juli26-BB",
+    effectivePeriod: { month: 7, year: 2026 },
+    sourceRange: approvedPlan.sourceRange,
+    schemaFingerprint: "dynamic-regression-schema",
+    mapping: BB_CANONICAL_MAPPING_CONTRACT,
+  });
+  assert.equal(canonicalRegressionPlan.approvalState, "APPROVED");
+  assert.ok(canonicalRegressionPlan.items.length > 0);
+
+  const legacyComparison = mapLegacyWorksheet({
+    worksheet: "Juli26-BB",
+    family: "CANONICAL_FAMILY",
+    parsed: approvedRegression,
+    plan: approvedPlan,
+    schema: buildSchemaSnapshot(approvedRegression),
+    classification: {
+      family: "CANONICAL_FAMILY",
+      semanticCoverage: 1,
+      labelCoverage: 1,
+      reason: "Phase 3 approved canonical regression fixture.",
+    },
+  });
+  const canonicalByBusinessKey = new Map(
+    canonicalRegressionPlan.items.map((item) => [item.businessKey, item]),
+  );
+  const legacyComparable = legacyComparison.canonicalRecords.map((row) => {
+    const period = row.periodStart?.toISOString().slice(0, 10) ?? null;
+    const reading = row.readingDate?.toISOString().slice(0, 10) ?? null;
+    const keyFields =
+      row.entityType === "biomass_consumption" ||
+      row.entityType === "coal_consumption" ||
+      row.entityType === "hop_reading"
+        ? { readingDate: reading, unitNumber: Number(row.unitCode?.replace("UNIT-", "")) }
+        : row.entityType === "coal_stock"
+          ? { readingDate: reading, stockScope: "plant" }
+          : row.entityType === "biomass_receipt"
+            ? { periodStart: period, supplierCode: row.supplierCode }
+            : row.entityType === "solar_consumption"
+              ? { readingDate: reading }
+            : row.entityType === "biomass_target"
+              ? { targetYear: row.periodStart?.getUTCFullYear() }
+              : { periodStart: period };
+    return {
+      businessKey: JSON.stringify({
+        entity: row.entityType,
+        scope: "plant",
+        keyFields,
+      }),
+      normalizedValue: row.normalizedValue,
+    };
+  });
+  assert.equal(legacyComparison.writeAuthorization, "COMPARISON_ONLY");
+  assert.equal(legacyComparable.length, canonicalRegressionPlan.items.length);
+  assert.ok(
+    legacyComparable.every((row) => {
+      const canonicalItem = canonicalByBusinessKey.get(row.businessKey);
+      if (!canonicalItem) return false;
+      const value = canonicalItem.record.value as Record<
+        string,
+        number | string | null
+      >;
+      const canonicalValue =
+        canonicalItem.record.entity === "coal_stock"
+          ? value.closingStock
+          : canonicalItem.record.entity === "biomass_consumption" ||
+              canonicalItem.record.entity === "coal_consumption"
+            ? value.quantityTon
+            : canonicalItem.record.entity === "solar_consumption" ||
+                canonicalItem.record.entity === "solar_receipt"
+              ? value.quantityLiter
+              : canonicalItem.record.entity === "hop_reading"
+                ? value.hopDays
+                : canonicalItem.record.entity === "biomass_target"
+                  ? value.targetTon
+                  : canonicalItem.record.entity === "biomass_cumulative"
+                    ? value.cumulativeTon
+                    : value.quantityTon;
+      return canonicalValue === row.normalizedValue;
+    }),
+  );
+
   const solarSelection = parseDynamicWorksheet(solarSelectionFixture(), {
     worksheetName: "Juli26-BB",
   });
@@ -535,6 +649,26 @@ function runStaticTests() {
   assert.equal(
     duplicateResult.normalized.metrics.biomassConsumptionMonthly.status,
     "ambiguous",
+  );
+
+  const explicitEmptyCurrent = regressionFixture();
+  put(explicitEmptyCurrent, 13, 23, "-");
+  const explicitEmptyCurrentResult = parseDynamicWorksheet(
+    explicitEmptyCurrent,
+    { worksheetName: "Agustus26-BB" },
+  );
+  assert.equal(
+    explicitEmptyCurrentResult.normalized.metrics.biomassUnit1Current.status,
+    "missing",
+  );
+  assert.equal(
+    explicitEmptyCurrentResult.normalized.metrics.biomassUnit1Current.available,
+    false,
+  );
+  assert.ok(
+    !explicitEmptyCurrentResult.diagnostics.ambiguous.includes(
+      "biomassUnit1Current",
+    ),
   );
 }
 

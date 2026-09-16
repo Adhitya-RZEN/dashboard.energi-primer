@@ -6,6 +6,7 @@ import { resolveAnchorValue } from "../value-resolver";
 import { OFFICIAL_BIOMASS_TARGET } from "../../legacy-mapping/profiles";
 import type {
   DetectedAnchor,
+  MappingApprovalContext,
   ResolvedValue,
   ScannedCell,
   StructureAnalysis,
@@ -17,7 +18,10 @@ export type TargetParseResult = {
   targetYear: number | null;
 };
 
-function approvedFallbackTarget(year: number): TargetParseResult {
+function approvedFallbackTarget(
+  year: number,
+  mappingApproval?: MappingApprovalContext,
+): TargetParseResult {
   return {
     target: {
       value: OFFICIAL_BIOMASS_TARGET,
@@ -27,6 +31,11 @@ function approvedFallbackTarget(year: number): TargetParseResult {
       source: null,
       status: "resolved",
       candidates: [],
+      writeAuthorization:
+        mappingApproval?.approvalState === "APPROVED" &&
+        mappingApproval.allowPolicyFallback
+          ? "APPROVED_POLICY_FALLBACK"
+          : "REVIEW_REQUIRED",
       note: `Tabel Target ${year} tidak ditemukan; menggunakan fallback target resmi ${OFFICIAL_BIOMASS_TARGET} ton.`,
     },
     targetYear: year,
@@ -45,6 +54,7 @@ export function parseTargetTable(
   worksheet: string,
   structure?: StructureAnalysis,
   fallbackYear?: number,
+  mappingApproval?: MappingApprovalContext,
 ): TargetParseResult {
   const matches = anchorsForKey(anchors, "biomassTarget");
   const explicitMatches = matches.filter((anchor) =>
@@ -52,7 +62,7 @@ export function parseTargetTable(
   );
   if (!explicitMatches.length) {
     if (fallbackYear && fallbackYear > 0)
-      return approvedFallbackTarget(fallbackYear);
+      return approvedFallbackTarget(fallbackYear, mappingApproval);
     return {
       target: unavailableValue("Target biomassa tidak ditemukan."),
       targetYear: null,
@@ -66,7 +76,7 @@ export function parseTargetTable(
         nearestRegion(regions, anchor, "dashboard"),
       worksheet,
       structure,
-      { parse: parseTargetNumber },
+      { parse: parseTargetNumber, mappingApproval },
     ),
   );
   const available = resolutions

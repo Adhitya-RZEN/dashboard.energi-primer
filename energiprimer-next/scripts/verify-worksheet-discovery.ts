@@ -50,14 +50,24 @@ function runStaticChecks() {
     "await persistGoogleSheetsWorksheetDiscovery",
   );
   const leaseCall = engineSource.indexOf("lease = await acquireSyncSourceLease");
+  const targetGateCall = engineSource.indexOf(
+    "await assertImportDatabaseTarget",
+  );
   const syncRunCall = engineSource.indexOf("const syncRun = await");
   assert.ok(
     sourceBootstrapCall >= 0 &&
+      targetGateCall >= 0 &&
+      targetGateCall < sourceBootstrapCall &&
       leaseCall > sourceBootstrapCall &&
       persistenceCall > sourceBootstrapCall &&
       persistenceCall > leaseCall &&
       syncRunCall > persistenceCall,
     "source bootstrap and lease precede discovery persistence and syncRun creation",
+  );
+  assert.match(
+    engineSource,
+    /const requestedTitle = options\.worksheetTitle[\s\S]*?worksheet\.worksheetTitle\.trim\(\)/u,
+    "explicit worksheet selection must use the requested title",
   );
 
   const previous = [

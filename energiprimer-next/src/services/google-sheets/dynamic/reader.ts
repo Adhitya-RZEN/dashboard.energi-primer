@@ -10,7 +10,7 @@ import {
   previousValidBBWorksheets,
   resolveBBWorksheet,
 } from "./worksheet-resolver";
-import type { DynamicParserResult } from "./types";
+import type { DynamicParserResult, MappingApprovalContext } from "./types";
 
 export const DYNAMIC_SCAN_RANGE = "A1:ZZ500";
 
@@ -31,6 +31,7 @@ export type DynamicWorksheetReadResult = {
 export async function readAndParseDynamicBBWorksheet(
   query: DynamicWorksheetQuery,
   range = DYNAMIC_SCAN_RANGE,
+  options: { mappingApproval?: MappingApprovalContext } = {},
 ): Promise<DynamicWorksheetReadResult> {
   const availableWorksheets = await listGoogleSheetsWorksheets();
   const availableNames = availableWorksheets.map((worksheet) => worksheet.title);
@@ -75,6 +76,7 @@ export async function readAndParseDynamicBBWorksheet(
           worksheetName: candidate.name,
           rowOffset: 1,
           columnOffset: 1,
+          mappingApproval: options.mappingApproval,
         }),
       };
     } catch (error) {
@@ -96,6 +98,7 @@ export async function readAndParseDynamicBBWorksheet(
 export async function readAndParseDynamicWorksheet(
   worksheet: string,
   range = DYNAMIC_SCAN_RANGE,
+  options: { mappingApproval?: MappingApprovalContext } = {},
 ): Promise<DynamicWorksheetReadResult> {
   const metadata = parseBBWorksheetName(worksheet);
   const result = await readGoogleSheetsRange(worksheet, range);
@@ -113,6 +116,7 @@ export async function readAndParseDynamicWorksheet(
       year: metadata?.year,
       rowOffset: 1,
       columnOffset: 1,
+      mappingApproval: options.mappingApproval,
     }),
   };
 }

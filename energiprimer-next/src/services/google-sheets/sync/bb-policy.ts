@@ -61,6 +61,7 @@ export type AutomaticWorksheetDecision = {
 };
 
 export type ApprovedCanonicalSchemaCandidate = {
+  sourceId?: bigint | number | string;
   status: string;
   worksheetTitle: string;
   schemaSnapshot: string | null;
@@ -74,6 +75,11 @@ export type ApprovedCanonicalSchemaResolution = {
   reason: string;
 };
 
+export type ApprovedCanonicalSchemaOptions = {
+  /** Prefer an approval from the same registered Google source when present. */
+  sourceId?: bigint | number | string;
+};
+
 /**
  * A schema approval belongs to the BB mapping profile, not to one workbook.
  * Only an active, exact Juli26-BB worksheet can contribute an approval. If
@@ -81,6 +87,7 @@ export type ApprovedCanonicalSchemaResolution = {
  */
 export function resolveApprovedCanonicalSchema(
   candidates: readonly ApprovedCanonicalSchemaCandidate[],
+  options: ApprovedCanonicalSchemaOptions = {},
 ): ApprovedCanonicalSchemaResolution {
   const canonicalTitle = normalizeWorksheetName(BB_CANONICAL_WORKSHEET);
   const valid = candidates
@@ -102,7 +109,21 @@ export function resolveApprovedCanonicalSchema(
       } => Boolean(value),
     );
 
-  if (valid.length === 0)
+  const sourceScoped =
+    options.sourceId === undefined
+      ? []
+      : valid.filter(
+          ({ candidate }) =>
+            candidate.sourceId !== undefined &&
+            String(candidate.sourceId) === String(options.sourceId),
+        );
+  // An explicit worksheet gets the canonical anchor from its own source when
+  // one exists. If that source has no Juli anchor, retain the global policy:
+  // a single global profile is usable, while conflicting global profiles still
+  // fail closed.
+  const considered = sourceScoped.length > 0 ? sourceScoped : valid;
+
+  if (considered.length === 0)
     return {
       status: "UNAVAILABLE",
       schemaSnapshot: null,
@@ -110,7 +131,7 @@ export function resolveApprovedCanonicalSchema(
       reason: "No active Juli26-BB schema profile is available.",
     };
 
-  const hashes = new Set(valid.map(({ snapshot }) => snapshot.hash));
+  const hashes = new Set(considered.map(({ snapshot }) => snapshot.hash));
   if (hashes.size > 1)
     return {
       status: "AMBIGUOUS",
@@ -119,7 +140,7 @@ export function resolveApprovedCanonicalSchema(
       reason: "Active Juli26-BB worksheets contain conflicting schema profiles.",
     };
 
-  const latest = [...valid].sort(
+  const latest = [...considered].sort(
     (left, right) =>
       (right.candidate.updatedAt?.getTime() ?? 0) -
       (left.candidate.updatedAt?.getTime() ?? 0),
@@ -136,7 +157,10 @@ export function resolveApprovedCanonicalSchema(
     status: "AVAILABLE",
     schemaSnapshot: JSON.stringify(latest.snapshot),
     schemaHash: latest.snapshot.hash,
-    reason: "An active Juli26-BB schema profile is available across workbooks.",
+    reason:
+      sourceScoped.length > 0
+        ? "An active Juli26-BB schema profile is available for the registered source."
+        : "An active Juli26-BB schema profile is available across workbooks.",
   };
 }
 
@@ -198,6 +222,13 @@ export function isAfterCanonicalBBWorksheet(worksheetTitle: string) {
   const period = parseBBWorksheetName(worksheetTitle);
   return Boolean(
     period && periodOrdinal(period) > periodOrdinal(BB_CANONICAL_PERIOD),
+  );
+}
+
+export function isCanonicalBBWorksheet(worksheetTitle: string) {
+  return (
+    normalizeWorksheetName(worksheetTitle) ===
+    normalizeWorksheetName(BB_CANONICAL_WORKSHEET)
   );
 }
 
