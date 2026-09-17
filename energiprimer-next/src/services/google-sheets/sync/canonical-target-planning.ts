@@ -11,6 +11,8 @@ import {
 import {
   classifyCanonicalTargetDiff,
   existingCanonicalStateForTargetState,
+  resolveJuli26TargetProvenance,
+  JULI26_TARGET_PROVENANCE_RESOLUTION,
   type CanonicalTargetDiff,
 } from "../canonical/target-state";
 import {
@@ -25,20 +27,37 @@ export type TargetAwareCanonicalPlanResult = {
   targetDiffs: readonly CanonicalTargetDiff[];
 };
 
+type TargetAwareCanonicalPlanInput = CompatibilityCanonicalPlanInput & {
+  provenanceResolution?: typeof JULI26_TARGET_PROVENANCE_RESOLUTION;
+};
+
 export async function buildTargetAwareCanonicalPlan(
-  input: CompatibilityCanonicalPlanInput,
+  input: TargetAwareCanonicalPlanInput,
 ): Promise<TargetAwareCanonicalPlanResult> {
   const { manifest, records } = canonicalRecordsForCompatibilityPlan(input);
   const targetRead = await loadCanonicalTargetStates(records);
+  const statesForPlanning = targetRead.states.map((state) => {
+    const record = records.find(
+      (candidate) => candidate.businessIdentity.canonicalKey === state.businessIdentity.canonicalKey,
+    );
+    if (!record) throw new Error("Target state lookup did not cover every canonical identity.");
+    if (
+      input.provenanceResolution === JULI26_TARGET_PROVENANCE_RESOLUTION &&
+      record.entity === "biomass_target"
+    ) {
+      return resolveJuli26TargetProvenance(record, state);
+    }
+    return state;
+  });
   const stateByKey = new Map(
-    targetRead.states.map((state) => [state.businessIdentity.canonicalKey, state]),
+    statesForPlanning.map((state) => [state.businessIdentity.canonicalKey, state]),
   );
   const targetDiffs = records.map((record) => {
     const state = stateByKey.get(record.businessIdentity.canonicalKey);
     if (!state) throw new Error("Target state lookup did not cover every canonical identity.");
     return classifyCanonicalTargetDiff(record, state);
   });
-  const existing = targetRead.states.flatMap((state) => {
+  const existing = statesForPlanning.flatMap((state) => {
     const record = records.find(
       (candidate) => candidate.businessIdentity.canonicalKey === state.businessIdentity.canonicalKey,
     );

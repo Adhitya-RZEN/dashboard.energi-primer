@@ -12,6 +12,11 @@ import {
   type VerifiedSupabaseProductionTarget,
 } from "../sync/production-target";
 import { assertProductionCanaryAuthorization } from "../sync/production-canary";
+import {
+  assertJuliCanaryCompatibilityPlan,
+  JULI26_CANARY_SHEET_ID,
+  JULI26_CANARY_WORKSHEET,
+} from "../sync/juli-canary-scope";
 import { verifyCanonicalLedgerCapability } from "../canonical/ledger-prisma-store";
 import { classifyRecoveryFailure } from "../canonical/recovery";
 import {
@@ -137,6 +142,8 @@ export type ImportCommitOptions = {
   productionTarget?: VerifiedSupabaseProductionTarget;
   /** Only the canonical batch adapter may invoke the Production writer. */
   canonicalBatch?: true;
+  /** Production writes are restricted to the explicitly authorized Juli canary. */
+  canary?: true;
   source?: string;
 };
 
@@ -149,6 +156,19 @@ export async function commitGoogleSheetsImportPlan(
   if (options.databaseTarget === "SUPABASE_PRODUCTION") {
     if (options.canonicalBatch !== true)
       throw new Error("Production writes must enter through a canonical durable batch.");
+    if (
+      options.canary !== true ||
+      plan.effective.worksheet.trim().toLocaleLowerCase("en-US") !==
+        JULI26_CANARY_WORKSHEET.toLocaleLowerCase("en-US") ||
+      plan.stagingRows.some((row) =>
+        row.source.sheetId !== JULI26_CANARY_SHEET_ID ||
+        row.source.worksheet.trim().toLocaleLowerCase("en-US") !==
+          JULI26_CANARY_WORKSHEET.toLocaleLowerCase("en-US")
+      )
+    ) {
+      throw new Error("Production writes require the exact Juli26-BB canary scope.");
+    }
+    assertJuliCanaryCompatibilityPlan(plan);
     assertProductionCanaryAuthorization(plan.summary.totalRows);
   }
   await assertImportDatabaseTarget(options);

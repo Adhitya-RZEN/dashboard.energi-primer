@@ -30,6 +30,13 @@ import {
 import {
   buildTargetAwareCanonicalPlan,
 } from "./canonical-target-planning";
+import {
+  juliCanaryScopeForCompatibilityPlan,
+  JULI26_CANARY_SCOPE_ID,
+} from "./juli-canary-scope";
+import {
+  JULI26_TARGET_PROVENANCE_RESOLUTION,
+} from "../canonical/target-state";
 import type {
   GoogleSheetsImportPlan,
   ImportStagingRecord,
@@ -123,7 +130,15 @@ export type WorksheetPreflightResult = {
     block: number;
     blockers: readonly string[];
   };
+  canary: {
+    enabled: boolean;
+    scopeId: typeof JULI26_CANARY_SCOPE_ID | null;
+    sourceRecords: number;
+    selectedRecords: number;
+  };
   plan: GoogleSheetsImportPlan;
+  /** The plan admitted to the canonical writer; full source plan remains in `plan`. */
+  executionPlan: GoogleSheetsImportPlan;
   schemaSnapshot: SchemaSnapshot;
   canonicalPlan: CanonicalImportPlan | null;
   canonicalPlanError: string | null;
@@ -363,6 +378,7 @@ function validRecordCount(
 
 export async function prepareWorksheetPreflight(input: {
   worksheet: string;
+  canary?: true;
 }): Promise<WorksheetPreflightResult> {
   const requestedWorksheet = input.worksheet.trim();
   if (!requestedWorksheet)
@@ -510,6 +526,8 @@ export async function prepareWorksheetPreflight(input: {
 
   let canonicalPlan: CanonicalImportPlan | null = null;
   let canonicalPlanError: string | null = null;
+  let executionPlan = plan;
+  let canaryScopeSelectedRecords = 0;
   let targetState: WorksheetPreflightResult["targetState"] = {
     status: "BLOCKED",
     statesRead: 0,
@@ -535,7 +553,7 @@ export async function prepareWorksheetPreflight(input: {
     canonicalPlanError = "Worksheet period could not be reconstructed.";
   } else {
     try {
-      const targetAware = await buildTargetAwareCanonicalPlan({
+      const planningInput = {
         importRunId: `preflight-${sourceKey}-${worksheetMetadata.sheetId}-${schemaSnapshot.hash}`,
         plan,
         sourceKey,
@@ -546,6 +564,18 @@ export async function prepareWorksheetPreflight(input: {
         sourceRange: plan.sourceRange,
         schemaFingerprint: schemaSnapshot.hash,
         mapping,
+      };
+      if (input.canary === true) {
+        const canaryScope = juliCanaryScopeForCompatibilityPlan(planningInput);
+        executionPlan = canaryScope.plan;
+        canaryScopeSelectedRecords = canaryScope.records.length;
+      }
+      const targetAware = await buildTargetAwareCanonicalPlan({
+        ...planningInput,
+        plan: executionPlan,
+        ...(input.canary === true
+          ? { provenanceResolution: JULI26_TARGET_PROVENANCE_RESOLUTION }
+          : {}),
       });
       const targetRead = targetAware.targetRead;
       targetState = {
@@ -571,6 +601,8 @@ export async function prepareWorksheetPreflight(input: {
     }
   }
   if (canonicalPlanError) blockers.push("canonical_mapping_review");
+  if (input.canary === true && canaryScopeSelectedRecords !== 22)
+    blockers.push("canary_scope_invalid");
   if (targetState.status === "BLOCKED") blockers.push("target_state_blocked");
   blockers.push(...targetDiff.blockers.map((issue) => `target_${issue.toLocaleLowerCase("en-US")}`));
 
@@ -648,7 +680,16 @@ export async function prepareWorksheetPreflight(input: {
     },
     targetState,
     targetDiff,
+    canary: {
+      enabled: input.canary === true,
+      scopeId: input.canary === true ? JULI26_CANARY_SCOPE_ID : null,
+      sourceRecords: plan.stagingRows.length,
+      selectedRecords: input.canary === true
+        ? canaryScopeSelectedRecords
+        : plan.stagingRows.length,
+    },
     plan,
+    executionPlan,
     schemaSnapshot,
     canonicalPlan,
     canonicalPlanError,

@@ -4,7 +4,6 @@ import type {
 } from "./types";
 import {
   assertCanonicalImportPlanIntegrity,
-  canonicalPlanHashInput,
 } from "./import-plan";
 import {
   classifyRecoveryFailure,
@@ -259,13 +258,25 @@ function iso(value: Date) {
   return value.toISOString();
 }
 
-function planSnapshot(plan: CanonicalImportPlan) {
-  return JSON.stringify({
-    planId: plan.planId,
-    planHash: plan.planHash,
-    importRunId: plan.importRunId,
-    canonical: canonicalPlanHashInput(plan),
-  });
+function canonicalSnapshotValue(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalSnapshotValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .filter((key) => key !== "observedAt")
+        .sort()
+        .map((key) => [
+          key,
+          canonicalSnapshotValue((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return value;
+}
+
+export function canonicalLedgerPlanSnapshot(plan: CanonicalImportPlan) {
+  return JSON.stringify(canonicalSnapshotValue(plan));
 }
 
 export function assertCanonicalLedgerPlanImmutable(
@@ -317,7 +328,7 @@ export class InMemoryCanonicalLedgerStore implements CanonicalLedgerStore {
       const existing = this.runs.get(existingId);
       if (!existing) throw new CanonicalLedgerError("Ledger run index is inconsistent.");
       assertCanonicalLedgerPlanImmutable(existing.planHash, input.plan.planHash);
-      if (existing.planSnapshot !== planSnapshot(input.plan)) {
+      if (existing.planSnapshot !== canonicalLedgerPlanSnapshot(input.plan)) {
         throw new CanonicalLedgerError("The durable plan snapshot is immutable and differs.");
       }
       const stored = clone(existing);
@@ -330,7 +341,7 @@ export class InMemoryCanonicalLedgerStore implements CanonicalLedgerStore {
       planId: input.plan.planId,
       planHash: input.plan.planHash,
       importRunId: input.plan.importRunId,
-      planSnapshot: planSnapshot(input.plan),
+      planSnapshot: canonicalLedgerPlanSnapshot(input.plan),
       status: "APPROVED",
       approvalState: "APPROVED",
       attemptCount: 0,

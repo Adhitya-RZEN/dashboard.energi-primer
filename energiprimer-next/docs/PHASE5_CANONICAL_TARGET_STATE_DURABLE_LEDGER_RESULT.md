@@ -68,7 +68,7 @@ preflight resolved all 352 canonical identities in 11 target queries:
 | Invalid rows / duplicate source keys | 0 / 0 |
 | Target states read | 352 |
 | Target lookup queries | 11 |
-| Target lookup duration | 2,350.34 ms |
+| Target lookup duration | 2,331.01 ms (latest read-only run) |
 | Target diff INSERT / UPDATE | 0 / 116 |
 | Target diff NO-OP / SKIP | 185 / 50 |
 | Target diff BLOCK | 1 |
@@ -193,7 +193,7 @@ All checks in this section used read-only metadata or data `SELECT`s:
 | Supabase target | `aws-0-ap-southeast-1.pooler.supabase.com:6543`, database `postgres`, schema `public`, role `postgres`, PostgreSQL `17.6` |
 | Pooler TLS parameter | `sslmode=verify-full`; pooler backend SSL session not reported |
 | Runtime normalized baseline | `stableDataRows: 2406`; KPI/dashboard parity PASS |
-| Production schema history | PASS; only `20260901130000_production_schema_baseline` |
+| Production migration history | PASS; live `_prisma_migrations` contains the baseline and approved user-management migration; no Phase 5 ledger migration |
 | Phase 5 ledger capability | `canonical_import_runs` and `canonical_import_batches`: absent |
 | Agustus registry/state audit | PASS read-only; remains `SCHEMA_REVIEW`; zero Agustus evidence |
 | Juli target-aware preflight | Read-only completed; blocked by one `PROVENANCE_ERROR`; zero writes |
@@ -350,3 +350,449 @@ durable-ledger evidence, read-only reconciliation, and a repeat-plan
 idempotency check. Keep Agustus in `SCHEMA_REVIEW` until its mapping is
 explicitly approved.
 ```
+
+## Phase 5 Production verification continuation (2026-09-16)
+
+### Deployment verification
+
+The intended Vercel project was inspected read-only:
+
+| Evidence | Result |
+| --- | --- |
+| Project | `projek-rzen/dashboard-energi-primer` |
+| Production state | `READY` |
+| Production URL | `https://dashboard-energi-primer.vercel.app` |
+| Root directory | `energiprimer-next` |
+| Framework/build | Next.js; `npm run build` |
+| Node.js | `24.x` |
+| Deployed commit | `c2704b0235f54f102bd9a6d7795f13dbecac5a4e` |
+| Local reviewed `HEAD` | Exact SHA match |
+| Live unauthenticated GET | `401`; no operation executed |
+| Live authenticated GET | `200`, `DISCOVERY_READY`, `write=NOT_EXECUTED` |
+| Live Juli GET preflight | `200`, `BLOCKED`, `write=NOT_EXECUTED` |
+
+The live Juli route exposed the reviewed target-aware behavior: 352 target
+states were read, mapping/schema/validation passed, and the single
+`PROVENANCE_ERROR` prevented admission. Vercel Production lists the required
+runtime variable names with secret values hidden, but the Phase 5 variables
+`CANONICAL_IMPORT_LEDGER_ENABLED`,
+`GOOGLE_SHEETS_PHASE5_CANARY_AUTHORIZATION`,
+`GOOGLE_SHEETS_PHASE5_CANARY_APPROVAL_REF`, and
+`GOOGLE_SHEETS_PHASE5_CANARY_MAX_RECORDS` are absent. The deployed default
+therefore remains fail-closed.
+
+### Ledger migration verification
+
+The reviewed application migration was inspected without applying it. It
+creates only `canonical_import_runs` and `canonical_import_batches`, seven
+indexes, primary/foreign keys, and status/approval checks. It contains no
+`DROP`, `TRUNCATE`, `DELETE`, or `ALTER TABLE` statement. Production data and
+schema were not changed.
+
+Fresh Production evidence confirms:
+
+```text
+ledgerTables: []
+ledgerTablesPresent: false
+productionWrites: 0
+```
+
+The live `_prisma_migrations` table contains the completed
+`20260901130000_production_schema_baseline` and
+`20260908120000_add_user_management_data_model` migrations. The existing
+technical Production migration preflight returned `FAIL` before any deploy
+because the latter historical migration contains a controlled user backfill
+that the safety checker flags as a forbidden operation. It reported
+`migrationDeploy=NOT RUN`, `databaseWrites=0`, and `destructiveOperations=NONE`.
+This pre-existing migration-review issue is not part of the additive Phase 5
+migration and was not bypassed.
+
+No migration authorization or approved change window was available. The Phase
+5 ledger migration remains `NOT EXECUTED`.
+
+### Juli provenance investigation
+
+The following narrow read-only evidence was collected:
+
+| Evidence | Result |
+| --- | --- |
+| Production target | `biomass_targets.id=1`, `target_year=2026`, `target_ton=70020.000`, source `Google Sheets April26-BB` |
+| Historical import | `spreadsheet_import_runs.id=12`, `April26-BB`, `SUCCESS` |
+| April source range | `CO56=4509,32` under `TONASE BIOMASSA` / Unit 1 cumulative; no `Target 2026` label in the inspected range |
+| Juli source range | `CO55=Target 2026`, `CO56=70.020` |
+| Juli mapping report | `biomassTarget=70020`, `RESOLVED`, source cell `CO56` |
+
+The evidence identifies the existing April attribution as a legacy fallback
+or import ownership marker rather than proof that April supplied a target
+cell. It does not authorize changing the Production row’s provenance or
+`import_run_id`. The target therefore remains blocked pending an explicit
+provenance ownership decision and approved correction procedure.
+
+### Juli, Agustus, and canary outcome
+
+The latest Juli read-only dry-run remains:
+
+```text
+source rows / candidate / valid: 31 / 352 / 352
+invalid rows / duplicate source keys: 0 / 0
+target states / lookup queries: 352 / 11
+target diff: 0 INSERT / 116 UPDATE / 185 NO-OP / 50 SKIP / 1 BLOCK
+blocker: PROVENANCE_ERROR
+write: NOT EXECUTED
+```
+
+Agustus remains `SCHEMA_REVIEW`; its registry/state audit and Production
+state check report zero Agustus business, staging, and row-state evidence.
+No Agustus reconciliation, metadata repair, import, or canary was executed.
+
+The Production canary was not run. The ledger schema is absent, the Juli
+provenance decision is unresolved, the deployed canary variables are absent,
+and no explicit Production write authorization or approved <=25-record scope
+was available. No Production, Google Sheets, registry, staging, or normalized
+data writes occurred.
+
+### Production verification result
+
+```text
+# PHASE 5 PRODUCTION VERIFICATION RESULT
+
+Status:
+BLOCKED
+
+Production deployment:
+VERIFIED
+
+Ledger migration:
+NOT EXECUTED
+
+Production ledger schema:
+NOT VERIFIED
+
+Juli provenance:
+BLOCKED
+
+Juli preflight:
+BLOCKED
+
+Agustus:
+SCHEMA_REVIEW — BLOCKED
+
+Production canary:
+NOT EXECUTED
+
+Canary record count:
+NOT EXECUTED
+
+Gate 1 — Target-State Integrity:
+PASS
+
+Gate 2 — Durable Ledger:
+PASS
+
+Gate 3 — Restart-Safe Recovery:
+PASS
+
+Gate 4 — Target Reconciliation:
+PASS
+
+Gate 5 — Production Canary:
+NOT EXECUTED
+
+Production INSERT:
+NOT EXECUTED
+
+Production UPDATE:
+NOT EXECUTED
+
+Production DELETE:
+NOT EXECUTED
+
+Production UPSERT:
+NOT EXECUTED
+
+Schema changes:
+0
+
+Migration:
+0 applied
+
+Google Sheets writes:
+0
+
+Reconciliation:
+NOT EXECUTED
+
+Automation readiness:
+2/4
+
+Critical findings:
+1. The reviewed application ledger migration is additive and safe by inspection, but its two tables are absent from Production; the existing technical migration preflight also requires separate review of the historical user-management backfill.
+2. The Production 2026 biomass target is attributed to April26-BB/import run 12, while Juli26-BB contains the explicit `Target 2026` source cell `CO56=70.020`; the ownership correction is not approved.
+3. Agustus26-BB remains SCHEMA_REVIEW with zero Production evidence and was not bypassed.
+
+Remaining blockers:
+1. Obtain an approved change window and migration authorization, resolve the historical migration-preflight finding, then apply only the reviewed additive ledger migration and verify its schema.
+2. Resolve Juli provenance, obtain explicit write authorization and a <=25-record scope, then rerun preflight before considering a canary.
+
+Documentation:
+UPDATED
+
+Next step:
+Complete the separately approved migration/provenance decisions, rerun all read-only gates, and only then consider a narrowly scoped explicit canary. Keep Agustus in SCHEMA_REVIEW.
+```
+
+## Phase 5.2 Production ledger deployment (2026-09-16)
+
+### Authorization and scope
+
+The Phase 5.2 operator authorization explicitly approved the Production
+database change for the reviewed additive ledger migration only. It did not
+authorize Juli or Agustus imports, provenance changes, a canary, unrelated
+migrations, historical user-backfill replay, or destructive schema changes.
+
+### Production target and final precheck
+
+The intended Supabase Production target was verified as PostgreSQL 17.6,
+database `postgres`, schema `public`, role `postgres`. The direct Supabase
+endpoint resolves only to IPv6 in this operator environment and was
+unreachable. The migration therefore used the same verified Supabase target
+through the shared session pooler on port `5432`, with `sslmode=require` and no
+`pgbouncer=true`; the transaction pooler was not used. This is the supported
+IPv4 session alternative for Prisma migration connectivity.
+
+Before deployment:
+
+```text
+canonical_import_runs: ABSENT
+canonical_import_batches: ABSENT
+```
+
+The exact reviewed migration was
+`prisma/migrations/20260916100000_add_canonical_import_ledger/migration.sql`.
+Its normalized SHA-256 was
+`4a46a23a1a178fed06dbce3d6b355c4c0ad007617defb437848c1b835a07f33c`.
+The audit found exactly the two intended tables, seven explicit indexes,
+primary/foreign keys, status/approval checks, and no `DROP`, `TRUNCATE`,
+`DELETE`, `UPDATE`, `INSERT`, or `UPSERT` operation.
+
+The historical migration
+`20260908120000_add_user_management_data_model` was verified as already
+applied, finished, and checksum-matching. Its expected user-management state
+is present: two users, zero null usernames, zero username-backfill mismatches,
+zero invalid roles/statuses, zero duplicate username candidates, and the
+`users`/`user_audit_logs` schema with its foreign keys and indexes. The
+historical migration was not replayed, altered, resolved, or otherwise
+modified.
+
+### Isolated migration execution
+
+The migration was applied at `2026-09-16T05:41:24.539Z` and completed at
+`2026-09-16T05:41:24.831Z` (`13:41:24.539` to `13:41:24.831` Asia/Makassar).
+The execution used `prisma migrate deploy` against a temporary migration
+directory containing the root application schema and only the exact reviewed
+ledger migration. The repository migration directory was untouched. The
+deployment exited `0` and reported only
+`20260916100000_add_canonical_import_ledger` as applied.
+
+### Post-deployment schema and history verification
+
+```text
+canonical_import_runs: VERIFIED
+canonical_import_batches: VERIFIED
+```
+
+Read-only metadata verification confirmed:
+
+- `canonical_import_runs`: 33 columns;
+- `canonical_import_batches`: 19 columns;
+- 7 reviewed indexes plus 2 primary-key indexes;
+- 6 expected primary/foreign/check constraints;
+- `canonical_import_batches.run_id` references `canonical_import_runs.id`
+  with `RESTRICT` on delete and `CASCADE` on update;
+- all reviewed defaults, types, nullability, and timestamp precision match the
+  Prisma schema and migration;
+- RLS is enabled on both public tables, with no `anon` or `authenticated`
+  table grant; only `postgres` and `service_role` are present in the ACL;
+- Prisma `CanonicalImportRun` and `CanonicalImportBatch` read delegates
+  resolve successfully and return no rows; zero verification rows were
+  created.
+
+Production `_prisma_migrations` now contains exactly three finished,
+non-rolled-back entries in order:
+
+```text
+20260901130000_production_schema_baseline
+20260908120000_add_user_management_data_model
+20260916100000_add_canonical_import_ledger
+```
+
+The historical user-management checksum remains
+`c1ec53d7a1c41a8fc587ee0ba683e79ad86a54b10d13da5effd2861a0416004e`; the new
+ledger checksum matches the reviewed migration exactly.
+
+### Business-data and route safety
+
+The post-deployment read-only counts match the recorded Production baseline:
+
+```text
+spreadsheet_import_runs       14
+spreadsheet_import_staging    3919
+biomass_receipts              49
+coal_receipts                 7
+coal_consumption              636
+coal_stock                    212
+biomass_consumptions          636
+solar_receipts                7
+solar_consumptions            212
+hop_readings                  636
+biomass_targets               1
+biomass_cumulative_snapshots  7
+users                         2
+user_audit_logs               2
+```
+
+The only authorized Production change was creation of the two ledger tables
+and their schema objects. Production business `INSERT`, `UPDATE`, `DELETE`,
+and `UPSERT` counts are all `0`; Google Sheets writes are `0`.
+
+The deployed general GET returned `DISCOVERY_READY` with
+`write=NOT_EXECUTED`. The deployed Juli GET returned `BLOCKED` with
+`PROVENANCE_ERROR` and `preflight_blocked`, with `write=NOT_EXECUTED`. The
+Agustus read-only state check remains clean with zero Production evidence and
+`Agustus26-BB = SCHEMA_REVIEW`.
+
+### Phase 5.2 result
+
+```text
+# PHASE 5.2 PRODUCTION LEDGER DEPLOYMENT RESULT
+
+Status:
+VERIFIED
+
+Production target:
+VERIFIED
+
+Migration authorization:
+AUTHORIZED
+
+Migration:
+APPLIED
+
+Migration name:
+20260916100000_add_canonical_import_ledger
+
+Migration type:
+ADDITIVE
+
+Historical user-management migration:
+ALREADY APPLIED - REVIEWED
+
+Historical migration replay:
+NOT EXECUTED
+
+Migration isolation:
+PASS
+
+canonical_import_runs:
+VERIFIED
+
+canonical_import_batches:
+VERIFIED
+
+Production ledger schema:
+VERIFIED
+
+Migration history:
+VERIFIED
+
+Application ledger compatibility:
+VERIFIED
+
+Production business INSERT:
+0
+
+Production business UPDATE:
+0
+
+Production business DELETE:
+0
+
+Production business UPSERT:
+0
+
+Production schema changes:
+2 tables
+
+Google Sheets writes:
+0
+
+Juli provenance:
+BLOCKED
+
+Juli preflight:
+BLOCKED
+
+Agustus:
+SCHEMA_REVIEW - BLOCKED
+
+Production canary:
+NOT EXECUTED
+
+Reconciliation:
+NOT EXECUTED - no business canary performed
+
+Automation readiness:
+2/4
+
+Gate 1 - Migration Safety:
+PASS
+
+Gate 2 - Migration Isolation:
+PASS
+
+Gate 3 - Production Ledger Schema:
+PASS
+
+Gate 4 - Application Compatibility:
+PASS
+
+Gate 5 - Business Data Safety:
+PASS
+
+Validation:
+- TypeScript: PASS
+- Lint: PASS
+- Build: PASS
+- Prisma: PASS
+- Phase 2: PASS
+- Phase 3: PASS
+- Phase 4: PASS
+- Phase 5: PASS
+- Phase 5.1: PASS
+- Phase 5.2: PASS
+- Production read-only: PASS_WITH_REVIEW - session-mode verification passed; direct IPv6 endpoint was unreachable from the operator network
+
+Critical findings:
+1. The ledger migration was applied successfully through an isolated session-mode deployment; the direct IPv6 endpoint remains unavailable from this operator network.
+2. The historical user-management migration is already applied and its resulting schema/backfill state is verified; it was not replayed despite the technical checker flagging its controlled backfill.
+3. Juli provenance remains blocked and Agustus remains SCHEMA_REVIEW; neither was bypassed.
+
+Remaining blockers:
+1. Juli provenance
+2. Explicit business-data canary authorization/scope
+3. Agustus SCHEMA_REVIEW
+
+Documentation:
+UPDATED
+
+Next step:
+Proceed only with the separately authorized Juli provenance-resolution and <=25-record canary phase. Keep Agustus in SCHEMA_REVIEW and do not run a full synchronization.
+```
+
+## Phase 6 cross-phase update - Juli provenance and controlled canary
+
+Phase 5.2 ledger infrastructure remains verified. The separately authorized Phase 6 Juli canary reached the existing canonical POST boundary with the exact 22-record `Juli26-BB_FINAL_DAY_AND_AGGREGATES_V1` scope. It committed 15 business updates and 7 no-ops, with zero inserts, deletes, Google Sheets writes, Agustus writes, schema changes, migrations, and unplanned business writes.
+
+The live Juli provenance and mapping were approved. The canary's initial post-write reconciliation stopped on legacy two-decimal Production storage precision, leaving ledger run 1 and batch 1 in `RECONCILIATION_REQUIRED` / `RECOVERY_REQUIRED`. A read-only recheck after the comparator fix passes, but the state-only Production recovery and idempotency check were not executed without explicit approval for that new Production metadata mutation.
+
+Phase 6 status: `BLOCKED` pending that narrowly scoped recovery approval. Agustus remains `SCHEMA_REVIEW - BLOCKED`; no full synchronization is authorized. See `docs/PHASE6_JULI_PROVENANCE_CONTROLLED_CANARY_RESULT.md` for the complete evidence and exact source-cell mapping.

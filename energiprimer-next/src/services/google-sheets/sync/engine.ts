@@ -9,6 +9,7 @@ import {
   readAndParseDynamicWorksheet,
   type DynamicWorksheetReadResult,
 } from "@/services/google-sheets/dynamic/reader";
+import { getGoogleSheetsConfig } from "@/lib/google-sheets";
 import {
   buildGoogleSheetsImportPlanFromReadResult,
 } from "@/services/google-sheets/import/plan";
@@ -61,6 +62,14 @@ import { PrismaCanonicalLedgerStore } from "@/services/google-sheets/canonical/l
 import { createCompatibilityCanonicalBatchRepository } from "@/services/google-sheets/canonical/compatibility-repository";
 import { sourceKeyForCanonicalRecord } from "@/services/google-sheets/canonical/compatibility-adapter";
 import { buildTargetAwareCanonicalPlan } from "./canonical-target-planning";
+import {
+  juliCanaryScopeForCompatibilityPlan,
+  JULI26_CANARY_SHEET_ID,
+  JULI26_CANARY_WORKSHEET,
+} from "./juli-canary-scope";
+import {
+  JULI26_TARGET_PROVENANCE_RESOLUTION,
+} from "../canonical/target-state";
 import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/profiles";
 import { classifySyncError } from "./error-classification";
 import { assertProductionCanaryAuthorization } from "./production-canary";
@@ -100,6 +109,8 @@ export type IncrementalSyncOptions = {
   canonicalImportRunId?: string;
   /** Required only for the explicit Phase 5 durable execution boundary. */
   durableLedger?: "REQUIRED" | "DISABLED";
+  /** Phase 6's closed Juli26-BB canary selector. */
+  canary?: true;
   requestId?: string;
 };
 
@@ -283,6 +294,18 @@ async function loadApprovedCanonicalSchema(sourceId?: bigint) {
     },
   });
   return resolveApprovedCanonicalSchema(candidates, { sourceId });
+}
+
+function assertProductionJuliCanaryScope(options: IncrementalSyncOptions) {
+  const worksheet = options.worksheetTitle?.trim().toLocaleLowerCase("en-US");
+  if (
+    options.canary !== true ||
+    worksheet !== JULI26_CANARY_WORKSHEET.toLocaleLowerCase("en-US") ||
+    (options.worksheetKey !== undefined && options.worksheetKey !== JULI26_CANARY_SHEET_ID) ||
+    (options.scope !== undefined && options.scope !== "all")
+  ) {
+    throw new Error("Production writes require the exact Juli26-BB canary scope.");
+  }
 }
 
 async function autoAdmitCanonicalWorksheet(
@@ -586,11 +609,12 @@ async function syncWorksheet(
     };
   }
 
+  let executionPlan = plan;
   let canonicalPlan: Awaited<ReturnType<typeof buildTargetAwareCanonicalPlan>>["canonicalPlan"];
   try {
     const period = parseBBWorksheetName(worksheet.worksheetTitle);
     if (!period) throw new Error("Worksheet period could not be reconstructed.");
-    const targetAware = await buildTargetAwareCanonicalPlan({
+    const planningInput = {
       importRunId: options.canonicalImportRunId?.trim() || importRunId,
       plan,
       sourceKey,
@@ -601,6 +625,16 @@ async function syncWorksheet(
       sourceRange: plan.sourceRange,
       schemaFingerprint: schemaSnapshot.hash,
       mapping,
+    };
+    if (options.canary === true) {
+      executionPlan = juliCanaryScopeForCompatibilityPlan(planningInput).plan;
+    }
+    const targetAware = await buildTargetAwareCanonicalPlan({
+      ...planningInput,
+      plan: executionPlan,
+      ...(options.canary === true
+        ? { provenanceResolution: JULI26_TARGET_PROVENANCE_RESOLUTION }
+        : {}),
     });
     canonicalPlan = targetAware.canonicalPlan;
     if (
@@ -614,7 +648,7 @@ async function syncWorksheet(
     return {
       ...base,
       status: "SCHEMA_REVIEW",
-      rowsScanned: plan.stagingRows.length,
+      rowsScanned: executionPlan.stagingRows.length,
       inserted: 0,
       updated: 0,
       skipped: 0,
@@ -635,7 +669,7 @@ async function syncWorksheet(
     return {
       ...base,
       status: "SCHEMA_REVIEW",
-      rowsScanned: plan.stagingRows.length,
+      rowsScanned: executionPlan.stagingRows.length,
       inserted: canonicalPlan.operationCounts.INSERT,
       updated: canonicalPlan.operationCounts.UPDATE,
       skipped: canonicalPlan.operationCounts.SKIP,
@@ -658,13 +692,13 @@ async function syncWorksheet(
     where: { worksheetId: worksheet.id },
     select: { sourceKey: true, contentHash: true },
   });
-  const classification = classifySyncRows(plan.stagingRows, existing);
+  const classification = classifySyncRows(executionPlan.stagingRows, existing);
   if (classification.duplicates.length > 0) {
     await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
     return {
       ...base,
       status: "SCHEMA_REVIEW",
-      rowsScanned: plan.stagingRows.length,
+      rowsScanned: executionPlan.stagingRows.length,
       inserted: classification.inserted,
       updated: classification.updated,
       skipped: classification.skipped,
@@ -695,7 +729,7 @@ async function syncWorksheet(
       .filter((item) => item.operation === "INSERT" || item.operation === "UPDATE")
       .map((item) => sourceKeyForCanonicalRecord(item.record)),
   );
-  const writePlan = filterImportPlanToSourceKeys(plan, changedKeys);
+  const writePlan = filterImportPlanToSourceKeys(executionPlan, changedKeys);
   try {
     if (changedKeys.size > 0) {
       if (options.durableLedger === "REQUIRED") {
@@ -703,10 +737,11 @@ async function syncWorksheet(
           throw new Error("canonical_durable_ledger_not_enabled");
         }
         const repository = createCompatibilityCanonicalBatchRepository({
-          basePlan: plan,
+          basePlan: executionPlan,
           allowNonLocalDatabase: options.allowNonLocalDatabase === true,
           databaseTarget: options.databaseTarget,
           productionTarget: options.productionTarget,
+          ...(options.canary === true ? { canary: true as const } : {}),
         });
         const durableResult = await withSyncDiagnostic(
           diagnostic,
@@ -769,7 +804,7 @@ async function syncWorksheet(
       status: requiresReconciliation
         ? "RECONCILIATION_REQUIRED"
         : "FAILED",
-      rowsScanned: plan.stagingRows.length,
+      rowsScanned: executionPlan.stagingRows.length,
       inserted: canonicalPlan.operationCounts.INSERT,
       updated: canonicalPlan.operationCounts.UPDATE,
       skipped: canonicalPlan.operationCounts.SKIP,
@@ -785,7 +820,7 @@ async function syncWorksheet(
   return {
     ...base,
     status: "SUCCESS",
-    rowsScanned: plan.stagingRows.length,
+    rowsScanned: executionPlan.stagingRows.length,
     inserted: canonicalPlan.operationCounts.INSERT,
     updated: canonicalPlan.operationCounts.UPDATE,
     skipped: canonicalPlan.operationCounts.SKIP,
@@ -796,6 +831,11 @@ async function syncWorksheet(
 export async function runGoogleSheetsIncrementalSync(
   options: IncrementalSyncOptions = {},
 ): Promise<IncrementalSyncResult> {
+  if (options.databaseTarget === "SUPABASE_PRODUCTION") {
+    // This engine is also callable without the HTTP/CLI wrappers. Keep the
+    // Phase 6 scope restriction at the deepest Production entry point.
+    assertProductionJuliCanaryScope(options);
+  }
   // Validate the target before source discovery can create or update registry
   // rows. Production is re-verified again by the commit boundary immediately
   // before normalized writes.
@@ -818,29 +858,38 @@ export async function runGoogleSheetsIncrementalSync(
   const discoveryStartedAt = diagnosticNow();
   let prepared: Awaited<
     ReturnType<typeof prepareGoogleSheetsWorksheetDiscovery>
-  >;
-  try {
-    prepared = await withSyncRetry((attempt) =>
-      prepareGoogleSheetsWorksheetDiscovery({ requestId, attempt }),
-    );
-  } catch (error) {
-    emitSyncDiagnostic({
-      context: diagnostic,
-      stage: "discovery_total",
-      status: "FAIL",
-      durationMs: diagnosticDurationMs(discoveryStartedAt),
-      ...safeSyncErrorDetails(error),
-    });
-    throw error;
-  }
-
+  > | null = null;
+  let sourceKey: string;
+  let externalId: string;
   let sourceId: bigint;
   try {
-    sourceId = await ensureSyncSourceForDiscovery(
-      prepared.sourceKey,
-      prepared.externalId,
-      diagnostic,
-    );
+    if (syncOptions.canary === true) {
+      // A Phase 6 canary must use the already registered source/worksheet.
+      // Global discovery persistence would touch unrelated tabs, including
+      // Agustus, before the closed canary selector is applied.
+      const config = getGoogleSheetsConfig();
+      sourceKey = stableGoogleSheetsSourceKey(config.spreadsheetId);
+      externalId = config.spreadsheetId;
+      const registeredSource = await prisma.syncSource.findUnique({
+        where: { sourceKey },
+        select: { id: true, status: true },
+      });
+      if (!registeredSource || registeredSource.status !== "ACTIVE") {
+        throw new Error("The exact Juli canary source is not registered ACTIVE.");
+      }
+      sourceId = registeredSource.id;
+    } else {
+      prepared = await withSyncRetry((attempt) =>
+        prepareGoogleSheetsWorksheetDiscovery({ requestId, attempt }),
+      );
+      sourceKey = prepared.sourceKey;
+      externalId = prepared.externalId;
+      sourceId = await ensureSyncSourceForDiscovery(
+        prepared.sourceKey,
+        prepared.externalId,
+        diagnostic,
+      );
+    }
   } catch (error) {
     emitSyncDiagnostic({
       context: diagnostic,
@@ -909,17 +958,29 @@ export async function runGoogleSheetsIncrementalSync(
 
   try {
     try {
-      await persistGoogleSheetsWorksheetDiscovery(
-        prepared,
-        sourceId,
-        diagnostic,
-      );
-      emitSyncDiagnostic({
-        context: diagnostic,
-        stage: "discovery_total",
-        status: "PASS",
-        durationMs: diagnosticDurationMs(discoveryStartedAt),
-      });
+      if (syncOptions.canary === true) {
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "discovery_total",
+          status: "PASS",
+          durationMs: diagnosticDurationMs(discoveryStartedAt),
+          errorCode: "CANARY_SCOPED_DISCOVERY_SKIPPED",
+        });
+      } else if (prepared) {
+        await persistGoogleSheetsWorksheetDiscovery(
+          prepared,
+          sourceId,
+          diagnostic,
+        );
+        emitSyncDiagnostic({
+          context: diagnostic,
+          stage: "discovery_total",
+          status: "PASS",
+          durationMs: diagnosticDurationMs(discoveryStartedAt),
+        });
+      } else {
+        throw new Error("Worksheet discovery preparation is missing.");
+      }
     } catch (error) {
       emitSyncDiagnostic({
         context: diagnostic,
@@ -984,6 +1045,12 @@ export async function runGoogleSheetsIncrementalSync(
         syncOptions,
         openSchemaReviewWorksheetIds,
       );
+      if (
+        syncOptions.canary === true &&
+        (selected.length !== 1 || selected[0]?.worksheetKey !== JULI26_CANARY_SHEET_ID)
+      ) {
+        throw new Error("The selected worksheet is not the exact Juli26-BB canary tab.");
+      }
       const canonicalCandidates = worksheets.filter(
         (worksheet) =>
           normalizeWorksheetName(worksheet.worksheetTitle) ===
@@ -1001,10 +1068,12 @@ export async function runGoogleSheetsIncrementalSync(
       );
       let canonicalSchema = canonicalResolution.schemaSnapshot;
       if (canonicalCandidates.length > 1) canonicalSchema = null;
-      canonicalSchema = await autoAdmitCanonicalWorksheet(
-        canonicalWorksheet,
-        canonicalSchema,
-      );
+      if (syncOptions.canary !== true) {
+        canonicalSchema = await autoAdmitCanonicalWorksheet(
+          canonicalWorksheet,
+          canonicalSchema,
+        );
+      }
       if (
         (syncOptions.worksheetKey || syncOptions.worksheetTitle) &&
         selected.length !== 1
@@ -1055,8 +1124,8 @@ export async function runGoogleSheetsIncrementalSync(
             syncOptions,
             canonicalSchema,
             syncRun.id.toString(),
-            prepared.sourceKey,
-            prepared.externalId,
+            sourceKey,
+            externalId,
           );
           emitSyncDiagnostic({
             context: diagnostic,

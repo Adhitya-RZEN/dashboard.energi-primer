@@ -221,6 +221,12 @@ function preflightReport(preflight: WorksheetPreflightResult) {
     },
     targetState: preflight.targetState,
     targetDiff: preflight.targetDiff,
+    scope: {
+      mode: preflight.canary.enabled ? "JULI26_CONTROLLED_CANARY" : "FULL_SOURCE_READ",
+      scopeId: preflight.canary.scopeId,
+      sourceRecords: preflight.canary.sourceRecords,
+      selectedRecords: preflight.canary.selectedRecords,
+    },
     admission: {
       admitted:
         preflight.status === "READY" &&
@@ -277,7 +283,17 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const worksheet = url.searchParams.get("worksheet");
     if (worksheet !== null) {
-      const preflight = await prepareWorksheetPreflight({ worksheet });
+      const canary = url.searchParams.get("canary");
+      if (canary !== null && canary !== "true") {
+        return NextResponse.json(
+          { status: "INVALID_REQUEST", message: "canary must be true when supplied." },
+          { status: 400 },
+        );
+      }
+      const preflight = await prepareWorksheetPreflight({
+        worksheet,
+        ...(canary === "true" ? { canary: true as const } : {}),
+      });
       emitSyncDiagnostic({
         context,
         stage: "sync_complete",
@@ -333,7 +349,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         status: "INVALID_REQUEST",
-        message: "action, worksheet, and canonical importPlanId are required.",
+        message: "action, worksheet, canonical importPlanId, and canary=true are required.",
       },
       { status: 400 },
     );
@@ -374,6 +390,7 @@ export async function POST(request: Request) {
         failed: result.syncResult.failed,
       },
       verification: result.verification,
+      idempotency: result.idempotency,
     });
   } catch (error) {
     if (error instanceof ControlledImportExecutionError) {

@@ -122,6 +122,7 @@ async function main() {
     );
     preflight = await prepareWorksheetPreflight({
       worksheet: argumentsList.worksheet,
+      ...(argumentsList.canary ? { canary: true as const } : {}),
     });
   } catch (error) {
     printReport({
@@ -179,6 +180,7 @@ async function main() {
       : null,
     targetState: preflight.targetState,
     targetDiff: preflight.targetDiff,
+    scope: preflight.canary,
     idempotency: {
       newRecords: preflight.classification.newRecords,
       existingRecords: preflight.classification.existingRecords,
@@ -196,6 +198,24 @@ async function main() {
     return;
   }
   if (argumentsList.dryRun) return;
+
+  if (
+    argumentsList.canary !== true ||
+    argumentsList.worksheet.trim().toLocaleLowerCase("en-US") !== "juli26-bb"
+  ) {
+    printReport({
+      status: "BLOCKED",
+      phase: "PRODUCTION_CANARY",
+      environment: "LOCAL",
+      target: "SUPABASE_PRODUCTION",
+      worksheet: preflight.worksheet.effective,
+      reason: "CANARY_SCOPE_REQUIRED",
+      write: "NOT_EXECUTED",
+      productionWrites: 0,
+    });
+    process.exitCode = 2;
+    return;
+  }
 
   try {
     assertProductionCanaryAuthorization(preflight.canonicalPlan?.items.length ?? 0);
@@ -239,6 +259,7 @@ async function main() {
       expectedCanonicalPlanId: preflight.canonicalPlan?.planId,
       canonicalImportRunId: preflight.canonicalPlan?.importRunId,
       durableLedger: "REQUIRED",
+      ...(argumentsList.canary ? { canary: true as const } : {}),
     });
     const { verifyWorksheetSyncAfterWrite } = await import(
       "../src/services/google-sheets/sync/post-write-verification"
@@ -260,28 +281,26 @@ async function main() {
       skipped: 0,
     };
     if (process.argv.includes("--verify-idempotency")) {
-      const repeat = await runGoogleSheetsIncrementalSync({
-        triggerType: "verification",
-        worksheetTitle: preflight.worksheet.effective,
-        scope: "all",
-        databaseTarget: "SUPABASE_PRODUCTION",
-        productionTarget,
-        expectedPlanFingerprint: preflight.expectedPlanFingerprint,
-        expectedCanonicalPlanId: preflight.canonicalPlan?.planId,
-        canonicalImportRunId: preflight.canonicalPlan?.importRunId,
-        durableLedger: "REQUIRED",
-      });
+      const { verifyImmutableCanonicalPlanIdempotency } = await import(
+        "../src/services/google-sheets/canonical/idempotency"
+      );
+      const repeat = result.status === "SUCCESS" && verification.status === "PASS"
+        ? await verifyImmutableCanonicalPlanIdempotency({
+            plan: preflight.canonicalPlan!,
+            basePlan: preflight.executionPlan,
+            productionTarget,
+          })
+        : null;
       repeatVerification = {
         status:
-          repeat.status === "SUCCESS" &&
-          repeat.inserted === 0 &&
-          repeat.updated === 0 &&
-          repeat.skipped === repeat.rowsScanned
+          repeat?.status === "PASS"
             ? "PASS"
             : "FAIL",
-        inserted: repeat.inserted,
-        updated: repeat.updated,
-        skipped: repeat.skipped,
+        inserted: repeat?.businessWrites ?? 0,
+        updated: 0,
+        skipped: repeat?.samePlan && repeat.sameLedgerRun
+          ? preflight.executionPlan.stagingRows.length
+          : 0,
       };
     }
 

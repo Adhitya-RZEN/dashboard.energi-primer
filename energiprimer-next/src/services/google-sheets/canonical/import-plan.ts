@@ -72,6 +72,14 @@ function operationFor(
       return { operation: "BLOCK", issues: ["IDENTITY_CONFLICT"] };
     }
   }
+  if (
+    existing.sourceIdentity.worksheetTitleSnapshot.trim().toLocaleLowerCase("en-US") !==
+    sourceManifest.worksheetTitleSnapshot.trim().toLocaleLowerCase("en-US")
+  ) {
+    // A resolved source-ownership change is a writable provenance update even
+    // when the business value itself is unchanged.
+    return { operation: "UPDATE", issues: [] };
+  }
   return {
     operation: existing.contentHash === record.contentHash ? "SKIP" : "UPDATE",
     issues: [],

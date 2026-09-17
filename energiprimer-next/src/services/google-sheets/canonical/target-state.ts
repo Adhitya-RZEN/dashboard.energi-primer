@@ -12,6 +12,9 @@ import type {
 import { businessIdentityForValue, contentHashForRecord, stableCanonicalHash } from "./identity";
 
 export const TARGET_NOT_AVAILABLE = "NOT AVAILABLE" as const;
+export const JULI26_TARGET_PROVENANCE_RESOLUTION =
+  "JULI26_TARGET_2026_EXPLICIT_CO56" as const;
+const JULI26_APPROVED_TARGET_IMPORT_RUN_ID = "15" as const;
 
 export type TargetScalar = string | number | null;
 export type CanonicalTargetValues = Readonly<Record<string, TargetScalar>>;
@@ -49,6 +52,22 @@ export type CanonicalTargetState = {
   blockingIssues: readonly CanonicalErrorCode[];
 };
 
+/**
+ * The legacy coal target tables persist these fields at two decimal places.
+ * Keep the canonical source value and its provenance at source precision, but
+ * compare the target using the precision that the existing table can retain.
+ */
+function targetStorageScale(entity: CanonicalEntity) {
+  return entity === "coal_consumption" || entity === "coal_stock" ? 2 : null;
+}
+
+function targetStorageValue(entity: CanonicalEntity, value: TargetScalar): TargetScalar {
+  const scale = targetStorageScale(entity);
+  if (scale === null || value === null) return value;
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? Number(numeric.toFixed(scale)) : value;
+}
+
 export type CanonicalTargetDiffOperation =
   | "INSERT"
   | "UPDATE"
@@ -85,6 +104,74 @@ export type CanonicalTargetReconciliationResult = {
   verifiedAt: string;
 };
 
+function normalizedWorksheet(value: string) {
+  return value.trim().toLocaleLowerCase("en-US");
+}
+
+/**
+ * Resolves one known legacy attribution only when the live Juli source and
+ * the current Production target row match the approved evidence exactly.
+ * Any deviation remains an exception and must stay blocked.
+ */
+export function resolveJuli26TargetProvenance(
+  record: CanonicalRecord,
+  state: CanonicalTargetState,
+) {
+  const value = record.value as CanonicalValueByEntity["biomass_target"];
+  const exactSource =
+    record.entity === "biomass_target" &&
+    value.targetYear === 2026 &&
+    value.targetTon === 70020 &&
+    normalizedWorksheet(record.source.worksheetTitleSnapshot) ===
+      normalizedWorksheet("Juli26-BB") &&
+    record.source.observationKind === "SOURCE_CELL" &&
+    record.source.granularity === "CELL" &&
+    record.source.cellAddress?.toLocaleUpperCase("en-US") === "CO56" &&
+    record.source.row === 56 &&
+    record.source.column === 93 &&
+    record.source.rawDisplayValue?.trim() === "70.020" &&
+    record.source.mappingSourceKind === "SEMANTIC_PATH" &&
+    (record.source.mappingAuthorization === "APPROVED_EXACT" ||
+      record.source.mappingAuthorization === "APPROVED_STRUCTURAL");
+  const exactLegacyState =
+    state.entity === "biomass_target" &&
+    state.targetModel === "biomass_targets" &&
+    state.existence === "PRESENT" &&
+    state.matchedRowCount === 1 &&
+    state.targetId === "1" &&
+    state.values.targetTon === 70020 &&
+    normalizedWorksheet(state.provenance.worksheetTitle) ===
+      normalizedWorksheet("April26-BB") &&
+    state.provenance.importRunId === "12" &&
+    state.provenance.conflict;
+  const alreadyApprovedJuliState =
+    state.entity === "biomass_target" &&
+    state.targetModel === "biomass_targets" &&
+    state.existence === "PRESENT" &&
+    state.matchedRowCount === 1 &&
+    state.targetId === "1" &&
+    state.values.targetTon === 70020 &&
+    state.provenance.authority === "GOOGLE_SHEETS" &&
+    normalizedWorksheet(state.provenance.worksheetTitle) ===
+      normalizedWorksheet("Juli26-BB") &&
+    state.provenance.importRunId === JULI26_APPROVED_TARGET_IMPORT_RUN_ID &&
+    !state.provenance.conflict;
+
+  if (!exactSource || (!exactLegacyState && !alreadyApprovedJuliState)) {
+    throw new Error(
+      `${JULI26_TARGET_PROVENANCE_RESOLUTION} rejected: evidence does not match the approved legacy attribution.`,
+    );
+  }
+
+  return {
+    ...state,
+    provenance: { ...state.provenance, conflict: false },
+    blockingIssues: state.blockingIssues.filter(
+      (issue) => issue !== "PROVENANCE_ERROR",
+    ),
+  };
+}
+
 const TARGET_MODELS: Readonly<Record<CanonicalEntity, string>> = {
   biomass_consumption: "biomass_consumptions",
   coal_consumption: "coal_consumption",
@@ -114,11 +201,22 @@ export function comparableTargetValues(
   switch (record.entity) {
     case "biomass_consumption":
     case "coal_consumption":
-      return { quantityTon: (value as CanonicalValueByEntity["biomass_consumption"]).quantityTon };
+      return {
+        quantityTon: targetStorageValue(
+          record.entity,
+          (value as CanonicalValueByEntity["biomass_consumption"]).quantityTon,
+        ),
+      };
     case "coal_stock":
       return {
-        closingStock: (value as CanonicalValueByEntity["coal_stock"]).closingStock,
-        consumed: (value as CanonicalValueByEntity["coal_stock"]).consumed,
+        closingStock: targetStorageValue(
+          record.entity,
+          (value as CanonicalValueByEntity["coal_stock"]).closingStock,
+        ),
+        consumed: targetStorageValue(
+          record.entity,
+          (value as CanonicalValueByEntity["coal_stock"]).consumed,
+        ),
       };
     case "biomass_receipt":
       return {
@@ -241,12 +339,16 @@ export function classifyCanonicalTargetDiff(
   }
 
   const same = targetValuesMatch(expectedValues, state.values);
+  const provenanceUpdate =
+    state.provenance.worksheetTitle !== TARGET_NOT_AVAILABLE &&
+    normalizedWorksheet(state.provenance.worksheetTitle) !==
+      normalizedWorksheet(record.source.worksheetTitleSnapshot);
   return {
     entity: record.entity,
     targetModel: targetModelForEntity(record.entity),
     businessKey: record.businessIdentity.canonicalKey,
-    operation: same ? "NO-OP" : "UPDATE",
-    canonicalOperation: same ? "SKIP" : "UPDATE",
+    operation: same && !provenanceUpdate ? "NO-OP" : "UPDATE",
+    canonicalOperation: same && !provenanceUpdate ? "SKIP" : "UPDATE",
     expectedValues,
     actualValues: state.values,
     existence: state.existence,
@@ -258,21 +360,37 @@ function targetSourceIdentity(
   record: CanonicalRecord,
   state: CanonicalTargetState,
 ): SourceIdentity {
-  return state.provenance.sourceKey === TARGET_NOT_AVAILABLE
-    ? record.sourceIdentity
-    : {
-        sourceKey: state.provenance.sourceKey,
-        spreadsheetId: state.provenance.spreadsheetId,
-        sheetId: state.provenance.sheetId,
-        worksheetTitleSnapshot: state.provenance.worksheetTitle,
-        sourceOccurrenceKey: record.sourceOccurrenceKey,
-        mappingVersion: record.mappingVersion,
-        schemaVersion: record.schemaVersion,
-      };
+  if (state.provenance.worksheetTitle === TARGET_NOT_AVAILABLE) {
+    return record.sourceIdentity;
+  }
+  if (state.provenance.sourceKey === TARGET_NOT_AVAILABLE) {
+    return {
+      ...record.sourceIdentity,
+      // The target table stores a worksheet title rather than a stable source
+      // key. Preserve that observed ownership so a resolved provenance change
+      // becomes an explicit UPDATE in the canonical plan.
+      worksheetTitleSnapshot: state.provenance.worksheetTitle,
+    };
+  }
+  return {
+    sourceKey: state.provenance.sourceKey,
+    spreadsheetId: state.provenance.spreadsheetId,
+    sheetId: state.provenance.sheetId,
+    worksheetTitleSnapshot: state.provenance.worksheetTitle,
+    sourceOccurrenceKey: record.sourceOccurrenceKey,
+    mappingVersion: record.mappingVersion,
+    schemaVersion: record.schemaVersion,
+  };
 }
 
 function targetValueForContentHash(record: CanonicalRecord, state: CanonicalTargetState) {
   if (!state.canonicalValue) return record.value;
+  // Legacy target tables may retain less numeric precision than the source.
+  // When storage-normalized values already match, hash the canonical source
+  // value so a repeat preflight is a SKIP rather than a perpetual UPDATE.
+  if (targetValuesMatch(comparableTargetValues(record), state.values)) {
+    return record.value;
+  }
   return state.canonicalValue;
 }
 

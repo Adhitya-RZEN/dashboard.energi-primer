@@ -11,6 +11,7 @@ import {
   assertCanonicalLedgerBatchManifests,
   assertCanonicalLedgerBatchManifestsMatch,
   assertCanonicalLedgerPlanImmutable,
+  canonicalLedgerPlanSnapshot,
   CanonicalLedgerError,
   transitionCanonicalLedgerBatch,
   transitionCanonicalLedgerRun,
@@ -141,10 +142,6 @@ function mapRun(row: {
   };
 }
 
-function planSnapshot(plan: CanonicalImportPlan) {
-  return JSON.stringify(plan);
-}
-
 async function loadById(runId: string) {
   if (!/^\d+$/u.test(runId)) throw new CanonicalLedgerError("Durable ledger run id is invalid.");
   const row = await prisma.canonicalImportRun.findUnique({
@@ -172,7 +169,7 @@ export class PrismaCanonicalLedgerStore implements CanonicalLedgerStore {
     now: Date;
   }) {
     assertCanonicalLedgerBatchManifests(input.plan, input.batches);
-    const snapshot = planSnapshot(input.plan);
+    const snapshot = canonicalLedgerPlanSnapshot(input.plan);
     const existing = await prisma.canonicalImportRun.findUnique({
       where: { planHash: input.plan.planHash },
       include: { batches: { orderBy: { batchNumber: "asc" } } },

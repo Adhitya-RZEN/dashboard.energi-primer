@@ -3,11 +3,16 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 
 import type { IncrementalSyncResult } from "./engine";
-import { contentHashForStagingRows, sourceKeyForStagingRow } from "./identity";
+import {
+  contentHashForStagingRow,
+  contentHashForStagingRows,
+  sourceKeyForStagingRow,
+} from "./identity";
 import type { WorksheetPreflightResult } from "./preflight";
 import {
   reconcileCanonicalTargetStates,
 } from "@/services/google-sheets/canonical/target-state";
+import { canonicalLedgerPlanSnapshot } from "@/services/google-sheets/canonical/ledger";
 import { loadCanonicalTargetStates } from "@/services/google-sheets/canonical/target-repository";
 
 export type PostWriteVerificationResult = {
@@ -28,7 +33,7 @@ export type PostWriteVerificationResult = {
 
 function expectedSourceKeys(preflight: WorksheetPreflightResult) {
   return [
-    ...new Set(preflight.plan.stagingRows.map((row) => sourceKeyForStagingRow(row))),
+    ...new Set(preflight.executionPlan.stagingRows.map((row) => sourceKeyForStagingRow(row))),
   ];
 }
 
@@ -122,13 +127,13 @@ export async function verifyWorksheetSyncAfterWrite(input: {
         databaseVerification = "FAIL";
       }
 
-      const states = sourceKeys.length
+          const states = sourceKeys.length
         ? await prisma.syncRowState.findMany({
             where: {
               worksheetId: worksheet.id,
               sourceKey: { in: sourceKeys },
             },
-            select: { sourceKey: true },
+            select: { sourceKey: true, entityType: true, contentHash: true },
           })
         : [];
       const stateKeys = new Set(states.map((state) => state.sourceKey));
@@ -140,6 +145,28 @@ export async function verifyWorksheetSyncAfterWrite(input: {
       if (states.length !== new Set(states.map((state) => state.sourceKey)).size) {
         issues.push("sync_row_states_duplicate");
         databaseVerification = "FAIL";
+      }
+      const expectedStateByKey = new Map(
+        preflight.executionPlan.stagingRows.map((row) => [
+          sourceKeyForStagingRow(row),
+          { entityType: row.entityType, contentHash: contentHashForStagingRow(row) },
+        ]),
+      );
+      for (const state of states) {
+        const expected = expectedStateByKey.get(state.sourceKey);
+        if (!expected) {
+          issues.push("sync_row_state_unexpected");
+          databaseVerification = "FAIL";
+          continue;
+        }
+        if (state.entityType !== expected.entityType) {
+          issues.push("sync_row_state_entity_mismatch");
+          databaseVerification = "FAIL";
+        }
+        if (state.contentHash !== expected.contentHash) {
+          issues.push("sync_row_state_content_hash_mismatch");
+          databaseVerification = "FAIL";
+        }
       }
     }
 
@@ -158,13 +185,20 @@ export async function verifyWorksheetSyncAfterWrite(input: {
           (batch) => batch.status === "COMMITTED" &&
             batch.committedItemCount === batch.itemCount,
         );
+      const planSnapshotMatches = ledgerRun !== null &&
+        ledgerRun.planSnapshot === canonicalLedgerPlanSnapshot(preflight.canonicalPlan);
       const ledgerPass = ledgerRun !== null &&
         ledgerRun.status === "RECONCILED" &&
         ledgerRun.approvalState === "APPROVED" &&
         ledgerRun.planId === preflight.canonicalPlan.planId &&
         ledgerRun.totalItems === preflight.canonicalPlan.items.length &&
         batchesCoverPlan &&
-        committedCountsCoverPlan;
+        committedCountsCoverPlan &&
+        ledgerRun.plannedInsert === preflight.canonicalPlan.operationCounts.INSERT &&
+        ledgerRun.plannedUpdate === preflight.canonicalPlan.operationCounts.UPDATE &&
+        ledgerRun.plannedSkip === preflight.canonicalPlan.operationCounts.SKIP &&
+        ledgerRun.plannedBlock === preflight.canonicalPlan.operationCounts.BLOCK &&
+        planSnapshotMatches;
       if (!ledgerPass) {
         ledgerVerification = "FAIL";
         traceability = "PASS_WITH_REVIEW";
@@ -206,6 +240,59 @@ export async function verifyWorksheetSyncAfterWrite(input: {
       const targetRead = await loadCanonicalTargetStates(
         preflight.canonicalPlan.items.map((item) => item.record),
       );
+      const worksheetProvenanceEntities = new Set([
+        "biomass_consumption",
+        "biomass_receipt",
+        "coal_receipt",
+        "solar_consumption",
+        "solar_receipt",
+        "hop_reading",
+        "biomass_target",
+        "biomass_cumulative",
+      ]);
+      const cellProvenanceEntities = new Set([
+        "biomass_consumption",
+        "biomass_receipt",
+        "coal_receipt",
+        "solar_consumption",
+        "solar_receipt",
+        "hop_reading",
+        "biomass_cumulative",
+      ]);
+      const statesByKey = new Map(
+        targetRead.states.map((state) => [state.businessIdentity.canonicalKey, state]),
+      );
+      for (const item of preflight.canonicalPlan.items) {
+        const state = statesByKey.get(item.businessKey);
+        if (!state) continue;
+        const source = item.record.source;
+        if (
+          worksheetProvenanceEntities.has(item.record.entity) &&
+          state.provenance.worksheetTitle.trim().toLocaleLowerCase("en-US") !==
+            source.worksheetTitleSnapshot.trim().toLocaleLowerCase("en-US")
+        ) {
+          issues.push("target_worksheet_provenance_mismatch");
+          databaseVerification = "FAIL";
+          targetReconciliation = "FAIL";
+        }
+        if (
+          cellProvenanceEntities.has(item.record.entity) &&
+          state.provenance.sourceCell.trim().toLocaleUpperCase("en-US") !==
+            (source.cellAddress ?? "").trim().toLocaleUpperCase("en-US")
+        ) {
+          issues.push("target_cell_provenance_mismatch");
+          databaseVerification = "FAIL";
+          targetReconciliation = "FAIL";
+        }
+        if (
+          worksheetProvenanceEntities.has(item.record.entity) &&
+          state.provenance.importRunId === "NOT AVAILABLE"
+        ) {
+          issues.push("target_import_run_provenance_missing");
+          databaseVerification = "FAIL";
+          targetReconciliation = "FAIL";
+        }
+      }
       const targetResult = reconcileCanonicalTargetStates(
         preflight.canonicalPlan,
         targetRead.states,
@@ -217,7 +304,7 @@ export async function verifyWorksheetSyncAfterWrite(input: {
           `RECONCILIATION_MISMATCH:${targetResult.blockers.join(",") || "target_state"}`,
         );
       } else {
-        targetReconciliation = "PASS";
+        if (targetReconciliation !== "FAIL") targetReconciliation = "PASS";
       }
     }
   } catch {
@@ -237,8 +324,10 @@ export async function verifyWorksheetSyncAfterWrite(input: {
   return {
     status,
     worksheet: worksheetStatus,
-    recordsRead: preflight.plan.stagingRows.length,
-    recordsValid: preflight.validation.validRecords,
+    recordsRead: preflight.executionPlan.stagingRows.length,
+    recordsValid: preflight.executionPlan.stagingRows.filter(
+      (row) => row.validationStatus !== "REJECTED",
+    ).length,
     recordsInserted: syncResult.inserted,
     recordsUpdated: syncResult.updated,
     recordsSkipped: syncResult.skipped,

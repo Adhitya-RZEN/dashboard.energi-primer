@@ -5,6 +5,8 @@ export type ControlledImportExecutionRequest = {
   worksheet: string;
   /** Canonical plan hash returned by the read-only preflight. */
   importPlanId: string;
+  /** Phase 6 permits only the fixed Juli26-BB canary scope. */
+  canary?: true;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,13 +36,22 @@ export function parseControlledImportRequest(
   if (!/^[a-f0-9]{64}$/u.test(importPlanId))
     throw new Error("importPlanId must be a canonical plan hash");
 
-  return { action: "execute-import", worksheet, importPlanId };
+  if ("canary" in value && value.canary !== true)
+    throw new Error("canary must be true when supplied");
+
+  return {
+    action: "execute-import",
+    worksheet,
+    importPlanId,
+    ...(value.canary === true ? { canary: true as const } : {}),
+  };
 }
 
 export type LocalSyncArguments = {
   worksheet: string;
   target: OperatorTarget;
   dryRun: boolean;
+  canary?: true;
   scope: "all";
 };
 
@@ -68,6 +79,7 @@ function validateOperatorArguments(argumentsList: readonly string[]) {
     "--production",
     "--dry-run",
     "--verify-idempotency",
+    "--canary",
     "--current",
   ]);
   for (let index = 0; index < argumentsList.length; index += 1) {
@@ -110,6 +122,7 @@ export function parseLocalSyncArguments(
     worksheet,
     target: "SUPABASE_PRODUCTION",
     dryRun: argumentsList.includes("--dry-run"),
+    ...(argumentsList.includes("--canary") ? { canary: true as const } : {}),
     scope: "all",
   };
 }

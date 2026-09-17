@@ -72,6 +72,7 @@ export function createCompatibilityCanonicalBatchRepository(input: {
   databaseTarget?: SyncDatabaseTarget;
   productionTarget?: VerifiedSupabaseProductionTarget;
   allowNonLocalDatabase?: boolean;
+  canary?: true;
 }): DurableCanonicalBatchRepository & {
   reconcileTarget(plan: CanonicalImportPlan): Promise<{
     status: "RECONCILED" | "RECONCILIATION_REQUIRED";
@@ -79,6 +80,7 @@ export function createCompatibilityCanonicalBatchRepository(input: {
   }>;
 } {
   return {
+    ...createCanonicalTargetReconciliationRepository(),
     async commitBatch(records, planHash) {
       const batchPlan = compatibilityPlanForCanonicalBatch(input.basePlan, records);
       await commitGoogleSheetsImportPlan(batchPlan, {
@@ -86,6 +88,7 @@ export function createCompatibilityCanonicalBatchRepository(input: {
         databaseTarget: input.databaseTarget,
         productionTarget: input.productionTarget,
         canonicalBatch: true,
+        ...(input.canary === true ? { canary: true as const } : {}),
         source: "google_sheets_canonical_batch",
       });
       const evidence = await targetEvidenceFor(records, planHash);
@@ -95,6 +98,26 @@ export function createCompatibilityCanonicalBatchRepository(input: {
         );
       }
       return evidence.observations;
+    },
+  };
+}
+
+/**
+ * Recovery uses the durable ledger's target evidence without exposing a
+ * business-row commit path. A recovery call can therefore mark an unknown
+ * batch committed only after the already-written target rows match exactly.
+ */
+export function createCanonicalTargetReconciliationRepository(): DurableCanonicalBatchRepository & {
+  reconcileTarget(plan: CanonicalImportPlan): Promise<{
+    status: "RECONCILED" | "RECONCILIATION_REQUIRED";
+    reason?: string;
+  }>;
+} {
+  return {
+    async commitBatch() {
+      throw new CanonicalTargetReconciliationError(
+        "State-only target reconciliation cannot commit business rows.",
+      );
     },
 
     async reconcileBatch(records, planHash) {

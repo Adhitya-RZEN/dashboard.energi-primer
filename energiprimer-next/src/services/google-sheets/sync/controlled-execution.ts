@@ -13,6 +13,8 @@ import {
 import type { VerifiedSupabaseProductionTarget } from "./production-target";
 import { assertProductionCanaryAuthorization } from "./production-canary";
 import { verifyCanonicalLedgerCapability } from "@/services/google-sheets/canonical/ledger-prisma-store";
+import { JULI26_CANARY_WORKSHEET } from "./juli-canary-scope";
+import { verifyImmutableCanonicalPlanIdempotency } from "@/services/google-sheets/canonical/idempotency";
 
 export type ControlledImportExecutionStatus =
   | "VERIFIED"
@@ -28,11 +30,20 @@ export type ControlledImportExecutionResult = {
   preflight: WorksheetPreflightResult;
   syncResult: IncrementalSyncResult;
   verification: PostWriteVerificationResult | null;
+  idempotency: {
+    status: "PASS" | "FAIL" | "NOT_EXECUTED";
+    mode: "SAME_IMMUTABLE_PLAN" | "NOT_EXECUTED";
+    businessWrites: number;
+    samePlan: boolean;
+    sameLedgerRun: boolean;
+    reason?: string;
+  };
 };
 
 export type ControlledImportExecutionErrorCode =
   | "PLAN_BLOCKED"
   | "PLAN_ID_MISMATCH"
+  | "CANARY_SCOPE_REQUIRED"
   | "CANARY_AUTHORIZATION_REQUIRED"
   | "CANARY_LEDGER_UNAVAILABLE";
 
@@ -70,11 +81,24 @@ export async function executeControlledWorksheetImport(input: {
   worksheet: string;
   importPlanId: string;
   productionTarget: VerifiedSupabaseProductionTarget;
+  canary?: true;
   requestId?: string;
 }): Promise<ControlledImportExecutionResult> {
   const preflight = await prepareWorksheetPreflight({
     worksheet: input.worksheet,
+    ...(input.canary === true ? { canary: true as const } : {}),
   });
+  const requestedWorksheet = input.worksheet.trim().toLocaleLowerCase("en-US");
+  if (
+    input.canary !== true ||
+    requestedWorksheet !== JULI26_CANARY_WORKSHEET.toLocaleLowerCase("en-US")
+  ) {
+    throw new ControlledImportExecutionError(
+      "CANARY_SCOPE_REQUIRED",
+      "Production execution requires the explicit Juli26-BB Phase 6 canary scope.",
+      preflight,
+    );
+  }
   const canonicalPlan = preflight.canonicalPlan;
   if (!admittedPreflight(preflight) || !canonicalPlan) {
     throw new ControlledImportExecutionError(
@@ -121,6 +145,7 @@ export async function executeControlledWorksheetImport(input: {
     expectedCanonicalPlanId: canonicalPlan.planId,
     canonicalImportRunId: canonicalPlan.importRunId,
     durableLedger: "REQUIRED",
+    canary: true,
   });
 
   if (syncResult.status !== "SUCCESS") {
@@ -132,6 +157,13 @@ export async function executeControlledWorksheetImport(input: {
       preflight,
       syncResult,
       verification: null,
+      idempotency: {
+        status: "NOT_EXECUTED",
+        mode: "NOT_EXECUTED",
+        businessWrites: 0,
+        samePlan: false,
+        sameLedgerRun: false,
+      },
     };
   }
 
@@ -139,11 +171,30 @@ export async function executeControlledWorksheetImport(input: {
     preflight,
     syncResult,
   });
+  let idempotency: ControlledImportExecutionResult["idempotency"] = {
+    status: "NOT_EXECUTED",
+    mode: "NOT_EXECUTED",
+    businessWrites: 0,
+    samePlan: false,
+    sameLedgerRun: false,
+  };
+  if (verification.status === "PASS") {
+    const replay = await verifyImmutableCanonicalPlanIdempotency({
+      plan: canonicalPlan,
+      basePlan: preflight.executionPlan,
+      productionTarget: input.productionTarget,
+    });
+    idempotency = replay;
+  }
   return {
-    status: verification.status === "PASS" ? "VERIFIED" : "PASS_WITH_REVIEW",
+    status:
+      verification.status === "PASS" && idempotency.status === "PASS"
+        ? "VERIFIED"
+        : "PASS_WITH_REVIEW",
     write: "EXECUTED",
     preflight,
     syncResult,
     verification,
+    idempotency,
   };
 }
