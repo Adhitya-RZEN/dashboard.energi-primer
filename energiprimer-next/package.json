@@ -68,6 +68,7 @@
     "phase6:audit": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/audit-juli-canary-read-only.ts",
     "phase6:recover": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/recover-phase6-juli-canary.ts",
     "phase6r:idempotency": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-phase6r-juli-idempotency.ts",
+    "phase7:verify": "node --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/verify-phase7-automation.ts",
     "sheets:dry-run": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/dry-run-google-sheets-import.ts",
     "kpi:map:juni": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/audit-kpi-juni26.ts --worksheet=Juni26-BB",
     "kpi:map:mei": "node --env-file=.env.local --experimental-strip-types --experimental-loader ./scripts/ts-strip-loader.mjs scripts/audit-kpi-juni26.ts --worksheet=Mei26-BB",

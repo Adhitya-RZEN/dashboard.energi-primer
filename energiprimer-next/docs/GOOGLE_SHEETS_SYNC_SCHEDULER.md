@@ -1,5 +1,12 @@
 # Google Sheets Sync Scheduler
 
+> **Phase 7 implementation boundary (2026-09-17):** The route supports an
+> authenticated, separately configured automatic branch, but unattended
+> Production writes remain disabled unless the environment explicitly enables
+> `GOOGLE_SHEETS_AUTOMATION_MODE=ENABLED`, sets
+> `GOOGLE_SHEETS_AUTOMATION_KILL_SWITCH=DISABLED`, and keeps the durable ledger
+> enabled. The Phase 7 live automation canary was not executed in this turn.
+
 > CURRENT PRODUCTION OPERATIONAL CONTRACT (2026-09-05): Phase 6K verified
 > the Production deployment and Phase 6L verified exactly one authorized
 > controlled sync with HTTP 200, status SUCCESS, syncRun ID 2, and no observed
@@ -35,6 +42,50 @@ The server rebuilds preflight and compares the submitted hash before calling
 the existing bounded writer. A stale, blocked, or mismatched plan is rejected
 without an import write.
 
+## Phase 7 automatic cron boundary
+
+The Phase 4 behavior remains the safe default. A normal authenticated GET,
+including a manually replayed request without the Vercel Cron user agent,
+performs read-only target verification and metadata discovery. It returns
+`write=NOT_EXECUTED` when automatic admission is not complete.
+
+The Vercel Cron GET may enter the automatic engine only when all of these gates
+pass:
+
+1. the deployment environment is allowed and `CRON_SECRET` authenticates the
+   request;
+2. the request has the Vercel Cron trigger marker;
+3. automatic mode is explicitly enabled and the kill switch is explicitly
+   disabled;
+4. `CANONICAL_IMPORT_LEDGER_ENABLED=true` and the Supabase Production target
+   is positively verified;
+5. worksheet and record bounds are valid; and
+6. each selected source is an active approved canonical profile or passes the
+   minimal `A1:Z10` semantic probe before its bounded full read.
+
+The safe defaults are:
+
+```text
+GOOGLE_SHEETS_AUTOMATION_MODE=DISABLED
+GOOGLE_SHEETS_AUTOMATION_KILL_SWITCH=ENABLED
+GOOGLE_SHEETS_AUTOMATION_MAX_WORKSHEETS=12
+GOOGLE_SHEETS_AUTOMATION_MAX_RECORDS=2000
+```
+
+Unknown, ambiguous, schema-changed, disabled, missing, and errored sources do
+not reach the canonical writer. New source metadata may be registered, but a
+new worksheet receives only the minimal probe until its approved profile,
+mapping, provenance, identity, target-state plan, and admission checks pass.
+The automatic engine reuses the existing lease, canonical target diff, durable
+ledger, bounded compatibility writer, reconciliation, and row-state idempotency
+path. Source absence is evidence only; it never produces a DELETE.
+
+The route emits bounded structured automation events for `STARTED`,
+`BLOCKED`, and `COMPLETED` states. Events contain request/run identifiers and
+counters, not raw cell values, credentials, or connection strings. Monitoring
+also reports the mode, kill-switch state, last cron run, and conservative alert
+classification.
+
 ## Endpoint
 
 ```text
@@ -68,9 +119,10 @@ generic `401`.
 0 22 * * *  → /api/sync/google-sheets (06:00 WITA daily)
 ```
 
-The configured cron invocation is still a GET, so under the Phase 4 method
-boundary it performs read-only workbook discovery and returns
-`write=NOT_EXECUTED`. It no longer uses the automatic write-capable engine.
+The configured cron invocation is a GET. With the Phase 7 environment defaults
+it performs read-only workbook discovery and returns
+`write=NOT_EXECUTED`; with every automatic gate above explicitly admitted it
+uses the existing bounded canonical writer and durable ledger.
 The explicit POST path admits one requested worksheet when all of these
 conditions hold:
 

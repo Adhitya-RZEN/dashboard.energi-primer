@@ -40,18 +40,23 @@ export type ExistingWorksheetSnapshot = {
   worksheetKey: string;
   worksheetTitle: string;
   status: string;
+  /** Optional because older registry snapshots did not retain column count. */
+  rowCount?: number | null;
+  columnCount?: number | null;
 };
 
 export type WorksheetDiscoveryChange = {
   worksheetKey: string;
   title: string | null;
-  type: "NEW" | "UNCHANGED" | "RENAMED" | "MISSING";
+  type: "NEW" | "UNCHANGED" | "CHANGED" | "RENAMED" | "MISSING";
+  changedFields?: readonly ("rowCount" | "columnCount")[];
 };
 
 export type WorksheetDiscoveryDiff = {
   changes: WorksheetDiscoveryChange[];
   newCount: number;
   unchangedCount: number;
+  changedCount: number;
   renamedCount: number;
   missingCount: number;
 };
@@ -87,6 +92,29 @@ export function classifyWorksheetDiscovery(
         type: "RENAMED",
       });
     } else {
+      const changedFields = [
+        ...(existing.rowCount !== undefined &&
+        existing.rowCount !== null &&
+        worksheet.rowCount !== null &&
+        existing.rowCount !== worksheet.rowCount
+          ? (["rowCount"] as const)
+          : []),
+        ...(existing.columnCount !== undefined &&
+        existing.columnCount !== null &&
+        worksheet.columnCount !== null &&
+        existing.columnCount !== worksheet.columnCount
+          ? (["columnCount"] as const)
+          : []),
+      ];
+      if (changedFields.length > 0) {
+        changes.push({
+          worksheetKey: worksheet.sheetId,
+          title: worksheet.title,
+          type: "CHANGED",
+          changedFields,
+        });
+        continue;
+      }
       changes.push({
         worksheetKey: worksheet.sheetId,
         title: worksheet.title,
@@ -110,6 +138,7 @@ export function classifyWorksheetDiscovery(
     newCount: changes.filter((change) => change.type === "NEW").length,
     unchangedCount: changes.filter((change) => change.type === "UNCHANGED")
       .length,
+    changedCount: changes.filter((change) => change.type === "CHANGED").length,
     renamedCount: changes.filter((change) => change.type === "RENAMED").length,
     missingCount: changes.filter((change) => change.type === "MISSING").length,
   };
@@ -292,6 +321,7 @@ export async function persistGoogleSheetsWorksheetDiscovery(
           worksheetKey: true,
           worksheetTitle: true,
           status: true,
+          rowCount: true,
         },
       }),
   );

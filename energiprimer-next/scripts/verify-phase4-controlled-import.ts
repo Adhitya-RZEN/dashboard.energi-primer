@@ -144,7 +144,8 @@ const getBody = routeSource.slice(
   routeSource.indexOf("export async function POST"),
 );
 assert.match(getBody, /prepareWorksheetPreflight|prepareGoogleSheetsWorksheetDiscovery/u);
-assert.doesNotMatch(getBody, /runGoogleSheetsIncrementalSync|commitGoogleSheetsImportPlan|executeControlled/u);
+assert.match(getBody, /runGoogleSheetsIncrementalSync|automaticRequestAuthorized/u);
+assert.doesNotMatch(getBody, /commitGoogleSheetsImportPlan|executeControlled/u);
 assert.match(routeSource, /action: "execute-import"|parseControlledImportRequest/u);
 
 const preflightPath = fileURLToPath(

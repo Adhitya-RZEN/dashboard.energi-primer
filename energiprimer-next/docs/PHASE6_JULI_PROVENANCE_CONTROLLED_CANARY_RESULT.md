@@ -1,7 +1,7 @@
 # PHASE 6 JULI PROVENANCE & CONTROLLED PRODUCTION CANARY RESULT
 
 Status:
-BLOCKED
+VERIFIED
 
 Juli provenance:
 APPROVED
@@ -28,7 +28,7 @@ Import plan integrity:
 PASS
 
 Durable ledger:
-FAIL
+PASS
 
 Production execution:
 EXECUTED
@@ -52,22 +52,25 @@ Google Sheets writes:
 0
 
 Ledger run:
-NOT VERIFIED
+RECONCILED (run 1; historical RECOVERY_REQUIRED retained)
 
 Ledger batches:
-NOT VERIFIED
+COMMITTED (batch 1; itemCount 15; committedItemCount 15)
 
 Commit:
 PASS
 
 Reconciliation:
-FAIL
+PASS
 
 Idempotency:
-NOT EXECUTED
+PASS
 
 Recovery:
-NOT EXECUTED
+PASS
+
+Juli row-state repair:
+PASS (22 metadata records)
 
 Duplicate business records:
 0
@@ -94,16 +97,16 @@ Gate 4 - Production Commit:
 PASS
 
 Gate 5 - Reconciliation:
-FAIL
+PASS
 
 Gate 6 - Idempotency:
-FAIL
+PASS
 
 Gate 7 - Recovery:
-REVIEW_ONLY
+PASS
 
 Automation readiness:
-2/4 (unchanged; architecture and ledger infrastructure are ready, but this bounded execution did not complete durable reconciliation, idempotency, and Production recovery proof)
+2/4 (unchanged; this proves a bounded canary and recovery, not unattended full automation)
 
 Validation:
 - TypeScript: PASS
@@ -116,24 +119,25 @@ Validation:
 - Phase 5: PASS
 - Phase 5.1: PASS
 - Phase 5.2: PASS
-- Phase 6: PASS (contract fixtures); BLOCKED (live post-canary state)
-- Production verification: PASS_WITH_REVIEW (business commit and scope evidence captured; ledger recovery remains pending)
+- Phase 6: PASS (contract fixtures and exact live-plan integrity; initial route required Phase 6R recovery)
+- Phase 6R: PASS (state-only recovery, read-only reconciliation, and same-plan idempotency)
+- Production verification: PASS (final ledger, Juli metadata, target state, and Agustus boundary verified read-only)
 
 Critical findings:
 1. The explicitly authorized canonical POST executed the exact 22-record Juli scope and committed 15 business updates, including the 2026 biomass-target provenance correction from April/import 12 to Juli/import 15. The API returned FAILED after the business transaction because post-write reconciliation detected Production storage precision differences.
-2. The Production ledger run 1 and batch 1 remain RECONCILIATION_REQUIRED with RECOVERY_REQUIRED. A storage-precision comparator fix and an exact-scope state-only recovery helper are implemented, but executing that helper would mutate Production ledger and Juli row-state/registry metadata and was not performed without explicit approval.
-3. Idempotency was not run after the failed overall canary, Production failure injection was not performed, Agustus was untouched and remains blocked, and the deployed Vercel environment was not changed; the live write used the existing local canonical route against the Production database.
+2. The explicitly authorized Phase 6R recovery reconciled the existing ledger and repaired only the 22 Juli row-state/registry metadata records. It performed zero additional normalized business writes, zero Google Sheets writes, zero schema changes, and zero migration changes. The historical `RECOVERY_REQUIRED` failure evidence remains on run 1 while its final status is `RECONCILED`; batch 1 is `COMMITTED` with 15/15 items committed.
+3. The same immutable plan idempotency check passed with zero additional business writes and unchanged ledger counts. Agustus was untouched and remains blocked; the deployed Vercel environment was not changed, and the live write/recovery used the existing local canonical route against the Production database.
 
 Remaining blockers:
-1. Explicit approval for the exact state-only recovery of ledger plan d6f4659cb1fab3af7cdd81e8f95d7caac054a6eb16e9b32ed7a38ab6afe2acbe.
-2. Durable ledger reconciliation, Juli row-state/registry repair, and same-immutable-plan idempotency verification.
-3. Production deployment configuration still lacks the Phase 6 canary variables, and Agustus requires a separate approved schema/mapping resolution.
+1. Agustus requires a separate approved schema/mapping resolution and remains `SCHEMA_REVIEW`.
+2. Production deployment configuration still lacks the Phase 6 canary variables; unattended scheduler/monitoring automation remains unproven.
+3. Any expansion beyond this exact Juli plan requires separate authorization; do not rerun the initial canary.
 
 Documentation:
 UPDATED
 
 Next step:
-Run the separately approved state-only recovery only after explicit operator approval. It must reconcile the existing ledger plan and repair only the 22 Juli row-state/registry metadata records, with zero normalized business writes, zero Google Sheets writes, and zero schema or migration changes. Then perform read-only reconciliation and the existing same-immutable-plan idempotency check; do not rerun the initial canary or expand scope.
+Retain Agustus in `SCHEMA_REVIEW`, review/merge the verified implementation and evidence, and require separate authorization before any broader import or automation rollout. Do not rerun the initial canary or expand the Juli scope.
 
 ## 1. Authorization and boundary
 
@@ -208,7 +212,7 @@ The target row was updated from the existing April/import 12 attribution to `Goo
 
 ## 5. Ledger and reconciliation evidence
 
-Production ledger run 1 and batch 1 were created before the write. They contain the exact plan identity, source identity, mapping version, scope, and 15 writable items. Their final state is:
+Production ledger run 1 and batch 1 were created before the write. They contain the exact plan identity, source identity, mapping version, scope, and 15 writable items. The initial post-write state, retained as historical evidence, was:
 
 ```text
 canonical_import_run:     RECONCILIATION_REQUIRED
@@ -220,13 +224,37 @@ committedItemCount:       0 (ledger outcome was treated as unknown)
 
 The initial post-write target comparison reported only scale differences caused by legacy Production storage precision: coal consumption values are stored at two decimals, and coal stock/consumed values are stored at two decimals. It reported no provenance mismatch and no duplicate business key.
 
-The comparator now normalizes those entities to their existing storage scale. A read-only recheck of the original immutable plan reports `RECONCILED`, with zero value mismatches, zero provenance mismatches, zero blockers, and zero duplicates. That read-only result does not itself mutate the ledger or row-state metadata, so the durable Production state remains pending recovery.
+The comparator now normalizes those entities to their existing storage scale. A read-only recheck of the original immutable plan reports `RECONCILED`, with zero value mismatches, zero provenance mismatches, zero blockers, and zero duplicates.
+
+After the explicitly authorized Phase 6R state-only recovery, the durable state is:
+
+```text
+canonical_import_run:     RECONCILED (run 1)
+canonical_import_batch:   COMMITTED (batch 1)
+attemptCount:             2
+batch attemptCount:       1
+itemCount:                15
+committedItemCount:       15
+retryable:                false
+failureCode:              RECOVERY_REQUIRED (historical evidence retained on run)
+```
+
+The recovery changed only the existing ledger state and the exact Juli row-state/registry metadata boundary. No normalized business row was written by recovery.
 
 ## 6. Idempotency and recovery
 
-The same-plan idempotency execution was not attempted because the first overall canary did not reach a verified reconciliation state. No second independent canary was created.
+The operator explicitly authorized Phase 6R state-only recovery for plan `d6f4659cb1fab3af7cdd81e8f95d7caac054a6eb16e9b32ed7a38ab6afe2acbe`. The existing recovery helper reconciled the existing run and batch, then repaired only the 22 selected Juli row-state records and the Juli worksheet registry metadata. It did not rerun the initial canary and did not call the business writer.
 
-The existing fixture recovery checks remain passing in Phase 4 and Phase 5. No Production failure was injected and no data was intentionally corrupted. The Phase 6 recovery helper is closed over the original 22-record plan and is state-only: it can reconcile the existing ledger evidence and repair only the 22 Juli row-state/registry metadata records. It was not executed because that is a new Production mutation requiring explicit operator approval after the partial/unknown ledger outcome.
+Recovery result:
+
+- Ledger reconciliation: `PASS`.
+- Juli row-state repair: `PASS`, 22 metadata records; 15 carry `lastSyncedAt` for the original writable items and 7 remain no-op metadata states.
+- Juli registry: `ACTIVE`, sheet ID `1692973815`, row count 352, schema/content metadata present.
+- Additional business INSERT/UPDATE/DELETE/UPSERT: `0/0/0/0`.
+- Google Sheets writes: `0`.
+- Schema changes and migrations: `0/0`.
+
+The same-immutable-plan idempotency verifier then passed with `businessWrites=0`, `samePlan=true`, `sameLedgerRun=true`, and unchanged ledger counts of one run and one batch. No second independent canary was created, no Production failure was injected, and no data was intentionally corrupted.
 
 ## 7. Safety verification
 
@@ -240,13 +268,19 @@ The existing fixture recovery checks remain passing in Phase 4 and Phase 5. No P
 ## 8. Files
 
 - `scripts/audit-juli-canary-read-only.ts` captures the live read-only scope and safety audit.
-- `scripts/recover-phase6-juli-canary.ts` contains the gated, exact-scope state-only recovery; it is not an authorization to execute it.
-- `scripts/verify-phase6-juli-canary.ts` contains the deterministic Phase 6 contract and scope regressions.
+- `scripts/recover-phase6-juli-canary.ts` contains the gated, exact-scope state-only recovery.
+- `scripts/verify-phase6r-juli-idempotency.ts` verifies the same immutable plan without creating a new run or batch.
+- `scripts/verify-phase6-juli-canary.ts` contains the deterministic Phase 6 contract, scope, and idempotency regressions.
+- `src/services/google-sheets/canonical/target-state.ts` accepts the already-approved Juli provenance state and applies legacy storage-precision-aware repeat hashing.
 
 ## 9. Phase 6R authorization gate - 2026-09-17
 
-The Phase 6R brief was received with status `BLOCKED - EXECUTION AUTHORIZATION REQUIRED`. It defines the allowed state-only recovery but does not contain an explicit operator approval to perform that Production mutation. Accordingly, no recovery command was executed.
+The Phase 6R brief was initially received with status `BLOCKED - EXECUTION AUTHORIZATION REQUIRED`. Before the explicit operator approval, no recovery command was executed.
 
-The final read-only snapshot still shows the existing immutable run 1 and batch 1 for plan `d6f4659cb1fab3af7cdd81e8f95d7caac054a6eb16e9b32ed7a38ab6afe2acbe`, source `Juli26-BB / 1692973815 / A1:ZZ500`, scope 22, planned `UPDATE 15 / SKIP 7 / INSERT 0 / BLOCK 0`, run and batch `RECONCILIATION_REQUIRED`, and `RECOVERY_REQUIRED`. Juli registry metadata is `ERROR`; Agustus remains `SCHEMA_REVIEW`; counts remain one canonical run, one canonical batch, spreadsheet import run 15, and no additional execution records.
+The operator then explicitly authorized: state-only recovery for plan `d6f4659cb1fab3af7cdd81e8f95d7caac054a6eb16e9b32ed7a38ab6afe2acbe`, with zero business, Google Sheets, schema, and migration writes.
 
-The state-only recovery remains gated until the operator explicitly authorizes it. The original Phase 6 business commit is not rerun.
+## 10. Phase 6R completion - 2026-09-17
+
+The authorized recovery and final verification completed successfully. The exact source remained `Juli26-BB / 1692973815 / A1:ZZ500`; the original immutable plan remained 22 records with `UPDATE 15 / SKIP 7 / INSERT 0 / BLOCK 0`. Read-only reconciliation reported zero value mismatches, zero provenance mismatches, zero duplicate business records, and zero blockers. The live repeat preflight now reports all 22 selected records as `SKIP`, confirming repeat idempotency without a new plan or write.
+
+Agustus remains `SCHEMA_REVIEW` with mapping blocked, no row-state records, no schema/content metadata, and no August-period business evidence. This boundary was not modified.

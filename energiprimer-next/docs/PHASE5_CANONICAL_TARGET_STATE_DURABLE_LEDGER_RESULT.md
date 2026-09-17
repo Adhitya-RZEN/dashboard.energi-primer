@@ -796,3 +796,27 @@ Phase 5.2 ledger infrastructure remains verified. The separately authorized Phas
 The live Juli provenance and mapping were approved. The canary's initial post-write reconciliation stopped on legacy two-decimal Production storage precision, leaving ledger run 1 and batch 1 in `RECONCILIATION_REQUIRED` / `RECOVERY_REQUIRED`. A read-only recheck after the comparator fix passes, but the state-only Production recovery and idempotency check were not executed without explicit approval for that new Production metadata mutation.
 
 Phase 6 status: `BLOCKED` pending that narrowly scoped recovery approval. Agustus remains `SCHEMA_REVIEW - BLOCKED`; no full synchronization is authorized. See `docs/PHASE6_JULI_PROVENANCE_CONTROLLED_CANARY_RESULT.md` for the complete evidence and exact source-cell mapping.
+
+## Phase 6R completion - Juli state-only recovery
+
+The operator subsequently authorized the exact Phase 6R recovery for plan
+`d6f4659cb1fab3af7cdd81e8f95d7caac054a6eb16e9b32ed7a38ab6afe2acbe`, with
+zero business, Google Sheets, schema, and migration writes. The gated recovery
+reconciled ledger run 1 and batch 1 and repaired only the 22 Juli row-state and
+worksheet-registry metadata records.
+
+Final evidence:
+
+- Ledger run: `RECONCILED`; batch: `COMMITTED`, 15/15 committed items.
+- Juli registry: `ACTIVE`, 352 source rows, exact sheet ID `1692973815`.
+- Read-only reconciliation: `PASS`, with zero value/provenance mismatches and
+  zero duplicate business records.
+- Same immutable-plan idempotency: `PASS`, additional business writes `0`, and
+  ledger counts unchanged at one run and one batch.
+- Additional recovery business writes: `0`; Google Sheets writes: `0`; schema
+  changes: `0`; migrations: `0`.
+
+The original Phase 6 route failure and its historical `RECOVERY_REQUIRED`
+evidence remain documented; the final durable state is verified. Agustus is
+unchanged and remains `SCHEMA_REVIEW - BLOCKED`. Full unattended automation and
+any scope expansion still require separate authorization.

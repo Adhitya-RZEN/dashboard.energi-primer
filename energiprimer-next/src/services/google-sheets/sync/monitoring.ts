@@ -1,6 +1,8 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { automationAlertClass } from "./automation-observability";
+import { readAutomationConfig } from "./automation-contract";
 
 export type SyncMonitoringSnapshot = {
   status: "NOT_CONFIGURED" | "NEVER_RUN" | "HEALTHY" | "WARNING" | "ERROR" | "UNAVAILABLE";
@@ -19,9 +21,20 @@ export type SyncMonitoringSnapshot = {
     skipped: number;
     failed: number;
   } | null;
+  automation: {
+    mode: "ENABLED" | "DISABLED";
+    killSwitch: "ENABLED" | "DISABLED";
+    enabled: boolean;
+    blockers: readonly string[];
+    lastRunStatus: string | null;
+    lastRunAt: string | null;
+    alert: "NORMAL" | "ACTION_REQUIRED" | "SYSTEM_FAILURE";
+  };
 };
 
-const emptySnapshot: SyncMonitoringSnapshot = {
+function emptySnapshot(): SyncMonitoringSnapshot {
+  const config = readAutomationConfig();
+  return {
   status: "NOT_CONFIGURED",
   lastRunStatus: null,
   lastRunAt: null,
@@ -32,17 +45,28 @@ const emptySnapshot: SyncMonitoringSnapshot = {
   worksheetsReview: 0,
   openSchemaChanges: 0,
   lastRunCounters: null,
-};
+    automation: {
+      mode: config.mode,
+      killSwitch: config.killSwitch,
+      enabled: config.enabled,
+      blockers: config.blockers,
+      lastRunStatus: null,
+      lastRunAt: null,
+      alert: automationAlertClass({ status: "BLOCKED", blockers: config.blockers }),
+    },
+  };
+}
 
 export async function getSyncMonitoringSnapshot(): Promise<SyncMonitoringSnapshot> {
   try {
+    const config = readAutomationConfig();
     const source = await prisma.syncSource.findFirst({
       orderBy: { updatedAt: "desc" },
       select: { id: true },
     });
-    if (!source) return emptySnapshot;
+    if (!source) return emptySnapshot();
 
-    const [latestRun, latestSuccess, latestFailure, worksheets, openSchemaChanges] =
+    const [latestRun, latestSuccess, latestFailure, latestAutomaticRun, worksheets, openSchemaChanges] =
       await Promise.all([
         prisma.syncRun.findFirst({
           where: { sourceId: source.id },
@@ -70,6 +94,11 @@ export async function getSyncMonitoringSnapshot(): Promise<SyncMonitoringSnapsho
           orderBy: { startedAt: "desc" },
           select: { startedAt: true },
         }),
+        prisma.syncRun.findFirst({
+          where: { sourceId: source.id, triggerType: "cron" },
+          orderBy: { startedAt: "desc" },
+          select: { status: true, startedAt: true },
+        }),
         prisma.syncWorksheet.findMany({
           where: { sourceId: source.id },
           select: { status: true },
@@ -90,6 +119,12 @@ export async function getSyncMonitoringSnapshot(): Promise<SyncMonitoringSnapsho
     );
     const hasError =
       Boolean(latestRun && ["FAILED", "PARTIAL"].includes(latestRun.status)) ||
+      Boolean(
+        latestAutomaticRun &&
+          ["FAILED", "PARTIAL", "RECONCILIATION_REQUIRED", "LOCKED"].includes(
+            latestAutomaticRun.status,
+          ),
+      ) ||
       worksheetCounts.review > 0 ||
       openSchemaChanges > 0;
     return {
@@ -111,9 +146,21 @@ export async function getSyncMonitoringSnapshot(): Promise<SyncMonitoringSnapsho
             failed: latestRun.failed,
           }
         : null,
+      automation: {
+        mode: config.mode,
+        killSwitch: config.killSwitch,
+        enabled: config.enabled,
+        blockers: config.blockers,
+        lastRunStatus: latestAutomaticRun?.status ?? null,
+        lastRunAt: latestAutomaticRun?.startedAt.toISOString() ?? null,
+        alert: automationAlertClass({
+          status: latestAutomaticRun?.status ?? (config.enabled ? "NOOP" : "BLOCKED"),
+          blockers: config.blockers,
+        }),
+      },
     };
   } catch {
-    return { ...emptySnapshot, status: "UNAVAILABLE" };
+    return { ...emptySnapshot(), status: "UNAVAILABLE" };
   }
 }
 

@@ -1,5 +1,9 @@
 # Google Sheets Incremental Sync
 
+> **Phase 7 note (2026-09-17):** Automatic cron execution is a separate,
+> fail-closed mode layered on the verified incremental engine. It is disabled
+> by default and was not live-canary executed in this implementation turn.
+
 > CURRENT PRODUCTION POINTER (Phase 6N, 2026-09-05): The incremental and
 > idempotency design below is the current technical reference. Deployment and
 > one controlled Production execution are evidenced by Phase 6K and Phase 6L.
@@ -18,8 +22,48 @@ verification, Google metadata discovery, or exact worksheet preflight and
 returns `write=NOT_EXECUTED`. POST requires `action=execute-import`, an exact
 worksheet, and the SHA-256 `importPlanId` returned by preflight. POST rebuilds
 the plan and rejects a stale or blocked hash before entering the existing sync
-engine. The Vercel GET cron therefore remains a read-only probe until an
-explicit POST is authorized.
+engine. The Vercel GET cron therefore remains a read-only probe until the
+separate Phase 7 automatic configuration and admission gates are authorized.
+
+## Phase 7 deterministic automatic lifecycle (2026-09-17)
+
+The automatic lifecycle is:
+
+```text
+metadata discovery
+  -> deterministic NEW/CHANGED/RENAMED/UNCHANGED/MISSING diff
+  -> registry status/profile admission
+  -> A1:Z10 minimal probe for unverified worksheets
+  -> approved canonical schema/profile
+  -> bounded full parse and schema fingerprint
+  -> canonical mapping/provenance/identity validation
+  -> target-state diff and immutable plan
+  -> automatic admission
+  -> durable bounded batches
+  -> reconciliation and monitoring
+```
+
+Only `ACTIVE` approved canonical worksheets, or `DISCOVERED` worksheets that
+pass the minimal semantic profile probe and the subsequent full canonical
+schema check, can reach the writer. Unknown or ambiguous sources remain
+`SCHEMA_REVIEW`/unadmitted with zero business writes. The automatic engine is
+selected by profile and canonical period policy, not by a worksheet-specific
+Agustus/September branch. It allows an approved canonical Juli source for
+normal change detection, while the historical Phase 6 canary remains a
+separate exact route and is not rerun.
+
+Existing row-state classification now exposes `newRows`, `changedRows`,
+`unchangedRows`, and `removedSourceKeys`. A removed source key is audit
+evidence only: there is no automatic DELETE operation. Changed business values
+become canonical `UPDATE` candidates, unchanged values become `SKIP`, and
+repeated execution reuses the durable plan/ledger and target-state comparison.
+
+The automatic route requires the authenticated Vercel Cron trigger, verified
+Supabase Production identity, `CANONICAL_IMPORT_LEDGER_ENABLED=true`, explicit
+automation enablement, an open kill switch, and bounded worksheet/record
+settings. The route remains metadata-only when any gate is absent. See
+`docs/PHASE7_DETERMINISTIC_SYNC_PRODUCTION_AUTOMATION_RESULT.md` for the
+implementation evidence and remaining live-canary gate.
 
 Dokumen ini menjelaskan mekanisme import incremental Phase 11. Google Sheets
 tetap menjadi source of truth, sedangkan PostgreSQL menyimpan state operasional

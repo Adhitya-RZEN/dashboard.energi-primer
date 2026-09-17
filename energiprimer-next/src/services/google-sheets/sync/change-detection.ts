@@ -26,6 +26,14 @@ export type SyncClassification = {
   inserted: number;
   updated: number;
   skipped: number;
+  /** Explicit names make the automatic lifecycle observable without changing
+   * the existing INSERT/UPDATE/SKIP writer contract. */
+  newRows: ClassifiedSyncRow[];
+  changedRows: ClassifiedSyncRow[];
+  unchangedRows: ClassifiedSyncRow[];
+  /** Source disappearance is evidence only; it never becomes a DELETE. */
+  removedSourceKeys: string[];
+  removed: number;
 };
 
 export function classifySyncRows(
@@ -41,6 +49,9 @@ export function classifySyncRows(
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  const newRows: ClassifiedSyncRow[] = [];
+  const changedRows: ClassifiedSyncRow[] = [];
+  const unchangedRows: ClassifiedSyncRow[] = [];
 
   for (const row of rows) {
     const sourceKey = sourceKeyForStagingRow(row);
@@ -57,10 +68,37 @@ export function classifySyncRows(
         ? "SKIP"
         : "UPDATE";
     changes.push({ row, sourceKey, contentHash, action });
-    if (action === "INSERT") inserted += 1;
-    if (action === "UPDATE") updated += 1;
-    if (action === "SKIP") skipped += 1;
+    if (action === "INSERT") {
+      inserted += 1;
+      newRows.push({ row, sourceKey, contentHash, action });
+    }
+    if (action === "UPDATE") {
+      updated += 1;
+      changedRows.push({ row, sourceKey, contentHash, action });
+    }
+    if (action === "SKIP") {
+      skipped += 1;
+      unchangedRows.push({ row, sourceKey, contentHash, action });
+    }
   }
 
-  return { changes, duplicates, inserted, updated, skipped };
+  const seenExistingKeys = new Set(
+    [...seen].filter((sourceKey) => existingByKey.has(sourceKey)),
+  );
+  const removedSourceKeys = existing
+    .map((state) => state.sourceKey)
+    .filter((sourceKey) => !seenExistingKeys.has(sourceKey));
+
+  return {
+    changes,
+    duplicates,
+    inserted,
+    updated,
+    skipped,
+    newRows,
+    changedRows,
+    unchangedRows,
+    removedSourceKeys,
+    removed: removedSourceKeys.length,
+  };
 }

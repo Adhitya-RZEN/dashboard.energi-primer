@@ -22,6 +22,13 @@ import {
 } from "@/services/google-sheets/sync/preflight";
 import { parseControlledImportRequest } from "@/services/google-sheets/sync/operator-contract";
 import { verifySupabaseProductionTarget } from "@/services/google-sheets/sync/production-target";
+import { runGoogleSheetsIncrementalSync } from "@/services/google-sheets/sync/engine";
+import {
+  automaticExecutionAdmission,
+  isVercelCronRequest,
+  readAutomationConfig,
+} from "@/services/google-sheets/sync/automation-contract";
+import { emitAutomationEvent } from "@/services/google-sheets/sync/automation-observability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -273,10 +280,13 @@ export async function GET(request: Request) {
   const denied = authorizeRequest(request, context, requestStartedAt);
   if (denied) return denied;
 
+  let cronTrigger = false;
+  let automationConfig: ReturnType<typeof readAutomationConfig> | null = null;
+  let automaticAttempted = false;
   try {
     // Target verification uses metadata SELECTs only. It is intentionally
     // shared by preview and execution so an unsafe target fails closed.
-    await verifySupabaseProductionTarget({
+    const productionTarget = await verifySupabaseProductionTarget({
       rawUrl: process.env.DATABASE_URL,
       connectionVariable: "DATABASE_URL",
     });
@@ -306,7 +316,110 @@ export async function GET(request: Request) {
       return NextResponse.json(preflightReport(preflight));
     }
 
+    automationConfig = readAutomationConfig();
+    cronTrigger = isVercelCronRequest(request.headers);
+    const automationAdmission = automaticExecutionAdmission({
+      config: automationConfig,
+      authenticatedCron: true,
+      vercelCron: cronTrigger,
+      productionTargetVerified: productionTarget.verified,
+    });
+    if (cronTrigger && automationAdmission.admitted) {
+      automaticAttempted = true;
+      emitAutomationEvent({
+        event: "AUTOMATION_STARTED",
+        requestId: context.requestId,
+        worksheetCount: 0,
+        rowsScanned: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        status: "RUNNING",
+      });
+      const result = await runGoogleSheetsIncrementalSync({
+        triggerType: "cron",
+        scope: "automatic",
+        databaseTarget: "SUPABASE_PRODUCTION",
+        productionTarget,
+        durableLedger: "REQUIRED",
+        automatic: true,
+        automaticRequestAuthorized: true,
+        requestId: context.requestId,
+      });
+      emitAutomationEvent({
+        event: "AUTOMATION_COMPLETED",
+        requestId: context.requestId,
+        runId: result.syncRunId,
+        worksheetCount: result.worksheetsScanned,
+        rowsScanned: result.rowsScanned,
+        inserted: result.inserted,
+        updated: result.updated,
+        skipped: result.skipped,
+        failed: result.failed,
+        status: result.status,
+      });
+      emitSyncDiagnostic({
+        context,
+        stage: "sync_complete",
+        status: result.status === "SUCCESS" ? "PASS" : "FAIL",
+        durationMs: diagnosticDurationMs(requestStartedAt),
+        ...(result.status === "SUCCESS"
+          ? {}
+          : { errorCategory: "SYNC", errorCode: result.status }),
+      });
+      const httpStatus =
+        result.status === "SUCCESS" || result.status === "PARTIAL"
+          ? 200
+          : result.status === "LOCKED"
+            ? 409
+            : 503;
+      return NextResponse.json(
+        {
+          status: result.status,
+          write:
+            result.inserted + result.updated > 0
+              ? "EXECUTED"
+              : result.status === "SUCCESS"
+                ? "NOOP"
+                : "NOT_EXECUTED",
+          automation: {
+            mode: automationConfig.mode,
+            killSwitch: automationConfig.killSwitch,
+            maxWorksheets: automationConfig.maxWorksheets,
+            maxRecords: automationConfig.maxRecords,
+            admission: "ADMITTED",
+          },
+          execution: {
+            syncRunId: result.syncRunId,
+            worksheetsScanned: result.worksheetsScanned,
+            rowsScanned: result.rowsScanned,
+            inserted: result.inserted,
+            updated: result.updated,
+            skipped: result.skipped,
+            failed: result.failed,
+          },
+        },
+        { status: httpStatus },
+      );
+    }
+
     const discovery = await prepareGoogleSheetsWorksheetDiscovery(context);
+    const blockedAutomation = cronTrigger || automationConfig.mode === "ENABLED";
+    if (blockedAutomation) {
+      emitAutomationEvent({
+        event: "AUTOMATION_BLOCKED",
+        requestId: context.requestId,
+        worksheetCount: discovery.current.length,
+        rowsScanned: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        status: "BLOCKED",
+        blockers: automationAdmission.blockers,
+      });
+    }
     emitSyncDiagnostic({
       context,
       stage: "sync_complete",
@@ -314,9 +427,15 @@ export async function GET(request: Request) {
       durationMs: diagnosticDurationMs(requestStartedAt),
     });
     return NextResponse.json({
-      status: "DISCOVERY_READY",
+      status: blockedAutomation ? "AUTOMATION_BLOCKED" : "DISCOVERY_READY",
       write: "NOT_EXECUTED",
       source: { sourceKey: discovery.sourceKey },
+      automation: {
+        mode: automationConfig.mode,
+        killSwitch: automationConfig.killSwitch,
+        enabled: automationConfig.enabled,
+        blockers: automationAdmission.blockers,
+      },
       worksheetCount: discovery.current.length,
       worksheets: discovery.current.map((item) => ({
         sheetId: item.sheetId,
@@ -325,6 +444,20 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
+    if (automaticAttempted && automationConfig) {
+      emitAutomationEvent({
+        event: "AUTOMATION_FAILED",
+        requestId: context.requestId,
+        worksheetCount: 0,
+        rowsScanned: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 1,
+        status: "AUTOMATION_FAILURE",
+        blockers: ["REQUEST_FAILED"],
+      });
+    }
     return requestFailure(error, context, requestStartedAt);
   }
 }

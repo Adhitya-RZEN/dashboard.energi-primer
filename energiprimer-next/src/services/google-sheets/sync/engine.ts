@@ -74,6 +74,15 @@ import { BB_CANONICAL_WORKSHEET } from "@/services/google-sheets/legacy-mapping/
 import { classifySyncError } from "./error-classification";
 import { assertProductionCanaryAuthorization } from "./production-canary";
 import {
+  assertAutomationRecordBound,
+  assertAutomationWorksheetBound,
+  automaticExecutionAdmission,
+  readAutomationConfig,
+} from "./automation-contract";
+import { classifyAutomaticWorksheetProbe } from "./automatic-admission";
+import { readAndParseDynamicWorksheet as readMinimalWorksheet } from "@/services/google-sheets/dynamic/reader";
+import { AUTOMATION_MINIMAL_PROBE_RANGE } from "./automation-contract";
+import {
   createSyncRequestId,
   diagnosticDurationMs,
   diagnosticNow,
@@ -111,6 +120,10 @@ export type IncrementalSyncOptions = {
   durableLedger?: "REQUIRED" | "DISABLED";
   /** Phase 6's closed Juli26-BB canary selector. */
   canary?: true;
+  /** Phase 7's separately admitted unattended execution mode. */
+  automatic?: true;
+  /** Set only by the authenticated cron route after trigger admission. */
+  automaticRequestAuthorized?: true;
   requestId?: string;
 };
 
@@ -260,9 +273,18 @@ function selectedWorksheets(
   const preferred = preferredWorksheetsByPeriod(valid);
   if (scope === "all") return preferred;
   if (scope === "automatic")
-    return preferred.filter((worksheet) =>
-      isAutomaticFutureBBWorksheet(worksheet.worksheetTitle),
-    );
+    return preferred.filter((worksheet) => {
+      const mapping = approvedMappingContractForWorksheet(worksheet.worksheetTitle);
+      const canonicalProfile = mapping?.profile === "BB_CANONICAL_V1";
+      const canonicalPeriod =
+        isCanonicalBBWorksheet(worksheet.worksheetTitle) ||
+        isAutomaticFutureBBWorksheet(worksheet.worksheetTitle);
+      return (
+        canonicalProfile &&
+        canonicalPeriod &&
+        ["ACTIVE", "DISCOVERED", "VALIDATED"].includes(worksheet.status)
+      );
+    });
   const now = new Date();
   return preferred.filter((worksheet) => {
     const period = parseBBWorksheetName(worksheet.worksheetTitle);
@@ -306,6 +328,34 @@ function assertProductionJuliCanaryScope(options: IncrementalSyncOptions) {
   ) {
     throw new Error("Production writes require the exact Juli26-BB canary scope.");
   }
+}
+
+function assertProductionAutomaticScope(options: IncrementalSyncOptions) {
+  const config = readAutomationConfig();
+  const admission = automaticExecutionAdmission({
+    config,
+    authenticatedCron: options.automaticRequestAuthorized === true,
+    // The route has already authenticated and classified the Vercel Cron
+    // trigger before handing control to the engine. This flag is intentionally
+    // not inferred from a caller-controlled worksheet or query parameter.
+    vercelCron: options.automaticRequestAuthorized === true,
+    productionTargetVerified: options.productionTarget?.verified === true,
+  });
+  if (!admission.admitted) {
+    throw new Error(`Automatic Production execution is blocked: ${admission.blockers.join(",")}.`);
+  }
+}
+
+function assertProductionExecutionScope(options: IncrementalSyncOptions) {
+  if (options.canary === true) {
+    assertProductionJuliCanaryScope(options);
+    return;
+  }
+  if (options.automatic === true) {
+    assertProductionAutomaticScope(options);
+    return;
+  }
+  throw new Error("Production writes require an explicitly admitted canary or automatic scope.");
 }
 
 async function autoAdmitCanonicalWorksheet(
@@ -386,6 +436,67 @@ async function autoAdmitCanonicalWorksheet(
     });
   }
   return JSON.stringify(currentSchema);
+}
+
+async function automaticMinimalAdmission(
+  worksheet: RegisteredWorksheet,
+  canonicalSchema: string | null,
+) {
+  const mapping = approvedMappingContractForWorksheet(worksheet.worksheetTitle);
+  if (!mapping) {
+    return classifyAutomaticWorksheetProbe({
+      worksheetTitle: worksheet.worksheetTitle,
+      registryStatus: worksheet.status,
+      canonicalSchema,
+      probe: null,
+    });
+  }
+
+  try {
+    const probe = await withSyncRetry(() =>
+      readMinimalWorksheet(
+        worksheet.worksheetTitle,
+        AUTOMATION_MINIMAL_PROBE_RANGE,
+        { mappingApproval: mappingApprovalForContract(mapping) },
+      ),
+    );
+    return classifyAutomaticWorksheetProbe({
+      worksheetTitle: worksheet.worksheetTitle,
+      registryStatus: worksheet.status,
+      canonicalSchema,
+      probe: {
+        scannedCellCount: probe.parsed.diagnostics.scannedCellCount,
+        anchors: probe.parsed.anchors,
+        parserErrors: probe.parsed.diagnostics.errors,
+        schemaSnapshot: buildSchemaSnapshot(probe.parsed),
+      },
+    });
+  } catch {
+    return classifyAutomaticWorksheetProbe({
+      worksheetTitle: worksheet.worksheetTitle,
+      registryStatus: worksheet.status,
+      canonicalSchema,
+      probe: null,
+    });
+  }
+}
+
+function automaticAdmissionResult(
+  worksheet: RegisteredWorksheet,
+  admission: ReturnType<typeof classifyAutomaticWorksheetProbe>,
+): WorksheetSyncResult {
+  return {
+    worksheetKey: worksheet.worksheetKey,
+    worksheetTitle: worksheet.worksheetTitle,
+    status: admission.status === "BLOCKED" ? "FAILED" : "SCHEMA_REVIEW",
+    rowsScanned: 0,
+    inserted: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 1,
+    error: `automatic_admission_${admission.status.toLowerCase()}`,
+    errorCode: admission.blockers[0] ?? "AUTOMATIC_ADMISSION_BLOCKED",
+  };
 }
 
 /**
@@ -559,6 +670,38 @@ async function syncWorksheet(
       error: `schema_review_${automaticGate.gate.toLowerCase()}`,
     };
   }
+  if (options.automatic === true && !worksheet.schemaSnapshot && canonicalSchema) {
+    const firstProfileComparison = detectSchemaChange(
+      canonicalSchema,
+      schemaSnapshot,
+      { allowObservedValueTypeDrift: true },
+    );
+    if (firstProfileComparison.changed) {
+      await prisma.syncSchemaChange.create({
+        data: {
+          worksheetId: worksheet.id,
+          previousSchemaHash: null,
+          currentSchemaHash: schemaSnapshot.hash,
+          changeType: firstProfileComparison.type,
+          previousSchema: canonicalSchema,
+          currentSchema: JSON.stringify(schemaSnapshot),
+          status: "OPEN",
+          resolution: firstProfileComparison.reason,
+        },
+      });
+      await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+      return {
+        ...base,
+        status: "SCHEMA_REVIEW",
+        rowsScanned: plan.stagingRows.length,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 1,
+        error: `schema_review_${firstProfileComparison.type.toLowerCase()}`,
+      };
+    }
+  }
   const schemaChange =
     automaticGate?.schemaChange ??
     detectSchemaChange(
@@ -682,7 +825,13 @@ async function syncWorksheet(
   // Keep the write boundary fail-closed even when the engine is invoked
   // directly instead of through the explicit POST/CLI admission wrappers.
   if (options.databaseTarget === "SUPABASE_PRODUCTION") {
-    assertProductionCanaryAuthorization(canonicalPlan.items.length);
+    if (options.canary === true) {
+      assertProductionCanaryAuthorization(canonicalPlan.items.length);
+    } else if (options.automatic === true) {
+      assertAutomationRecordBound(canonicalPlan.items.length, readAutomationConfig());
+    } else {
+      throw new Error("Production writes require an admitted execution mode.");
+    }
     if (options.durableLedger !== "REQUIRED")
       throw new Error("Production writes require the Phase 5 durable ledger.");
   }
@@ -833,8 +982,9 @@ export async function runGoogleSheetsIncrementalSync(
 ): Promise<IncrementalSyncResult> {
   if (options.databaseTarget === "SUPABASE_PRODUCTION") {
     // This engine is also callable without the HTTP/CLI wrappers. Keep the
-    // Phase 6 scope restriction at the deepest Production entry point.
-    assertProductionJuliCanaryScope(options);
+    // Phase 6 scope restriction at the deepest Production entry point while
+    // allowing only the separately admitted Phase 7 automatic mode.
+    assertProductionExecutionScope(options);
   }
   // Validate the target before source discovery can create or update registry
   // rows. Production is re-verified again by the commit boundary immediately
@@ -848,7 +998,11 @@ export async function runGoogleSheetsIncrementalSync(
     // The explicit wrappers perform the same check after their read-only
     // preflight. Keep this early guard for direct engine callers so an
     // unauthorized Production invocation cannot persist discovery metadata.
-    assertProductionCanaryAuthorization(0);
+    if (options.canary === true) {
+      assertProductionCanaryAuthorization(0);
+    } else if (options.automatic !== true) {
+      throw new Error("Production writes require an admitted execution mode.");
+    }
     if (options.durableLedger !== "REQUIRED")
       throw new Error("Production writes require the Phase 5 durable ledger.");
   }
@@ -1068,7 +1222,7 @@ export async function runGoogleSheetsIncrementalSync(
       );
       let canonicalSchema = canonicalResolution.schemaSnapshot;
       if (canonicalCandidates.length > 1) canonicalSchema = null;
-      if (syncOptions.canary !== true) {
+      if (syncOptions.canary !== true && syncOptions.automatic !== true) {
         canonicalSchema = await autoAdmitCanonicalWorksheet(
           canonicalWorksheet,
           canonicalSchema,
@@ -1079,6 +1233,9 @@ export async function runGoogleSheetsIncrementalSync(
         selected.length !== 1
       ) {
         throw new Error("Requested worksheet is not uniquely registered.");
+      }
+      if (syncOptions.automatic === true) {
+        assertAutomationWorksheetBound(selected.length, readAutomationConfig());
       }
       if (selected.length === 0) {
         emitSyncDiagnostic({
@@ -1119,6 +1276,40 @@ export async function runGoogleSheetsIncrementalSync(
         if (!renewed) throw new Error("Synchronization lease was lost.");
         const worksheetStartedAt = diagnosticNow();
         try {
+          if (syncOptions.automatic === true) {
+            // A missing canonical approval blocks before any full worksheet
+            // read. New or otherwise unverified sources receive only the
+            // bounded semantic probe first.
+            if (!canonicalSchema) {
+              await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+              worksheetResults.push({
+                ...automaticAdmissionResult(worksheet, {
+                  status: "SCHEMA_REVIEW",
+                  worksheetTitle: worksheet.worksheetTitle,
+                  mappingProfile: null,
+                  mappingVersion: null,
+                  probeRange: AUTOMATION_MINIMAL_PROBE_RANGE,
+                  recognizedAnchorCount: 0,
+                  detectedSchemaHash: null,
+                  blockers: ["CANONICAL_SCHEMA_UNAVAILABLE"],
+                  reason: "The approved canonical schema is unavailable.",
+                }),
+                errorCode: "CANONICAL_SCHEMA_UNAVAILABLE",
+              });
+              continue;
+            }
+            if (worksheet.status !== "ACTIVE" || !worksheet.schemaSnapshot) {
+              const admission = await automaticMinimalAdmission(
+                worksheet,
+                canonicalSchema,
+              );
+              if (admission.status !== "APPROVED_PROFILE") {
+                await markWorksheetFailure(worksheet.id, "SCHEMA_REVIEW");
+                worksheetResults.push(automaticAdmissionResult(worksheet, admission));
+                continue;
+              }
+            }
+          }
           const worksheetResult = await syncWorksheet(
             worksheet,
             syncOptions,
@@ -1151,7 +1342,28 @@ export async function runGoogleSheetsIncrementalSync(
             durationMs: diagnosticDurationMs(worksheetStartedAt),
             ...safeSyncErrorDetails(error),
           });
-          throw error;
+          // A worksheet-local mapping, validation, or writer failure is
+          // isolated so unrelated admitted worksheets can finish. Losing the
+          // source lease is different: continuing would permit overlapping
+          // executions and is therefore a run-level failure.
+          if (
+            error instanceof Error &&
+            error.message === "Synchronization lease was lost."
+          ) {
+            throw error;
+          }
+          await markWorksheetFailure(worksheet.id, "ERROR").catch(() => undefined);
+          worksheetResults.push({
+            worksheetKey: worksheet.worksheetKey,
+            worksheetTitle: worksheet.worksheetTitle,
+            status: "FAILED",
+            rowsScanned: 0,
+            inserted: 0,
+            updated: 0,
+            skipped: 0,
+            failed: 1,
+            error: safeErrorMessage(error),
+          });
         }
       }
 

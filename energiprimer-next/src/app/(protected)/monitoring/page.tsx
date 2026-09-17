@@ -98,6 +98,66 @@ export default async function MonitoringPage() {
           </div>
         </div>
       </section>
+      <section
+        aria-labelledby="automation-status-heading"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+              Phase 7 Automation
+            </p>
+            <h2 id="automation-status-heading" className="mt-1 text-lg font-bold text-slate-900">
+              Kontrol sinkronisasi otomatis
+            </h2>
+          </div>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              sync.automation.enabled
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {sync.automation.enabled ? "Siap" : "Dikunci"}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Mode</p>
+            <p className="mt-1 font-semibold text-slate-900">{sync.automation.mode}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Kill switch</p>
+            <p className="mt-1 font-semibold text-slate-900">{sync.automation.killSwitch}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Cron terakhir</p>
+            <p className="mt-1 font-semibold text-slate-900">
+              {sync.automation.lastRunStatus ?? "Belum ada"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {formatDate(sync.automation.lastRunAt)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs text-slate-500">Alert</p>
+            <p className="mt-1 font-semibold text-slate-900">{sync.automation.alert}</p>
+          </div>
+        </div>
+        {sync.automation.blockers.length > 0 ? (
+          <div
+            aria-live="polite"
+            className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900"
+          >
+            <p className="font-semibold">Automatic execution belum diadmit.</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {sync.automation.blockers.map((blocker) => (
+                <li key={blocker}>{blocker}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
       <div
         className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900"
         role="alert"

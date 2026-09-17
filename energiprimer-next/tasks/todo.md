@@ -26,3 +26,23 @@
 
 Production canary execution remains intentionally `NOT EXECUTED`; its absence
 is a Phase 5 gate result, not an incomplete implementation task.
+
+## Phase 7 — deterministic sync and production automation
+
+- [x] Record and preserve the Phase 6/6R no-rerun and no-live-write boundary.
+- [x] Add fail-closed automatic configuration, kill switch, cron admission, and
+  bounded execution settings.
+- [x] Add deterministic NEW/CHANGED/RENAMED/UNCHANGED/MISSING discovery
+  classification and minimal unverified-source admission.
+- [x] Add an explicit automatic engine mode without widening the Phase 6
+  canary boundary.
+- [x] Connect the authenticated cron route to the durable-ledger engine only
+  after all automatic gates pass.
+- [x] Verify no-write behavior, unknown-source isolation, changed-row diff,
+  retry/restart/concurrency safety, and failure isolation with disposable
+  fixtures.
+- [x] Add structured automation observability and conservative monitoring
+  fields without introducing a new database schema.
+- [x] Run Phase 7 plus Phase 2–6 validation and update scheduler/result docs.
+- [ ] Keep the live Phase 7 production canary `NOT EXECUTED` pending separate
+  explicit authorization.

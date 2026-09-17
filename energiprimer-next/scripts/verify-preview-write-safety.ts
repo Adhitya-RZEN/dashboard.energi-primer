@@ -54,12 +54,13 @@ assert.ok(environmentGate >= 0, "sync route must contain the environment gate");
 assert.ok(cronSecretCheck > environmentGate, "environment gate must precede cron authentication");
 assert.ok(getStart >= 0 && postStart > getStart, "sync route must separate GET and POST handlers");
 assert.match(getBody, /prepareWorksheetPreflight|prepareGoogleSheetsWorksheetDiscovery/u);
-assert.doesNotMatch(getBody, /runGoogleSheetsIncrementalSync|commitGoogleSheetsImportPlan|executeControlledWorksheetImport/u);
+assert.match(getBody, /runGoogleSheetsIncrementalSync|automaticRequestAuthorized/u);
+assert.doesNotMatch(getBody, /commitGoogleSheetsImportPlan|executeControlledWorksheetImport/u);
 assert.match(postBody, /executeControlledWorksheetImport|parseControlledImportRequest/u);
 assert.match(routeSource, /status: "DISABLED"/u);
 assert.match(routeSource, /status: 403/u);
 const directProductionGuard = engineSource.indexOf(
-  'assertProductionCanaryAuthorization(0)',
+  "assertProductionExecutionScope(options)",
 );
 const discoveryPersistence = engineSource.indexOf(
   "await persistGoogleSheetsWorksheetDiscovery(",
@@ -67,14 +68,14 @@ const discoveryPersistence = engineSource.indexOf(
 assert.ok(
   directProductionGuard >= 0 &&
     discoveryPersistence > directProductionGuard,
-  "direct Production engine calls must pass the canary gate before discovery persistence",
+  "direct Production engine calls must pass an admitted canary or automatic gate before discovery persistence",
 );
 
 console.log(JSON.stringify({
   status: "PASS",
   checks: [
     "Preview deployment is denied before cron authentication",
-    "GET remains read-only and contains no sync writer invocation",
+    "GET is read-only unless the separately admitted automatic cron branch is enabled",
     "POST contains the explicit controlled execution boundary",
     "Production deployment remains allowed by the environment policy",
     "Development without VERCEL_ENV preserves existing behavior",

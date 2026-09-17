@@ -169,3 +169,116 @@ separate explicit authorization and all Phase 5 gates are proven.
 - Pure target-state/diff and ledger/recovery tests with timing breakdowns.
 - Existing Phase 2, Phase 3, and Phase 4 verification scripts.
 - Production metadata, target-scope, and schema-history reads only.
+
+---
+
+# Phase 7 — Deterministic sync and production automation
+
+## Objective
+
+Turn the existing Phase 2–6 synchronization pipeline into an unattended,
+bounded, deterministic scheduler while preserving the exact Phase 6 canary
+boundary. The scheduled path must be independently admitted, fail closed, use
+the existing durable ledger and lease, and isolate unknown or ambiguous
+worksheets from the business writer.
+
+## Phase 7 assumptions and safety boundary
+
+- The Phase 6/6R Juli evidence is historical and must not be rerun or edited.
+- Agustus is not a Phase 7 source or canary. No live Phase 7 business write is
+  authorized in this implementation turn.
+- Automatic mode is disabled by default and requires an explicit production
+  configuration, a valid authenticated cron request, a verified Production
+  target, and the durable ledger.
+- The existing Phase 6 explicit POST/CLI canary path remains unchanged in
+  meaning and continues to require its exact worksheet, plan, approval, and
+  ledger gates.
+- No Prisma schema or migration is added unless an existing contract proves
+  insufficient; registry, lease, sync-run, row-state, schema-review, and
+  canonical ledger records are the Phase 7 persistence boundary.
+- The no-delete-by-absence rule remains absolute. Missing source rows are
+  observable and reconcilable, never delete instructions.
+
+## Architecture decisions
+
+1. Add a typed automatic-mode contract with safe defaults, a kill switch,
+   bounded worksheet/record settings, and a cron-trigger predicate. The
+   route remains read-only discovery when automatic mode is not fully admitted.
+2. Extend worksheet discovery with deterministic `CHANGED` classification from
+   stable metadata, while preserving sheet ID as identity and title as mutable
+   display metadata.
+3. Keep unverified worksheets on a minimal probe path. Only an approved
+   profile with a canonical schema may proceed to the bounded full read and
+   canonical plan; unknown, malformed, ambiguous, future, or schema-changed
+   worksheets are persisted as review evidence and never reach the writer.
+4. Add an explicit automatic admission helper and invoke the existing engine
+   with `triggerType: "cron"`, `scope: "automatic"`, verified Production,
+   `durableLedger: "REQUIRED"`, and `automatic: true`. The engine must reject
+   any other Production mode at its deepest boundary.
+5. Reuse canonical target-state diff, durable batches, retry/reconciliation,
+   leases, and row-state hashes. No new writer or parallel importer is added.
+6. Expose bounded, secret-free automation status in structured diagnostics and
+   the existing monitoring snapshot. Alerts are derived from failed,
+   reconciliation-required, locked, schema-review, and kill-switch states;
+   no external alert service or schema migration is introduced here.
+
+## Implementation slices and acceptance checkpoints
+
+### Slice 0 — Contract and plan
+
+- [x] Add the automatic configuration/kill-switch/cron-admission contract and
+  document production environment names with fail-closed defaults.
+- [x] Add typed automatic execution mode without weakening Phase 6 guards.
+- [x] Add pure tests for configuration, trigger authentication, bounds, and
+  invalid combinations.
+
+### Slice 1 — Deterministic source admission
+
+- [x] Classify discovery metadata as NEW, CHANGED, RENAMED, UNCHANGED, or
+  MISSING using stable sheet identity and deterministic metadata comparison.
+- [x] Add minimal unverified worksheet probing and an admission result that
+  sends unknown/ambiguous/schema-review sources to isolation.
+- [x] Ensure only ACTIVE, approved-profile worksheets can be selected by
+  automatic execution; preserve the registry and no-business-write behavior
+  for all others.
+
+### Slice 2 — Automatic engine and cron route
+
+- [x] Add the authenticated Vercel cron GET execution branch, guarded by
+  deployment environment, automatic mode, kill switch, verified Production,
+  durable ledger, lease, and bounded scope.
+- [x] Reuse the existing canonical target plan and ledger executor for INSERT /
+  UPDATE / SKIP; preserve row identity and no-delete semantics.
+- [x] Isolate worksheet failures so one review/error/reconciliation outcome does
+  not cause unrelated approved worksheets to be blindly replayed.
+
+### Slice 3 — Recovery, observability, and operator controls
+
+- [x] Verify retry, restart, stale-batch reconciliation, lock contention, and
+  idempotent rerun through existing ledger contracts and automatic fixtures.
+- [x] Emit structured, secret-free automation events with request/run/source
+  correlation and bounded counters.
+- [x] Extend monitoring output with automation mode, kill-switch state, last
+  automatic run, review/reconciliation/lock signals, and conservative health.
+
+### Slice 4 — Verification and handoff
+
+- [x] Add a Phase 7 disposable verification matrix for unknown/new/changed/new
+  approved-profile worksheets, schema isolation, changed rows, retry,
+  restart, concurrency, failure isolation, route gating, and no-write mode.
+- [x] Run TypeScript, lint, build, Prisma validation, Phase 2–6 checks, and the
+  Phase 7 disposable checks.
+- [x] Update the existing scheduler/incremental-sync documentation and add a
+  Phase 7 result document recording live-canary status as NOT EXECUTED unless
+  separately authorized.
+
+## Verification evidence required before any readiness claim
+
+- Static: TypeScript, lint, Next build, Prisma validation.
+- Pure/disposable: contract, discovery, admission, schema, change detection,
+  ledger recovery/idempotency, route gating, and monitoring tests.
+- Existing: Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, and Phase 6R checks.
+- Live read-only: target identity and registry/ledger state only, with no
+  Agustus or Phase 7 business source promotion.
+- Production automation canary: `NOT EXECUTED` in this turn; do not claim
+  unattended readiness 4/4 without a separately authorized live lifecycle.
